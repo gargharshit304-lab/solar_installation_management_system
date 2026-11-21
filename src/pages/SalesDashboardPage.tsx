@@ -2,13 +2,12 @@ import React, { useState } from 'react';
 import { 
   Users, UserPlus, CalendarClock, Compass, FileText, 
   CheckCircle2, Clock, AlertTriangle, ArrowUpRight, 
-  Search, Filter, Plus, Phone, Mail, MapPin, Eye, 
+  Search, Plus, Phone, Mail, MapPin, Eye, 
   Download, ArrowRight, Check, Sparkles, AlertCircle, 
-  ChevronRight, Calendar, MessageSquare, Play, X
+  ChevronRight, Calendar, MessageSquare, ChevronDown
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Customer, LeadStatus, SystemType } from '../types';
-import { KpiCard } from '../components/common/KpiCard';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { SalesCustomerProfileModal } from '../components/sales/SalesCustomerProfileModal';
 import { CreateEnquiryModal } from '../components/sales/CreateEnquiryModal';
@@ -16,10 +15,6 @@ import { ScheduleFollowUpModal } from '../components/sales/ScheduleFollowUpModal
 import { RequestSurveyModal } from '../components/sales/RequestSurveyModal';
 import { CreateQuotationModal } from '../components/sales/CreateQuotationModal';
 import { Link } from 'react-router-dom';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, PieChart, Pie, Cell, Legend 
-} from 'recharts';
 
 export const SalesDashboardPage: React.FC = () => {
   const { 
@@ -29,7 +24,6 @@ export const SalesDashboardPage: React.FC = () => {
     quotations, 
     orders, 
     followUps, 
-    enquiries, 
     salesActivities, 
     completeFollowUp,
     showToast 
@@ -43,14 +37,12 @@ export const SalesDashboardPage: React.FC = () => {
   const [isScheduleFollowUpModalOpen, setIsScheduleFollowUpModalOpen] = useState(false);
   const [isRequestSurveyModalOpen, setIsRequestSurveyModalOpen] = useState(false);
   const [targetCustomerForFollowUp, setTargetCustomerForFollowUp] = useState<Customer | null>(null);
-  const [isFullPipelineOpen, setIsFullPipelineOpen] = useState(false);
 
   // Table filtering & search states
-  const [pipelineStageFilter, setPipelineStageFilter] = useState<string>('all');
   const [enquirySearch, setEnquirySearch] = useState('');
   const [enquirySourceFilter, setEnquirySourceFilter] = useState('all');
   const [enquiryCapacityFilter, setEnquiryCapacityFilter] = useState('all');
-  const [followUpTab, setFollowUpTab] = useState<'overdue' | 'today' | 'upcoming' | 'completed'>('overdue');
+  const [followUpTab, setFollowUpTab] = useState<'overdue' | 'today' | 'upcoming'>('overdue');
 
   // Filter records strictly belonging to the logged-in salesperson (e.g. Pooja Kulkarni)
   const myCustomers = customers.filter(c => 
@@ -102,53 +94,52 @@ export const SalesDashboardPage: React.FC = () => {
     ? ((convertedOrdersCount / totalLeadsCount) * 100).toFixed(1)
     : '0';
 
-  // 2. Pipeline Stages data
-  const pipelineStages: { stage: LeadStatus; label: string; count: number; color: string }[] = [
-    { stage: 'new', label: '1. New Enquiries', count: myCustomers.filter(c => c.leadStatus === 'new').length, color: '#183153' },
-    { stage: 'contacted', label: '2. Contacted', count: myCustomers.filter(c => c.leadStatus === 'contacted').length, color: '#C48A42' },
-    { stage: 'survey_scheduled', label: '3. Survey Sched', count: myCustomers.filter(c => c.leadStatus === 'survey_scheduled').length, color: '#C48A42' },
-    { stage: 'survey_completed', label: '4. Survey Done', count: myCustomers.filter(c => c.leadStatus === 'survey_completed').length, color: '#6F8F7A' },
-    { stage: 'quotation_sent', label: '5. Quote Sent', count: myCustomers.filter(c => c.leadStatus === 'quotation_sent').length, color: '#183153' },
-    { stage: 'negotiation', label: '6. Negotiation', count: myCustomers.filter(c => c.leadStatus === 'negotiation').length, color: '#C48A42' },
-    { stage: 'converted', label: '7. Converted', count: myCustomers.filter(c => c.leadStatus === 'converted').length, color: '#6F8F7A' },
-    { stage: 'lost', label: '8. Lost', count: myCustomers.filter(c => c.leadStatus === 'lost').length, color: '#B85C52' },
-  ];
-
-  // 3. Filtered Enquiries table
+  // 2. Filtered Enquiries (Latest 5 records)
   const filteredEnquiries = myCustomers.filter(c => {
     const term = enquirySearch.toLowerCase();
     const matchesSearch = c.fullName.toLowerCase().includes(term) || c.phone.includes(term) || c.customerCode.toLowerCase().includes(term);
-    const matchesStage = pipelineStageFilter === 'all' || c.leadStatus === pipelineStageFilter;
     const matchesSource = enquirySourceFilter === 'all' || c.enquirySource === enquirySourceFilter;
     const matchesCapacity = enquiryCapacityFilter === 'all' || c.interestedCapacityKw === parseFloat(enquiryCapacityFilter);
-    return matchesSearch && matchesStage && matchesSource && matchesCapacity;
+    return matchesSearch && matchesSource && matchesCapacity;
   });
 
-  // 4. Follow-ups filtered by tab
+  const latestEnquiries = filteredEnquiries.slice(0, 5);
+
+  // 3. Follow-ups preview (Limited to 4 records)
   const activeFollowUpsList = myFollowUps.filter(f => {
     if (followUpTab === 'overdue') return f.status === 'overdue';
     if (followUpTab === 'today') return f.status === 'pending' && f.scheduledDate.startsWith(new Date().toISOString().split('T')[0]);
     if (followUpTab === 'upcoming') return f.status === 'pending' || f.status === 'rescheduled';
-    if (followUpTab === 'completed') return f.status === 'completed';
     return true;
-  });
+  }).slice(0, 4);
 
-  // 5. Analytics Data (Recharts)
-  const leadFunnelData = [
-    { stage: 'Enquiries', count: totalLeadsCount },
-    { stage: 'Contacted', count: myCustomers.filter(c => c.leadStatus !== 'new').length },
-    { stage: 'Surveys', count: mySurveys.length },
-    { stage: 'Quotes', count: myQuotations.length },
-    { stage: 'Orders', count: convertedOrdersCount }
-  ];
+  // 4. Site Surveys preview (Sorted by priority, max 4 records)
+  const priorityStatusWeight: Record<string, number> = {
+    unassigned: 1,
+    assigned: 2,
+    scheduled: 3,
+    submitted: 4,
+    approved: 5,
+    rejected: 6
+  };
 
-  const sourceData = [
-    { name: 'Website', value: myCustomers.filter(c => c.enquirySource === 'website').length, color: '#183153' },
-    { name: 'WhatsApp', value: myCustomers.filter(c => c.enquirySource === 'whatsapp').length, color: '#6F8F7A' },
-    { name: 'Phone Call', value: myCustomers.filter(c => c.enquirySource === 'phone_call').length, color: '#C48A42' },
-    { name: 'Referral', value: myCustomers.filter(c => c.enquirySource === 'referral').length, color: '#DECDBB' },
-    { name: 'Manual', value: myCustomers.filter(c => c.enquirySource === 'manual').length, color: '#777777' }
-  ].filter(s => s.value > 0);
+  const prioritySurveys = [...mySurveys].sort((a, b) => {
+    const weightA = priorityStatusWeight[a.status] || 99;
+    const weightB = priorityStatusWeight[b.status] || 99;
+    return weightA - weightB;
+  }).slice(0, 4);
+
+  // 5. Actionable Quotations (Drafts or Sent first, max 3 records)
+  const actionableQuotations = [...myQuotations]
+    .sort((a, b) => {
+      if ((a.status === 'sent' || a.status === 'draft') && !(b.status === 'sent' || b.status === 'draft')) return -1;
+      if (!(a.status === 'sent' || a.status === 'draft') && (b.status === 'sent' || b.status === 'draft')) return 1;
+      return 0;
+    })
+    .slice(0, 3);
+
+  // 6. Recent Sales Activities (Latest 4 records)
+  const latestActivities = myActivities.slice(0, 4);
 
   const exportEnquiriesCSV = () => {
     const headers = 'ID,Name,Phone,City,Capacity (kW),System Type,Source,Status,Received Date\n';
@@ -169,222 +160,274 @@ export const SalesDashboardPage: React.FC = () => {
     showToast(`Initiating outbound call to ${name} (${phone})`, 'info');
   };
 
+  // Reusable Card Style with Warm Amber Shadow
+  const cardContainerClass = "bg-white rounded-2xl border border-[rgba(196,138,66,0.18)] shadow-[0_3px_12px_rgba(196,138,66,0.10)] hover:shadow-[0_5px_18px_rgba(196,138,66,0.16)] transition-all duration-200";
+
   return (
     <div className="space-y-6">
       
       {/* 1. Header Section */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-white rounded-card p-5 border border-warmGrey/60 shadow-card">
-        <div>
-          <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-sage animate-ping" />
-            <span className="text-[11px] font-bold uppercase tracking-wider text-mutedGrey">
-              Sales Executive Workspace
-            </span>
-          </div>
-          <h1 className="text-2xl font-bold text-charcoal tracking-tight mt-1">
-            Sales Overview
-          </h1>
-          <p className="text-sm font-semibold text-navy mt-0.5">
-            Welcome back, {currentUser.name}!
-          </p>
-          <p className="text-xs text-mutedGrey mt-0.5">
-            Manage your enquiries, customer relationships and sales pipeline.
-          </p>
-
-          {/* Compact Sales Performance Summary Ribbon */}
-          <div className="flex flex-wrap items-center gap-3 mt-3 text-xs">
-            <div className="px-2.5 py-1 rounded-lg bg-sand-100 text-charcoal font-semibold border border-warmGrey/60">
-              📅 {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-            </div>
-            <div className="px-2.5 py-1 rounded-lg bg-sand-100 text-navy font-semibold border border-warmGrey/60">
-              🎯 Monthly Target: 10 Projects
-            </div>
-            <div className="px-2.5 py-1 rounded-lg bg-sage-50 text-sage font-bold border border-sage/30">
-              ✓ Converted: {convertedOrdersCount} Orders ({conversionRate}%)
-            </div>
-            <div className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber font-bold border border-amber/30">
-              ⚡ Active Pipeline: {activeLeadsCount} Leads
-            </div>
-          </div>
-        </div>
-
-        {/* Primary Quick Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-          <button
-            onClick={() => setIsAddCustomerModalOpen(true)}
-            className="px-4 py-2 bg-navy text-white text-xs font-semibold rounded-xl hover:bg-navy-light transition-colors shadow-xs flex items-center space-x-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ Add Customer</span>
-          </button>
-          
-          <button
-            onClick={() => setIsCreateEnquiryModalOpen(true)}
-            className="px-3.5 py-2 bg-white text-charcoal border border-warmGrey text-xs font-semibold rounded-xl hover:bg-sand-100 transition-colors shadow-xs flex items-center space-x-1.5"
-          >
-            <span>+ Create Enquiry</span>
-          </button>
-
-          <button
-            onClick={() => setIsCreateQuotationModalOpen(true)}
-            className="px-3.5 py-2 bg-white text-charcoal border border-warmGrey text-xs font-semibold rounded-xl hover:bg-sand-100 transition-colors shadow-xs flex items-center space-x-1.5"
-          >
-            <span>+ Create Quotation</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 2. Six Role-Specific KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <KpiCard
-          title="My Total Leads"
-          value={totalLeadsCount}
-          subValue={`${activeLeadsCount} Active in Pipeline`}
-          trend={{ value: '14.2%', isPositive: true }}
-          icon={Users}
-          iconBgColor="bg-sand-200/70"
-          iconColor="text-navy"
-        />
-
-        <KpiCard
-          title="New Enquiries"
-          value={newEnquiriesCount}
-          subValue="Awaiting First Contact"
-          icon={UserPlus}
-          iconBgColor="bg-navy/10"
-          iconColor="text-navy"
-          badge={newEnquiriesCount > 0 ? 'Action Req' : 'Clear'}
-          badgeColor={newEnquiriesCount > 0 ? 'amber' : 'sage'}
-        />
-
-        <KpiCard
-          title="Follow-ups Due"
-          value={followUpsDueCount}
-          subValue={`${overdueFollowUps.length} Overdue • ${todayFollowUps.length} Today`}
-          icon={CalendarClock}
-          iconBgColor="bg-amber-50"
-          iconColor="text-amber"
-          badge={overdueFollowUps.length > 0 ? `${overdueFollowUps.length} Overdue` : 'On Schedule'}
-          badgeColor={overdueFollowUps.length > 0 ? 'terracotta' : 'sage'}
-        />
-
-        <KpiCard
-          title="Surveys Scheduled"
-          value={scheduledSurveysCount}
-          subValue="Allocated Field Techs"
-          icon={Compass}
-          iconBgColor="bg-sand-200/70"
-          iconColor="text-navy"
-        />
-
-        <KpiCard
-          title="Pending Quotes"
-          value={pendingQuotationsCount}
-          subValue={`${draftQuotesCount} Drafts • ${sentQuotesCount} Sent`}
-          icon={FileText}
-          iconBgColor="bg-amber-50"
-          iconColor="text-amber"
-        />
-
-        <KpiCard
-          title="Converted Sales"
-          value={convertedOrdersCount}
-          subValue={`${conversionRate}% Conversion Rate`}
-          trend={{ value: '25.0%', isPositive: true }}
-          icon={CheckCircle2}
-          iconBgColor="bg-sage-50"
-          iconColor="text-sage"
-          badge="Confirmed"
-          badgeColor="sage"
-        />
-      </div>
-
-      {/* 3. Sales Pipeline Distribution Section */}
-      <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div className={`${cardContainerClass} p-6`}>
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
           <div>
-            <h2 className="text-sm font-bold text-charcoal">Sales Pipeline Progression</h2>
-            <p className="text-xs text-mutedGrey">
-              Distribution of your {totalLeadsCount} assigned leads across lifecycle conversion stages. Click any stage to filter.
+            <div className="flex items-center space-x-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-sage animate-ping" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-mutedGrey">
+                Sales Executive Workspace
+              </span>
+            </div>
+            <h1 className="text-2xl font-bold text-charcoal tracking-tight mt-1.5">
+              Sales Overview
+            </h1>
+            <p className="text-sm font-semibold text-navy mt-1">
+              Welcome back, {currentUser.name}!
             </p>
+            <p className="text-xs text-mutedGrey mt-0.5">
+              Manage your customer enquiries, site survey coordination, quotations and conversions.
+            </p>
+
+            {/* Performance Ribbon */}
+            <div className="flex flex-wrap items-center gap-2.5 mt-3.5 text-xs">
+              <div className="px-3 py-1 rounded-lg bg-sand-100 text-charcoal font-semibold border border-warmGrey/60">
+                📅 {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+              </div>
+              <div className="px-3 py-1 rounded-lg bg-sand-100 text-navy font-semibold border border-warmGrey/60">
+                🎯 Target: 10 Projects
+              </div>
+              <div className="px-3 py-1 rounded-lg bg-sage-50 text-sage font-bold border border-sage/30">
+                ✓ Converted: {convertedOrdersCount} ({conversionRate}%)
+              </div>
+              <div className="px-3 py-1 rounded-lg bg-amber-50 text-amber font-bold border border-amber/30">
+                ⚡ Active Leads: {activeLeadsCount}
+              </div>
+            </div>
           </div>
-          <div className="flex items-center space-x-2">
-            {pipelineStageFilter !== 'all' && (
-              <button
-                onClick={() => setPipelineStageFilter('all')}
-                className="text-xs text-navy font-semibold hover:underline"
-              >
-                Clear Filter (Show All)
-              </button>
-            )}
+
+          {/* Primary Quick Action Buttons */}
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
             <button
-              onClick={() => setIsFullPipelineOpen(!isFullPipelineOpen)}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-sand-100 hover:bg-sand-200 text-charcoal border border-warmGrey transition-colors"
+              onClick={() => setIsAddCustomerModalOpen(true)}
+              className="px-4 py-2.5 bg-navy text-white text-xs font-semibold rounded-xl hover:bg-navy-light transition-all shadow-sm flex items-center space-x-2 active:scale-[0.98]"
             >
-              {isFullPipelineOpen ? 'Hide Summary' : 'View Full Pipeline'}
+              <Plus className="w-4 h-4" />
+              <span>+ Add Customer</span>
+            </button>
+            
+            <button
+              onClick={() => setIsCreateEnquiryModalOpen(true)}
+              className="px-4 py-2.5 bg-white text-charcoal border border-warmGrey text-xs font-semibold rounded-xl hover:bg-sand-100 transition-all shadow-xs flex items-center space-x-2 active:scale-[0.98]"
+            >
+              <Users className="w-4 h-4 text-navy" />
+              <span>+ Create Enquiry</span>
+            </button>
+
+            <button
+              onClick={() => setIsCreateQuotationModalOpen(true)}
+              className="px-4 py-2.5 bg-white text-charcoal border border-warmGrey text-xs font-semibold rounded-xl hover:bg-sand-100 transition-all shadow-xs flex items-center space-x-2 active:scale-[0.98]"
+            >
+              <FileText className="w-4 h-4 text-amber" />
+              <span>+ Create Quotation</span>
             </button>
           </div>
         </div>
-
-        {/* Pipeline Visual Bar Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
-          {pipelineStages.map((stg) => {
-            const isSelected = pipelineStageFilter === stg.stage;
-
-            return (
-              <button
-                key={stg.stage}
-                onClick={() => setPipelineStageFilter(isSelected ? 'all' : stg.stage)}
-                className={`p-3 rounded-xl border text-left transition-all relative overflow-hidden group ${
-                  isSelected 
-                    ? 'bg-navy text-white border-navy shadow-md ring-2 ring-navy/20' 
-                    : 'bg-sand-50/70 hover:bg-sand-100 border-warmGrey/60 text-charcoal'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span 
-                    className="w-2 h-2 rounded-full" 
-                    style={{ backgroundColor: isSelected ? '#FFFFFF' : stg.color }} 
-                  />
-                  <span className={`text-[10px] font-bold ${isSelected ? 'text-sand' : 'text-mutedGrey'}`}>
-                    {totalLeadsCount > 0 ? Math.round((stg.count / totalLeadsCount) * 100) : 0}%
-                  </span>
-                </div>
-
-                <div className="text-lg font-bold mt-1.5 leading-none">
-                  {stg.count}
-                </div>
-
-                <div className={`text-[11px] font-semibold mt-1 truncate ${isSelected ? 'text-white' : 'text-charcoal'}`}>
-                  {stg.label}
-                </div>
-
-                {/* Bottom visual indicator */}
-                <div 
-                  className="absolute bottom-0 inset-x-0 h-1" 
-                  style={{ backgroundColor: stg.color, opacity: isSelected ? 1 : 0.4 }} 
-                />
-              </button>
-            );
-          })}
-        </div>
       </div>
 
-      {/* 4. Two-Column Operations Layout: My Customer Enquiries & Follow-up Queue */}
+      {/* 2. Six Role-Specific KPI Cards (3 per row on Desktop) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        
+        {/* ROW 1 - Card 1: My Total Leads */}
+        <div className={`${cardContainerClass} p-5 flex flex-col justify-between`}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold text-mutedGrey uppercase tracking-wider">
+                My Total Leads
+              </p>
+              <h3 className="text-3xl font-bold text-charcoal mt-2 tracking-tight">
+                {totalLeadsCount}
+              </h3>
+              <p className="text-xs text-mutedGrey mt-1">
+                {activeLeadsCount} active in pipeline
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-sand-200/70 text-navy flex items-center justify-center shrink-0">
+              <Users className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-warmGrey/40 flex items-center justify-between text-xs">
+            <span className="text-sage font-semibold flex items-center">
+              ↑ 14.2% <span className="text-mutedGrey ml-1 font-normal">vs last month</span>
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-sand-100 text-charcoal border border-warmGrey/60">
+              Assigned
+            </span>
+          </div>
+        </div>
+
+        {/* ROW 1 - Card 2: New Enquiries */}
+        <div className={`${cardContainerClass} p-5 flex flex-col justify-between`}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold text-mutedGrey uppercase tracking-wider">
+                New Enquiries
+              </p>
+              <h3 className="text-3xl font-bold text-charcoal mt-2 tracking-tight">
+                {newEnquiriesCount}
+              </h3>
+              <p className="text-xs text-mutedGrey mt-1">
+                Awaiting first contact
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-navy/10 text-navy flex items-center justify-center shrink-0">
+              <UserPlus className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-warmGrey/40 flex items-center justify-between text-xs">
+            <span className="text-mutedGrey">
+              Inbound via web & WhatsApp
+            </span>
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+              newEnquiriesCount > 0 
+                ? 'bg-amber-50 text-amber border-amber/30' 
+                : 'bg-sage-50 text-sage border-sage/30'
+            }`}>
+              {newEnquiriesCount > 0 ? 'Action Req' : 'Clear'}
+            </span>
+          </div>
+        </div>
+
+        {/* ROW 1 - Card 3: Follow-ups Due */}
+        <div className={`${cardContainerClass} p-5 flex flex-col justify-between`}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold text-mutedGrey uppercase tracking-wider">
+                Follow-ups Due
+              </p>
+              <h3 className="text-3xl font-bold text-charcoal mt-2 tracking-tight">
+                {followUpsDueCount}
+              </h3>
+              <p className="text-xs text-mutedGrey mt-1">
+                {overdueFollowUps.length} Overdue • {todayFollowUps.length} Today
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-amber-50 text-amber flex items-center justify-center shrink-0">
+              <CalendarClock className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-warmGrey/40 flex items-center justify-between text-xs">
+            <span className="text-mutedGrey">
+              Scheduled customer touchpoints
+            </span>
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+              overdueFollowUps.length > 0 
+                ? 'bg-terracotta-50 text-terracotta border-terracotta/30' 
+                : 'bg-sage-50 text-sage border-sage/30'
+            }`}>
+              {overdueFollowUps.length > 0 ? `${overdueFollowUps.length} Overdue` : 'On Schedule'}
+            </span>
+          </div>
+        </div>
+
+        {/* ROW 2 - Card 4: Surveys Scheduled */}
+        <div className={`${cardContainerClass} p-5 flex flex-col justify-between`}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold text-mutedGrey uppercase tracking-wider">
+                Surveys Scheduled
+              </p>
+              <h3 className="text-3xl font-bold text-charcoal mt-2 tracking-tight">
+                {scheduledSurveysCount}
+              </h3>
+              <p className="text-xs text-mutedGrey mt-1">
+                Allocated to field technicians
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-sand-200/70 text-navy flex items-center justify-center shrink-0">
+              <Compass className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-warmGrey/40 flex items-center justify-between text-xs">
+            <span className="text-mutedGrey">
+              {mySurveys.filter(s => s.status === 'approved').length} completed & approved
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-sand-100 text-navy border border-warmGrey/60">
+              Active Feasibility
+            </span>
+          </div>
+        </div>
+
+        {/* ROW 2 - Card 5: Pending Quotations */}
+        <div className={`${cardContainerClass} p-5 flex flex-col justify-between`}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold text-mutedGrey uppercase tracking-wider">
+                Pending Quotations
+              </p>
+              <h3 className="text-3xl font-bold text-charcoal mt-2 tracking-tight">
+                {pendingQuotationsCount}
+              </h3>
+              <p className="text-xs text-mutedGrey mt-1">
+                {draftQuotesCount} Drafts • {sentQuotesCount} Sent
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-amber-50 text-amber flex items-center justify-center shrink-0">
+              <FileText className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-warmGrey/40 flex items-center justify-between text-xs">
+            <span className="text-mutedGrey">
+              Customer review & negotiation
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber border border-amber/30">
+              Pipeline Proposals
+            </span>
+          </div>
+        </div>
+
+        {/* ROW 2 - Card 6: Converted Sales */}
+        <div className={`${cardContainerClass} p-5 flex flex-col justify-between`}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold text-mutedGrey uppercase tracking-wider">
+                Converted Sales
+              </p>
+              <h3 className="text-3xl font-bold text-charcoal mt-2 tracking-tight">
+                {convertedOrdersCount}
+              </h3>
+              <p className="text-xs text-mutedGrey mt-1">
+                {conversionRate}% conversion rate
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-sage-50 text-sage flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-warmGrey/40 flex items-center justify-between text-xs">
+            <span className="text-sage font-semibold flex items-center">
+              ↑ 25.0% <span className="text-mutedGrey ml-1 font-normal">vs target</span>
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-sage-50 text-sage border border-sage/30">
+              Confirmed
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      {/* 3. Customer Enquiries & Follow-up Queue Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Left Column (2 Cols): My Customer Enquiries Table */}
-        <div className="lg:col-span-2 bg-white rounded-card p-5 border border-warmGrey/60 shadow-card space-y-4">
+        {/* Left Column (2 Cols): Customer Enquiries (Latest 5 records) */}
+        <div className={`lg:col-span-2 ${cardContainerClass} p-5 space-y-4`}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <div className="flex items-center space-x-2">
-                <h2 className="text-sm font-bold text-charcoal">My Customer Enquiries & Leads</h2>
+                <h2 className="text-sm font-bold text-charcoal">Customer Enquiries</h2>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-sand-100 text-navy border border-warmGrey">
-                  {filteredEnquiries.length} Assigned
+                  Latest 5 of {filteredEnquiries.length}
                 </span>
               </div>
               <p className="text-xs text-mutedGrey mt-0.5">
-                Qualified inquiries managed by you • Click customer row for 360° profile & timeline
+                Qualified inquiries managed by you • Click customer row for 360° profile
               </p>
             </div>
 
@@ -397,6 +440,14 @@ export const SalesDashboardPage: React.FC = () => {
                 <Download className="w-3.5 h-3.5 text-navy" />
                 <span>Export</span>
               </button>
+              
+              <Link
+                to="/enquiries"
+                className="px-3 py-1.5 rounded-lg bg-navy hover:bg-navy-light text-white text-xs font-semibold flex items-center space-x-1 transition-colors"
+              >
+                <span>View All Enquiries</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
           </div>
 
@@ -409,14 +460,14 @@ export const SalesDashboardPage: React.FC = () => {
                 placeholder="Search name, phone or code..."
                 value={enquirySearch}
                 onChange={e => setEnquirySearch(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 border border-warmGrey rounded-lg focus:outline-none focus:ring-1 focus:ring-navy"
+                className="w-full pl-8 pr-3 py-1.5 border border-warmGrey rounded-lg focus:outline-none focus:ring-1 focus:ring-navy text-xs"
               />
             </div>
 
             <select
               value={enquirySourceFilter}
               onChange={e => setEnquirySourceFilter(e.target.value)}
-              className="px-2.5 py-1.5 border border-warmGrey rounded-lg bg-white text-charcoal font-medium"
+              className="px-2.5 py-1.5 border border-warmGrey rounded-lg bg-white text-charcoal font-medium text-xs"
             >
               <option value="all">All Lead Sources</option>
               <option value="website">Website Form</option>
@@ -429,7 +480,7 @@ export const SalesDashboardPage: React.FC = () => {
             <select
               value={enquiryCapacityFilter}
               onChange={e => setEnquiryCapacityFilter(e.target.value)}
-              className="px-2.5 py-1.5 border border-warmGrey rounded-lg bg-white text-charcoal font-medium"
+              className="px-2.5 py-1.5 border border-warmGrey rounded-lg bg-white text-charcoal font-medium text-xs"
             >
               <option value="all">All Solar Capacities</option>
               <option value="1">1 kW</option>
@@ -440,7 +491,7 @@ export const SalesDashboardPage: React.FC = () => {
             </select>
           </div>
 
-          {/* Enquiries Table */}
+          {/* Enquiries Table (Streamlined) */}
           <div className="overflow-x-auto border border-warmGrey/60 rounded-xl">
             <table className="w-full text-left text-xs">
               <thead className="bg-sand-50 text-mutedGrey font-semibold uppercase tracking-wider border-b border-warmGrey">
@@ -449,77 +500,94 @@ export const SalesDashboardPage: React.FC = () => {
                   <th className="py-2.5 px-3">Location</th>
                   <th className="py-2.5 px-3">Capacity & Type</th>
                   <th className="py-2.5 px-3">Source</th>
-                  <th className="py-2.5 px-3">Lead Status</th>
+                  <th className="py-2.5 px-3">Status</th>
                   <th className="py-2.5 px-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-warmGrey/40 text-charcoal">
-                {filteredEnquiries.map(c => (
-                  <tr 
-                    key={c.id} 
-                    className="hover:bg-sand-50/70 transition-colors cursor-pointer"
-                    onClick={() => setSelectedCustomerForProfile(c)}
-                  >
-                    <td className="py-2.5 px-3">
-                      <div className="font-bold text-charcoal">{c.fullName}</div>
-                      <div className="text-[11px] text-mutedGrey">{c.phone}</div>
-                    </td>
-                    <td className="py-2.5 px-3 font-medium text-charcoal">
-                      {c.city}
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <div className="font-bold text-navy">{c.interestedCapacityKw} kW</div>
-                      <div className="text-[10px] uppercase text-mutedGrey">{c.preferredSystemType.replace('_', ' ')}</div>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <span className="capitalize px-2 py-0.5 rounded-md bg-sand-100 text-[11px] font-medium border border-warmGrey/60">
-                        {c.enquirySource.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <StatusBadge status={c.leadStatus} />
-                    </td>
-                    <td className="py-2.5 px-3 text-right space-x-1" onClick={e => e.stopPropagation()}>
-                      <button
-                        onClick={() => handleCallCustomer(c.phone, c.fullName)}
-                        className="p-1.5 rounded-lg bg-sand-100 hover:bg-navy hover:text-white text-navy transition-colors"
-                        title="Direct Call"
-                      >
-                        <Phone className="w-3.5 h-3.5" />
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setTargetCustomerForFollowUp(c);
-                          setIsScheduleFollowUpModalOpen(true);
-                        }}
-                        className="p-1.5 rounded-lg bg-sand-100 hover:bg-amber hover:text-white text-charcoal transition-colors"
-                        title="Schedule Follow-up"
-                      >
-                        <CalendarClock className="w-3.5 h-3.5" />
-                      </button>
-
-                      <button
-                        onClick={() => setSelectedCustomerForProfile(c)}
-                        className="px-2 py-1 rounded-lg bg-sand-100 hover:bg-navy hover:text-white text-charcoal font-semibold text-xs transition-colors"
-                      >
-                        Profile
-                      </button>
+                {latestEnquiries.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-6 text-center text-mutedGrey">
+                      No customer enquiries found matching criteria.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  latestEnquiries.map(c => (
+                    <tr 
+                      key={c.id} 
+                      className="hover:bg-sand-50/70 transition-colors cursor-pointer"
+                      onClick={() => setSelectedCustomerForProfile(c)}
+                    >
+                      <td className="py-2.5 px-3">
+                        <div className="font-bold text-charcoal">{c.fullName}</div>
+                        <div className="text-[11px] text-mutedGrey">{c.phone}</div>
+                      </td>
+                      <td className="py-2.5 px-3 font-medium text-charcoal">
+                        {c.city}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <div className="font-bold text-navy">{c.interestedCapacityKw} kW</div>
+                        <div className="text-[10px] uppercase text-mutedGrey">{c.preferredSystemType.replace('_', ' ')}</div>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <span className="capitalize px-2 py-0.5 rounded-md bg-sand-100 text-[11px] font-medium border border-warmGrey/60">
+                          {c.enquirySource.replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <StatusBadge status={c.leadStatus} />
+                      </td>
+                      <td className="py-2.5 px-3 text-right space-x-1" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={() => handleCallCustomer(c.phone, c.fullName)}
+                          className="p-1.5 rounded-lg bg-sand-100 hover:bg-navy hover:text-white text-navy transition-colors"
+                          title="Direct Call"
+                        >
+                          <Phone className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setTargetCustomerForFollowUp(c);
+                            setIsScheduleFollowUpModalOpen(true);
+                          }}
+                          className="p-1.5 rounded-lg bg-sand-100 hover:bg-amber hover:text-white text-charcoal transition-colors"
+                          title="Schedule Follow-up"
+                        >
+                          <CalendarClock className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => setSelectedCustomerForProfile(c)}
+                          className="px-2 py-1 rounded-lg bg-sand-100 hover:bg-navy hover:text-white text-charcoal font-semibold text-xs transition-colors"
+                        >
+                          Profile
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
+
+          {/* Bottom link to view full list */}
+          <div className="pt-1 flex items-center justify-between text-xs text-mutedGrey">
+            <span>Showing top {latestEnquiries.length} recent enquiries</span>
+            <Link to="/enquiries" className="text-navy font-semibold hover:underline flex items-center space-x-1">
+              <span>View full list ({filteredEnquiries.length} enquiries)</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         </div>
 
-        {/* Right Column (1 Col): Follow-up Management Queue */}
-        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card flex flex-col justify-between space-y-4">
+        {/* Right Column (1 Col): Follow-up Management Queue (3-4 records) */}
+        <div className={`${cardContainerClass} p-5 flex flex-col justify-between space-y-4`}>
           <div>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center space-x-2">
                 <CalendarClock className="w-4 h-4 text-amber" />
-                <h2 className="text-sm font-bold text-charcoal">Follow-up Management</h2>
+                <h2 className="text-sm font-bold text-charcoal">Follow-up Queue</h2>
               </div>
               <button
                 onClick={() => {
@@ -532,11 +600,11 @@ export const SalesDashboardPage: React.FC = () => {
               </button>
             </div>
             <p className="text-xs text-mutedGrey mb-3">
-              Never let a customer go cold. Scheduled contact agendas & callbacks.
+              Scheduled callbacks and agenda touchpoints
             </p>
 
             {/* Follow-up Subtabs */}
-            <div className="flex space-x-1 border-b border-warmGrey pb-1 text-xs">
+            <div className="flex space-x-1 border-b border-warmGrey pb-1.5 text-xs">
               <button
                 onClick={() => setFollowUpTab('overdue')}
                 className={`px-2.5 py-1 rounded-lg font-semibold transition-colors flex items-center space-x-1 ${
@@ -573,22 +641,13 @@ export const SalesDashboardPage: React.FC = () => {
               >
                 Upcoming
               </button>
-
-              <button
-                onClick={() => setFollowUpTab('completed')}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${
-                  followUpTab === 'completed' ? 'bg-sage text-white' : 'text-charcoal hover:bg-sand-100'
-                }`}
-              >
-                Done
-              </button>
             </div>
 
-            {/* Follow-up Items Queue */}
-            <div className="space-y-2.5 mt-3 max-h-[380px] overflow-y-auto pr-1">
+            {/* Follow-up Items Queue (Max 4 items) */}
+            <div className="space-y-2.5 mt-3">
               {activeFollowUpsList.length === 0 ? (
-                <div className="text-center py-8 text-xs text-mutedGrey">
-                  No follow-ups in this queue. Great job staying on track!
+                <div className="text-center py-6 text-xs text-mutedGrey">
+                  No pending follow-ups in this tab.
                 </div>
               ) : (
                 activeFollowUpsList.map(flw => (
@@ -610,18 +669,18 @@ export const SalesDashboardPage: React.FC = () => {
                       </span>
                     </div>
 
-                    <p className="text-mutedGrey text-[11px] leading-snug line-clamp-2">
+                    <p className="text-mutedGrey text-[11px] leading-snug line-clamp-1">
                       {flw.followUpReason}
                     </p>
 
-                    <div className="flex items-center justify-between text-[10px] text-mutedGrey pt-1">
-                      <span>Scheduled: {new Date(flw.scheduledDate).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                    <div className="flex items-center justify-between text-[10px] text-mutedGrey pt-0.5">
+                      <span>{new Date(flw.scheduledDate).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                       {flw.status === 'overdue' && (
                         <span className="text-terracotta font-bold uppercase">Overdue</span>
                       )}
                     </div>
 
-                    {/* Actions */}
+                    {/* Quick Action buttons */}
                     {flw.status !== 'completed' && (
                       <div className="pt-2 border-t border-warmGrey/60 flex items-center justify-between gap-1">
                         <button
@@ -651,17 +710,17 @@ export const SalesDashboardPage: React.FC = () => {
             to="/follow-ups"
             className="w-full block text-center py-2 bg-sand-100 hover:bg-sand-200 text-charcoal text-xs font-semibold rounded-xl transition-colors border border-warmGrey"
           >
-            Open Full Follow-ups Calendar & Log
+            View All Follow-ups Calendar & Log →
           </Link>
         </div>
 
       </div>
 
-      {/* 5. Site Survey Coordination & Quotation Pipeline Sections */}
+      {/* 4. Site Survey Coordination & Quotation Management Sections */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Site Survey Coordination Box */}
-        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card space-y-4">
+        {/* Site Survey Coordination Box (Max 4 priority records) */}
+        <div className={`${cardContainerClass} p-5 space-y-4`}>
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center space-x-2">
@@ -683,66 +742,72 @@ export const SalesDashboardPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Business rule banner */}
+          {/* Engineering Gate Rule Banner */}
           <div className="p-3 bg-sand-100 rounded-xl border border-warmGrey text-[11px] leading-relaxed text-charcoal flex items-start space-x-2">
             <AlertCircle className="w-4 h-4 text-navy shrink-0 mt-0.5" />
             <div>
-              <strong>Engineering Gate Rule:</strong> A final solar quotation can only be finalized and sent to a customer after the site survey measurements and shadow analysis have been <strong>Approved</strong> by the engineering lead.
+              <strong>Engineering Gate Rule:</strong> Quotations can only be finalized and dispatched after site survey measurements and shadow analysis are <strong>Approved</strong> by the engineering lead.
             </div>
           </div>
 
-          {/* Survey List */}
+          {/* Survey List (Max 4 items) */}
           <div className="space-y-2.5">
-            {mySurveys.slice(0, 3).map(s => (
-              <div key={s.id} className="p-3.5 rounded-xl border border-warmGrey/60 bg-sand-50/60 hover:bg-sand-50 transition-colors text-xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-mono font-bold text-navy">{s.surveyNumber}</span>
-                    <span className="font-semibold text-charcoal ml-2">{s.customerName}</span>
-                  </div>
-                  <StatusBadge status={s.status} />
-                </div>
-
-                <div className="grid grid-cols-2 text-[11px] text-mutedGrey">
-                  <div>Technician: <strong>{s.technicianName || 'Pending'}</strong></div>
-                  <div>Scheduled: <strong>{new Date(s.scheduledDate).toLocaleDateString()}</strong></div>
-                  <div>Shadow-Free: <strong>{s.shadowFreeAreaSqm ? `${s.shadowFreeAreaSqm} sq.m` : 'Pending'}</strong></div>
-                  <div>Orientation: <strong>{s.roofDirection || 'Pending'} ({s.roofTiltDegrees || 0}°)</strong></div>
-                </div>
-
-                {s.status === 'approved' ? (
-                  <div className="pt-2 border-t border-warmGrey/60 flex items-center justify-between text-sage font-bold text-[11px]">
-                    <span className="flex items-center space-x-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Approved by Engineering</span>
-                    </span>
-                    <Link
-                      to="/quotations"
-                      className="px-2.5 py-1 bg-navy text-white rounded font-semibold text-xs hover:bg-navy-light"
-                    >
-                      Generate Quotation →
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="pt-2 border-t border-warmGrey/60 flex items-center justify-between text-mutedGrey text-[11px]">
-                    <span className="text-amber font-semibold">Survey in progress / awaiting review</span>
-                    <span className="italic">Quotation Locked</span>
-                  </div>
-                )}
+            {prioritySurveys.length === 0 ? (
+              <div className="text-center py-6 text-xs text-mutedGrey">
+                No active survey requests currently scheduled.
               </div>
-            ))}
+            ) : (
+              prioritySurveys.map(s => (
+                <div key={s.id} className="p-3.5 rounded-xl border border-warmGrey/60 bg-sand-50/60 hover:bg-sand-50 transition-colors text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-mono font-bold text-navy">{s.surveyNumber}</span>
+                      <span className="font-semibold text-charcoal ml-2">{s.customerName}</span>
+                    </div>
+                    <StatusBadge status={s.status} />
+                  </div>
+
+                  <div className="grid grid-cols-2 text-[11px] text-mutedGrey">
+                    <div>Technician: <strong className="text-charcoal">{s.technicianName || 'Pending Allocation'}</strong></div>
+                    <div>Scheduled: <strong className="text-charcoal">{new Date(s.scheduledDate).toLocaleDateString()}</strong></div>
+                    <div>Shadow-Free: <strong className="text-charcoal">{s.shadowFreeAreaSqm ? `${s.shadowFreeAreaSqm} sq.m` : 'Pending'}</strong></div>
+                    <div>Roof: <strong className="text-charcoal">{s.roofDirection || 'Pending'} ({s.roofTiltDegrees || 0}°)</strong></div>
+                  </div>
+
+                  {s.status === 'approved' ? (
+                    <div className="pt-2 border-t border-warmGrey/60 flex items-center justify-between text-sage font-bold text-[11px]">
+                      <span className="flex items-center space-x-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Approved by Engineering</span>
+                      </span>
+                      <Link
+                        to="/quotations"
+                        className="px-2.5 py-1 bg-navy text-white rounded font-semibold text-xs hover:bg-navy-light"
+                      >
+                        Generate Quotation →
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="pt-2 border-t border-warmGrey/60 flex items-center justify-between text-mutedGrey text-[11px]">
+                      <span className="text-amber font-semibold">Survey in progress / awaiting review</span>
+                      <span className="italic text-[10px]">Quotation Locked</span>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
 
           <Link
             to="/surveys"
             className="w-full block text-center py-2 bg-sand-50 hover:bg-sand-100 text-charcoal text-xs font-semibold rounded-xl border border-warmGrey"
           >
-            View All Site Surveys
+            View All Site Surveys ({mySurveys.length}) →
           </Link>
         </div>
 
-        {/* Quotation Management Box */}
-        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card space-y-4">
+        {/* Quotation Management Box (Max 3 actionable quotations) */}
+        <div className={`${cardContainerClass} p-5 space-y-4`}>
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center space-x-2">
@@ -753,12 +818,12 @@ export const SalesDashboardPage: React.FC = () => {
                 Proposals issued, customer decision status & conversion tracking
               </p>
             </div>
-            <Link
-              to="/quotations"
+            <button
+              onClick={() => setIsCreateQuotationModalOpen(true)}
               className="px-3 py-1.5 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy-light shadow-xs"
             >
               + Create Quote
-            </Link>
+            </button>
           </div>
 
           {/* Summary Pills */}
@@ -777,130 +842,82 @@ export const SalesDashboardPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Quotations List */}
+          {/* Quotations List (Max 3 records) */}
           <div className="space-y-2.5">
-            {myQuotations.slice(0, 3).map(q => (
-              <div key={q.id} className="p-3.5 rounded-xl border border-warmGrey/60 bg-sand-50/60 hover:bg-sand-50 transition-colors text-xs space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-charcoal">{q.customerName}</span>
-                  <StatusBadge status={q.status} />
-                </div>
-                <div className="flex items-center justify-between text-mutedGrey text-[11px]">
-                  <span>{q.quotationNumber} • {q.packageName}</span>
-                  <span className="font-bold text-navy text-xs">₹{q.totalAmount.toLocaleString('en-IN')}</span>
-                </div>
-                <div className="text-[10px] text-mutedGrey flex justify-between pt-1 border-t border-warmGrey/40">
-                  <span>Issued: {q.createdDate}</span>
-                  <span>Valid until: {q.validUntil}</span>
-                </div>
+            {actionableQuotations.length === 0 ? (
+              <div className="text-center py-6 text-xs text-mutedGrey">
+                No active quotations found.
               </div>
-            ))}
+            ) : (
+              actionableQuotations.map(q => (
+                <div key={q.id} className="p-3.5 rounded-xl border border-warmGrey/60 bg-sand-50/60 hover:bg-sand-50 transition-colors text-xs space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-charcoal">{q.customerName}</span>
+                    <StatusBadge status={q.status} />
+                  </div>
+                  <div className="flex items-center justify-between text-mutedGrey text-[11px]">
+                    <span>{q.quotationNumber} • {q.packageName}</span>
+                    <span className="font-bold text-navy text-xs">₹{q.totalAmount.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="text-[10px] text-mutedGrey flex justify-between pt-1 border-t border-warmGrey/40">
+                    <span>Issued: {q.createdDate}</span>
+                    <span>Valid until: {q.validUntil}</span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
 
           <Link
             to="/quotations"
             className="w-full block text-center py-2 bg-sand-50 hover:bg-sand-100 text-charcoal text-xs font-semibold rounded-xl border border-warmGrey"
           >
-            Open Quotations Catalog & Builder
+            Open Quotations Catalog & Builder ({myQuotations.length}) →
           </Link>
         </div>
 
       </div>
 
-      {/* 6. Recent Sales Activities & Sales Performance Visualizations */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Recent Sales Activities Feed */}
-        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card space-y-3">
-          <div className="flex items-center justify-between">
+      {/* 5. Recent Sales Activities Feed (Stream of latest 4 activities) */}
+      <div className={`${cardContainerClass} p-5 space-y-4`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Sparkles className="w-4 h-4 text-amber" />
             <h2 className="text-sm font-bold text-charcoal">Recent Sales Activities</h2>
-            <span className="text-[10px] font-semibold text-mutedGrey">Your Live Feed</span>
           </div>
-          <p className="text-xs text-mutedGrey">
-            Real-time trail of customer touchpoints, site survey updates & contract approvals
-          </p>
+          <span className="text-[11px] font-semibold text-mutedGrey">Latest 4 activities</span>
+        </div>
+        <p className="text-xs text-mutedGrey">
+          Real-time audit trail of customer touchpoints, site survey updates & quotation decisions
+        </p>
 
-          <div className="space-y-3 mt-3 max-h-80 overflow-y-auto pr-1">
-            {myActivities.map(act => (
-              <div key={act.id} className="p-3 bg-sand-50/80 rounded-xl border border-warmGrey/60 text-xs space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-charcoal">{act.customerName}</span>
-                  <span className="text-[10px] text-mutedGrey font-mono">{act.timestamp}</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+          {latestActivities.length === 0 ? (
+            <div className="col-span-full text-center py-6 text-xs text-mutedGrey">
+              No recent sales activities logged.
+            </div>
+          ) : (
+            latestActivities.map(act => (
+              <div key={act.id} className="p-3.5 bg-sand-50/80 rounded-xl border border-warmGrey/60 text-xs flex flex-col justify-between space-y-2">
+                <div>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-bold text-charcoal truncate">{act.customerName}</span>
+                    <span className="text-[10px] text-mutedGrey font-mono shrink-0 ml-1">{act.timestamp}</span>
+                  </div>
+                  <p className="text-mutedGrey text-[11px] leading-snug mt-1 line-clamp-2">
+                    {act.description}
+                  </p>
                 </div>
-                <p className="text-mutedGrey text-[11px] leading-snug">{act.description}</p>
                 {act.relatedLink && (
-                  <Link to={act.relatedLink} className="text-[10px] text-navy font-semibold hover:underline block pt-0.5">
-                    View record →
+                  <Link to={act.relatedLink} className="text-[10px] text-navy font-semibold hover:underline flex items-center space-x-0.5 pt-1 border-t border-warmGrey/40">
+                    <span>View record</span>
+                    <ArrowRight className="w-3 h-3" />
                   </Link>
                 )}
               </div>
-            ))}
-          </div>
+            ))
+          )}
         </div>
-
-        {/* Lead Conversion Funnel Chart */}
-        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-charcoal">Lead Conversion Velocity</h2>
-            <span className="text-xs font-bold text-sage">{conversionRate}% Close Rate</span>
-          </div>
-          <p className="text-xs text-mutedGrey">Progression from inbound lead to contracted order</p>
-
-          <div className="h-56 w-full pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={leadFunnelData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#EFE8DE" vertical={false} />
-                <XAxis dataKey="stage" stroke="#777777" fontSize={11} tickLine={false} />
-                <YAxis stroke="#777777" fontSize={11} tickLine={false} allowDecimals={false} />
-                <Tooltip 
-                  formatter={(val: number) => [`${val} Records`, 'Stage Volume']}
-                  contentStyle={{ backgroundColor: '#30343B', borderRadius: '10px', color: '#fff', fontSize: '12px' }}
-                />
-                <Bar dataKey="count" fill="#183153" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Enquiry Source Distribution Chart */}
-        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-charcoal">Lead Acquisition Sources</h2>
-            <span className="text-xs font-bold text-navy">{totalLeadsCount} Total</span>
-          </div>
-          <p className="text-xs text-mutedGrey">Breakdown across marketing & consultation channels</p>
-
-          <div className="h-56 w-full flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={sourceData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={45}
-                  outerRadius={75}
-                  paddingAngle={4}
-                  dataKey="value"
-                >
-                  {sourceData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  formatter={(val: number, name: string) => [`${val} Leads`, name]}
-                  contentStyle={{ backgroundColor: '#30343B', borderRadius: '10px', color: '#fff', fontSize: '12px' }}
-                />
-                <Legend 
-                  verticalAlign="bottom" 
-                  height={36} 
-                  iconType="circle"
-                  formatter={(value) => <span className="text-xs text-charcoal font-medium">{value}</span>}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
       </div>
 
       {/* Sales-Focused Customer 360 Profile Modal */}
