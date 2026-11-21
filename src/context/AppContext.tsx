@@ -26,6 +26,9 @@ export interface Toast {
 interface AppContextType {
   // Auth & Role
   currentUser: UserProfile;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<UserProfile | null>;
+  logout: () => void;
   switchRole: (role: UserRole) => void;
   usersList: UserProfile[];
   
@@ -113,6 +116,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Active User Profile (Defaults to Owner Vikramaditya Rao)
   const [currentUser, setCurrentUser] = useState<UserProfile>(SYSTEM_USERS[0]);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   
   // UI states
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
@@ -177,6 +181,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentUser(matched);
       showToast(`Switched active view to ${matched.roleTitle} (${matched.name})`, 'info');
     }
+  };
+
+  const login = async (email: string, password: string): Promise<UserProfile | null> => {
+    const DEMO_PASSWORD = 'solaros2026';
+    if (password !== DEMO_PASSWORD) {
+      return null;
+    }
+    const user = SYSTEM_USERS.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (user) {
+      setCurrentUser(user);
+      setIsAuthenticated(true);
+      return user;
+    }
+    return null;
+  };
+
+  const logout = () => {
+    setCurrentUser(SYSTEM_USERS[0]);
+    setIsAuthenticated(false);
+    showToast('Logged out successfully', 'info');
   };
 
   // Customers
@@ -763,6 +787,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider value={{
       currentUser,
+      isAuthenticated,
+      login,
+      logout,
       switchRole,
       usersList: SYSTEM_USERS,
       isGlobalSearchOpen,

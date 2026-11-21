@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { UserRole } from '../../types';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 export const Navbar: React.FC = () => {
   const { 
@@ -19,8 +19,10 @@ export const Navbar: React.FC = () => {
     notifications,
     markNotificationAsRead,
     markAllNotificationsAsRead,
-    showToast
+    showToast,
+    logout
   } = useApp();
+  const navigate = useNavigate();
 
   const location = useLocation();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -279,7 +281,8 @@ export const Navbar: React.FC = () => {
                 <button
                   onClick={() => {
                     setIsProfileMenuOpen(false);
-                    showToast('Logged out of session. Switched to guest mode.', 'info');
+                    logout();
+                    navigate('/login', { replace: true });
                   }}
                   className="w-full flex items-center space-x-2 px-3 py-2 text-xs text-terracotta hover:bg-terracotta-50 rounded-lg transition-colors"
                 >
