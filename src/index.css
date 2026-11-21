@@ -2,6 +2,103 @@
 @tailwind components;
 @tailwind utilities;
 
+.report-category-tab {
+  position: relative;
+  isolation: isolate;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 8px 12px;
+  color: #30343B;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  transition:
+    color 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.report-category-tab::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  bottom: -44px;
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  background: #183153;
+  transform: translateX(-50%) scale(0);
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.report-category-tab:hover::before {
+  transform: translateX(-50%) scale(4.5);
+}
+
+.report-category-tab:hover {
+  color: #FFFFFF;
+  border-color: rgba(24, 49, 83, 0.18);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -12px rgba(24, 49, 83, 0.45);
+}
+
+.report-category-tab__icon,
+.report-category-tab__label {
+  position: relative;
+  z-index: 1;
+  transition:
+    color 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.report-category-tab__icon {
+  color: #777777;
+}
+
+.report-category-tab:hover .report-category-tab__icon,
+.report-category-tab:hover .report-category-tab__label {
+  color: #FFFFFF;
+}
+
+.report-category-tab:hover .report-category-tab__icon {
+  transform: scale(1.12);
+}
+
+.report-category-tab--active {
+  color: #FFFFFF;
+  border-color: #183153;
+  background: #183153;
+  box-shadow: 0 8px 18px -10px rgba(24, 49, 83, 0.55);
+}
+
+.report-category-tab--active::before {
+  display: none;
+}
+
+.report-category-tab--active .report-category-tab__icon,
+.report-category-tab--active .report-category-tab__label {
+  color: #FFFFFF;
+}
+
+@keyframes reportPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @layer base {
   body {
     background-color: #E9E0D2;

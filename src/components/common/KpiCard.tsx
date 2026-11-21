@@ -34,7 +34,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({
   }[badgeColor];
 
   return (
-    <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card hover:shadow-card-hover transition-all duration-200">
+    <div className="bg-white rounded-card p-4 border border-warmGrey/60 shadow-card hover:shadow-card-hover transition-all duration-200">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs font-semibold text-mutedGrey uppercase tracking-wider">{title}</p>

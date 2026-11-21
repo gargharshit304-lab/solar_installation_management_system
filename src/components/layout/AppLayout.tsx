@@ -17,8 +17,8 @@ export const AppLayout: React.FC = () => {
         <Sidebar />
 
         {/* Page Content Body */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 overflow-y-auto">
-          <div className="max-w-7xl mx-auto space-y-6">
+        <main className="flex-1 p-5 sm:p-6 lg:p-7 min-w-0 overflow-y-auto">
+          <div className="max-w-[1440px] mx-auto space-y-8">
             <Outlet />
           </div>
         </main>

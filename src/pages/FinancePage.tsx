@@ -34,7 +34,7 @@ export const FinancePage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -56,29 +56,29 @@ export const FinancePage: React.FC = () => {
       </div>
 
       {/* Financial Scorecards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-card p-4 border border-warmGrey/60 shadow-card">
-          <span className="text-xs font-semibold text-mutedGrey uppercase">Total Realized Revenue</span>
-          <div className="text-2xl font-bold text-navy mt-1">₹{totalRevenue.toLocaleString('en-IN')}</div>
-          <p className="text-[11px] text-mutedGrey mt-1">Across 3 executed solar contracts</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card">
+          <span className="text-xs font-semibold text-mutedGrey uppercase tracking-wide">Total Realized Revenue</span>
+          <div className="text-2xl font-bold text-navy mt-2">₹{totalRevenue.toLocaleString('en-IN')}</div>
+          <p className="text-[11px] text-mutedGrey mt-2">Across 3 executed solar contracts</p>
         </div>
 
-        <div className="bg-white rounded-card p-4 border border-warmGrey/60 shadow-card">
-          <span className="text-xs font-semibold text-mutedGrey uppercase">Hardware & BOS Cost</span>
-          <div className="text-2xl font-bold text-charcoal mt-1">₹{totalEquipmentCost.toLocaleString('en-IN')}</div>
-          <p className="text-[11px] text-mutedGrey mt-1">{((totalEquipmentCost / totalRevenue) * 100).toFixed(1)}% of gross project turnover</p>
+        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card">
+          <span className="text-xs font-semibold text-mutedGrey uppercase tracking-wide">Hardware & BOS Cost</span>
+          <div className="text-2xl font-bold text-charcoal mt-2">₹{totalEquipmentCost.toLocaleString('en-IN')}</div>
+          <p className="text-[11px] text-mutedGrey mt-2">{((totalEquipmentCost / totalRevenue) * 100).toFixed(1)}% of gross project turnover</p>
         </div>
 
-        <div className="bg-white rounded-card p-4 border border-warmGrey/60 shadow-card">
-          <span className="text-xs font-semibold text-mutedGrey uppercase">Technician Labour Outflow</span>
-          <div className="text-2xl font-bold text-charcoal mt-1">₹{totalLabourCost.toLocaleString('en-IN')}</div>
-          <p className="text-[11px] text-mutedGrey mt-1">Certified electrical installation crew</p>
+        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card">
+          <span className="text-xs font-semibold text-mutedGrey uppercase tracking-wide">Technician Labour Outflow</span>
+          <div className="text-2xl font-bold text-charcoal mt-2">₹{totalLabourCost.toLocaleString('en-IN')}</div>
+          <p className="text-[11px] text-mutedGrey mt-2">Certified electrical installation crew</p>
         </div>
 
-        <div className="bg-white rounded-card p-4 border border-warmGrey/60 shadow-card">
-          <span className="text-xs font-semibold text-mutedGrey uppercase">Net Project Profit</span>
-          <div className="text-2xl font-bold text-sage mt-1">₹{totalGrossProfit.toLocaleString('en-IN')}</div>
-          <div className="flex items-center space-x-1.5 mt-1">
+        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card">
+          <span className="text-xs font-semibold text-mutedGrey uppercase tracking-wide">Net Project Profit</span>
+          <div className="text-2xl font-bold text-sage mt-2">₹{totalGrossProfit.toLocaleString('en-IN')}</div>
+          <div className="flex items-center space-x-1.5 mt-2">
             <span className="text-xs font-bold text-sage">{overallMargin}% Margin</span>
             <span className="text-[11px] text-mutedGrey">Company gross profit</span>
           </div>
