@@ -5,7 +5,8 @@ import {
   Package, Truck, Wrench, UserCheck, ShieldCheck,
   HeadphonesIcon, IndianRupee, BarChart3, Bot,
   Cpu, Settings as SettingsIcon, ChevronRight, ChevronDown,
-  UserPlus, CalendarClock, Bell, ClipboardList, CheckCircle2
+  UserPlus, CalendarClock, Bell, ClipboardList, CheckCircle2,
+  Building2, Activity, CheckSquare, Layers, Mic
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { UserRole } from '../../types';
@@ -37,7 +38,9 @@ export const Sidebar: React.FC = () => {
     followUps,
     enquiries,
     quotations,
-    notifications
+    notifications,
+    approvals,
+    smartAlerts
   } = useApp();
 
   // Collapsible section state
@@ -58,6 +61,8 @@ export const Sidebar: React.FC = () => {
   const newEnquiriesCount = enquiries.filter(e => e.leadStatus === 'new').length;
   const pendingQuotesCount = quotations.filter(q => q.status === 'sent' || q.status === 'draft').length;
   const unreadNotifsCount = notifications.filter(n => !n.read).length;
+  const pendingApprovalsCount = approvals.filter(a => a.status === 'pending').length;
+  const activeAlertsCount = smartAlerts.filter(a => a.status === 'new').length;
 
   // Field Survey Specialist metrics
   const myAssignedSurveys = surveys.filter(s => 
@@ -333,7 +338,136 @@ export const Sidebar: React.FC = () => {
     }
   ];
 
-  // Default Full Operational Sections (Preserved for Owner/Admin & Operations)
+  // Dedicated Owner & Managing Director Command Center Navigation Structure
+  const ownerSections: NavSection[] = [
+    {
+      title: 'OVERVIEW',
+      items: [
+        { 
+          name: 'Company Overview', 
+          path: '/', 
+          icon: LayoutDashboard, 
+          allowedRoles: ['owner_admin'] 
+        },
+        { 
+          name: 'Activity Center', 
+          path: '/activity-center', 
+          icon: Activity, 
+          allowedRoles: ['owner_admin'] 
+        },
+        { 
+          name: 'Approvals & Requests', 
+          path: '/approvals', 
+          icon: CheckSquare, 
+          allowedRoles: ['owner_admin'],
+          badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : undefined
+        },
+      ]
+    },
+    {
+      title: 'PEOPLE MANAGEMENT',
+      items: [
+        { 
+          name: 'Employees & Workforce', 
+          path: '/workforce', 
+          icon: UserCheck, 
+          allowedRoles: ['owner_admin'] 
+        },
+        { 
+          name: 'Departments & Teams', 
+          path: '/departments', 
+          icon: Building2, 
+          allowedRoles: ['owner_admin'] 
+        },
+        { 
+          name: 'Roles & Permissions', 
+          path: '/roles-permissions', 
+          icon: Layers, 
+          allowedRoles: ['owner_admin'] 
+        },
+      ]
+    },
+    {
+      title: 'BUSINESS OPERATIONS',
+      items: [
+        { 
+          name: 'Customers & CRM', 
+          path: '/customers', 
+          icon: Users, 
+          allowedRoles: ['owner_admin'] 
+        },
+        { 
+          name: 'Site Surveys', 
+          path: '/surveys', 
+          icon: Compass, 
+          allowedRoles: ['owner_admin'],
+          badge: pendingSurveysCount > 0 ? pendingSurveysCount : undefined
+        },
+        { 
+          name: 'Installations & Projects', 
+          path: '/installations', 
+          icon: Wrench, 
+          allowedRoles: ['owner_admin'] 
+        },
+        { 
+          name: 'Inventory & Warehouse', 
+          path: '/inventory', 
+          icon: Package, 
+          allowedRoles: ['owner_admin'],
+          badge: lowStockCount > 0 ? lowStockCount : undefined
+        },
+        { 
+          name: 'Finance & Accounts', 
+          path: '/finance', 
+          icon: IndianRupee, 
+          allowedRoles: ['owner_admin'] 
+        },
+      ]
+    },
+    {
+      title: 'INTELLIGENCE & AUTOMATION',
+      items: [
+        { 
+          name: 'AI Voice Agents', 
+          path: '/ai-agents', 
+          icon: Mic, 
+          allowedRoles: ['owner_admin'] 
+        },
+        { 
+          name: 'Business Reports', 
+          path: '/reports', 
+          icon: BarChart3, 
+          allowedRoles: ['owner_admin'] 
+        },
+        { 
+          name: 'Smart Alerts', 
+          path: '/notifications', 
+          icon: Bell, 
+          allowedRoles: ['owner_admin'],
+          badge: activeAlertsCount > 0 ? activeAlertsCount : undefined
+        },
+      ]
+    },
+    {
+      title: 'ADMINISTRATION',
+      items: [
+        { 
+          name: 'System Settings', 
+          path: '/settings', 
+          icon: SettingsIcon, 
+          allowedRoles: ['owner_admin'] 
+        },
+        { 
+          name: 'Company Profile', 
+          path: '/profile', 
+          icon: ShieldCheck, 
+          allowedRoles: ['owner_admin'] 
+        },
+      ]
+    }
+  ];
+
+  // Default Full Operational Sections (Preserved for Warehouse & Other Operations)
   const standardSections: NavSection[] = [
     {
       title: 'Main',
@@ -468,6 +602,7 @@ export const Sidebar: React.FC = () => {
   ];
 
   const sectionsToRender =
+    currentUser.role === 'owner_admin' ? ownerSections :
     currentUser.role === 'sales_exec' ? salesSections :
     currentUser.role === 'survey_tech' ? fieldSections :
     currentUser.role === 'engineering_lead' ? engineeringSections :

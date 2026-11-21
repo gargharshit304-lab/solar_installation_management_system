@@ -37,6 +37,13 @@ import { SurveyReportsPage } from './pages/field/SurveyReportsPage';
 import { SurveyTeamPage } from './pages/field/SurveyTeamPage';
 import { EngineeringDashboardPage } from './pages/engineering/EngineeringDashboardPage';
 
+// Owner Command Center Pages
+import { EmployeeActivityCenterPage } from './pages/owner/EmployeeActivityCenterPage';
+import { DepartmentsTeamsPage } from './pages/owner/DepartmentsTeamsPage';
+import { RolesPermissionsPage } from './pages/owner/RolesPermissionsPage';
+import { ApprovalsRequestsPage } from './pages/owner/ApprovalsRequestsPage';
+import { AiAgentManagementPage } from './pages/owner/AiAgentManagementPage';
+
 function HomeRouter() {
   const { currentUser } = useApp();
   if (currentUser.role === 'sales_exec') {
@@ -191,6 +198,31 @@ export function App() {
               <Route path="workforce" element={
                 <RoleGuard allowedRoles={['owner_admin']}>
                   <WorkforcePage />
+                </RoleGuard>
+              } />
+              <Route path="activity-center" element={
+                <RoleGuard allowedRoles={['owner_admin']}>
+                  <EmployeeActivityCenterPage />
+                </RoleGuard>
+              } />
+              <Route path="departments" element={
+                <RoleGuard allowedRoles={['owner_admin']}>
+                  <DepartmentsTeamsPage />
+                </RoleGuard>
+              } />
+              <Route path="roles-permissions" element={
+                <RoleGuard allowedRoles={['owner_admin']}>
+                  <RolesPermissionsPage />
+                </RoleGuard>
+              } />
+              <Route path="approvals" element={
+                <RoleGuard allowedRoles={['owner_admin']}>
+                  <ApprovalsRequestsPage />
+                </RoleGuard>
+              } />
+              <Route path="ai-agents" element={
+                <RoleGuard allowedRoles={['owner_admin']}>
+                  <AiAgentManagementPage />
                 </RoleGuard>
               } />
               <Route path="warranty" element={

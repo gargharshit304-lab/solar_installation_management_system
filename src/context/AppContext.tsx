@@ -7,7 +7,9 @@ import {
   Employee, NotificationItem, AiMessage, FollowUpItem,
   CustomerEnquiry, CommunicationHistoryItem, SalesActivityItem,
   TechnicianLeave, SurveyAssignmentAudit, CustomerSite,
-  TechnicianAvailabilityStatus
+  TechnicianAvailabilityStatus, Department, Team, RoleDefinition,
+  ApprovalRequest, EmployeeActivityLog, RetellAiAgent, SmartAlert,
+  PermissionAction
 } from '../types';
 import {
   SYSTEM_USERS, INITIAL_CUSTOMERS, INITIAL_SURVEYS,
@@ -18,7 +20,10 @@ import {
   INITIAL_NOTIFICATIONS, INITIAL_FOLLOW_UPS, INITIAL_ENQUIRIES,
   INITIAL_COMMUNICATION_HISTORY, INITIAL_SALES_ACTIVITIES,
   INITIAL_TECHNICIAN_LEAVES, INITIAL_SURVEY_ASSIGNMENTS,
-  INITIAL_CUSTOMER_SITES
+  INITIAL_CUSTOMER_SITES, INITIAL_DEPARTMENTS, INITIAL_TEAMS,
+  INITIAL_ROLES_PERMISSIONS, INITIAL_APPROVALS,
+  INITIAL_EMPLOYEE_ACTIVITIES, INITIAL_AI_AGENTS,
+  INITIAL_SMART_ALERTS
 } from '../data/mockData';
 
 export interface Toast {
@@ -126,6 +131,44 @@ interface AppContextType {
   
   profitability: ProjectProfitability[];
   employees: Employee[];
+  addEmployee: (emp: Omit<Employee, 'id'>) => Employee;
+  updateEmployee: (id: string, updates: Partial<Employee>) => void;
+  deactivateEmployee: (id: string, reason?: string) => void;
+  reactivateEmployee: (id: string) => void;
+
+  // Departments & Teams
+  departments: Department[];
+  updateDepartment: (id: string, updates: Partial<Department>) => void;
+  teams: Team[];
+  updateTeam: (id: string, updates: Partial<Team>) => void;
+  transferEmployee: (empId: string, targetDept: string, targetTeamId?: string, newRole?: UserRole) => void;
+
+  // Roles & Permissions
+  rolesPermissions: RoleDefinition[];
+  updateRolePermissions: (roleId: string, permissions: Record<string, PermissionAction[]>) => void;
+  createCustomRole: (role: Omit<RoleDefinition, 'id' | 'isCustom'>) => RoleDefinition;
+
+  // Approvals & Requests
+  approvals: ApprovalRequest[];
+  createApprovalRequest: (req: Omit<ApprovalRequest, 'id' | 'requestNumber' | 'createdDate' | 'status'>) => ApprovalRequest;
+  approveRequest: (id: string, remarks?: string) => void;
+  rejectRequest: (id: string, reason: string) => void;
+  requestMoreInfo: (id: string, query: string) => void;
+
+  // Employee Activities
+  employeeActivities: EmployeeActivityLog[];
+  logEmployeeActivity: (act: Omit<EmployeeActivityLog, 'id' | 'timestamp'>) => void;
+
+  // AI Voice Agents (Retell)
+  aiAgents: RetellAiAgent[];
+  updateAiAgent: (id: string, updates: Partial<RetellAiAgent>) => void;
+  toggleAiAgentStatus: (id: string) => void;
+
+  // Smart Alerts
+  smartAlerts: SmartAlert[];
+  acknowledgeAlert: (id: string) => void;
+  resolveAlert: (id: string) => void;
+
   notifications: NotificationItem[];
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
@@ -191,6 +234,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [enquiries, setEnquiries] = useState<CustomerEnquiry[]>(INITIAL_ENQUIRIES);
   const [communicationHistory, setCommunicationHistory] = useState<CommunicationHistoryItem[]>(INITIAL_COMMUNICATION_HISTORY);
   const [salesActivities, setSalesActivities] = useState<SalesActivityItem[]>(INITIAL_SALES_ACTIVITIES);
+
+  // Owner Command Center State
+  const [departments, setDepartments] = useState<Department[]>(INITIAL_DEPARTMENTS);
+  const [teams, setTeams] = useState<Team[]>(INITIAL_TEAMS);
+  const [rolesPermissions, setRolesPermissions] = useState<RoleDefinition[]>(INITIAL_ROLES_PERMISSIONS);
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>(INITIAL_APPROVALS);
+  const [employeeActivities, setEmployeeActivities] = useState<EmployeeActivityLog[]>(INITIAL_EMPLOYEE_ACTIVITIES);
+  const [aiAgents, setAiAgents] = useState<RetellAiAgent[]>(INITIAL_AI_AGENTS);
+  const [smartAlerts, setSmartAlerts] = useState<SmartAlert[]>(INITIAL_SMART_ALERTS);
   
   // AI Command Center state
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([
@@ -1622,6 +1674,243 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 900);
   };
 
+  // ==========================================
+  // Owner Command Center Handlers
+  // ==========================================
+
+  // Employee Management
+  const addEmployee = (empData: Omit<Employee, 'id'>): Employee => {
+    const newEmp: Employee = {
+      ...empData,
+      id: `emp-${Date.now()}`,
+      status: empData.status || 'active',
+      isAvailable: empData.isAvailable ?? true,
+      activeJobs: empData.activeJobs || 0,
+      rating: empData.rating || 5.0
+    };
+    setEmployees(prev => [newEmp, ...prev]);
+
+    logEmployeeActivity({
+      employeeId: currentUser.id,
+      employeeName: currentUser.name,
+      department: 'Sales',
+      role: currentUser.roleTitle,
+      actionType: 'Employee Added',
+      actionDetails: `Added new employee ${newEmp.fullName} (${newEmp.employeeCode}) to ${newEmp.department} department`,
+      targetEntity: newEmp.fullName,
+      targetId: newEmp.id,
+      severity: 'important'
+    });
+
+    showToast(`Employee ${newEmp.fullName} registered successfully`, 'success');
+    return newEmp;
+  };
+
+  const updateEmployee = (id: string, updates: Partial<Employee>) => {
+    setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, ...updates } : emp));
+    showToast('Employee profile updated successfully', 'success');
+  };
+
+  const deactivateEmployee = (id: string, reason?: string) => {
+    setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, status: 'inactive', isAvailable: false } : emp));
+    const emp = employees.find(e => e.id === id);
+    if (emp) {
+      logEmployeeActivity({
+        employeeId: currentUser.id,
+        employeeName: currentUser.name,
+        department: 'Sales',
+        role: currentUser.roleTitle,
+        actionType: 'Employee Deactivated',
+        actionDetails: `Deactivated employee account for ${emp.fullName}. Reason: ${reason || 'Administrative action by Owner'}`,
+        targetEntity: emp.fullName,
+        targetId: emp.id,
+        severity: 'critical'
+      });
+    }
+    showToast('Employee account marked as inactive', 'info');
+  };
+
+  const reactivateEmployee = (id: string) => {
+    setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, status: 'active', isAvailable: true } : emp));
+    showToast('Employee account reactivated to Active status', 'success');
+  };
+
+  // Departments & Teams
+  const updateDepartment = (id: string, updates: Partial<Department>) => {
+    setDepartments(prev => prev.map(dept => dept.id === id ? { ...dept, ...updates } : dept));
+    showToast('Department details updated', 'success');
+  };
+
+  const updateTeam = (id: string, updates: Partial<Team>) => {
+    setTeams(prev => prev.map(team => team.id === id ? { ...team, ...updates } : team));
+    showToast('Team details updated', 'success');
+  };
+
+  const transferEmployee = (empId: string, targetDept: string, targetTeamId?: string, newRole?: UserRole) => {
+    const emp = employees.find(e => e.id === empId);
+    if (!emp) return;
+    const oldDept = emp.department;
+    const targetTeam = teams.find(t => t.id === targetTeamId);
+
+    setEmployees(prev => prev.map(e => {
+      if (e.id === empId) {
+        return {
+          ...e,
+          department: targetDept,
+          teamId: targetTeamId || e.teamId,
+          teamName: targetTeam ? targetTeam.name : e.teamName,
+          role: newRole || e.role
+        };
+      }
+      return e;
+    }));
+
+    logEmployeeActivity({
+      employeeId: currentUser.id,
+      employeeName: currentUser.name,
+      department: 'Sales',
+      role: currentUser.roleTitle,
+      actionType: 'Employee Transferred',
+      actionDetails: `Transferred ${emp.fullName} from ${oldDept} to ${targetDept}${targetTeam ? ` (${targetTeam.name})` : ''}`,
+      targetEntity: emp.fullName,
+      targetId: emp.id,
+      severity: 'important'
+    });
+
+    showToast(`Transferred ${emp.fullName} to ${targetDept}`, 'success');
+  };
+
+  // Roles & Permissions
+  const updateRolePermissions = (roleId: string, permissions: Record<string, PermissionAction[]>) => {
+    setRolesPermissions(prev => prev.map(r => r.id === roleId ? { ...r, permissions } : r));
+    showToast('Role permissions matrix updated successfully', 'success');
+  };
+
+  const createCustomRole = (roleData: Omit<RoleDefinition, 'id' | 'isCustom'>): RoleDefinition => {
+    const newRole: RoleDefinition = {
+      ...roleData,
+      id: `role-${Date.now()}`,
+      isCustom: true
+    };
+    setRolesPermissions(prev => [...prev, newRole]);
+    showToast(`Custom role "${newRole.name}" created`, 'success');
+    return newRole;
+  };
+
+  // Approvals & Requests
+  const createApprovalRequest = (reqData: Omit<ApprovalRequest, 'id' | 'requestNumber' | 'createdDate' | 'status'>): ApprovalRequest => {
+    const newReq: ApprovalRequest = {
+      ...reqData,
+      id: `appr-${Date.now()}`,
+      requestNumber: `REQ-2026-${String(approvals.length + 1).padStart(3, '0')}`,
+      status: 'pending',
+      createdDate: new Date().toISOString()
+    };
+    setApprovals(prev => [newReq, ...prev]);
+    showToast(`Approval request ${newReq.requestNumber} submitted to Owner`, 'success');
+    return newReq;
+  };
+
+  const approveRequest = (id: string, remarks?: string) => {
+    setApprovals(prev => prev.map(req => {
+      if (req.id === id) {
+        return {
+          ...req,
+          status: 'approved',
+          reviewedDate: new Date().toISOString(),
+          reviewedBy: currentUser.name,
+          remarks: remarks || req.remarks
+        };
+      }
+      return req;
+    }));
+
+    const req = approvals.find(r => r.id === id);
+    if (req) {
+      logEmployeeActivity({
+        employeeId: currentUser.id,
+        employeeName: currentUser.name,
+        department: 'Accounts',
+        role: currentUser.roleTitle,
+        actionType: 'Request Approved',
+        actionDetails: `Approved request ${req.requestNumber} (${req.title}) - ${req.amount ? `₹${req.amount.toLocaleString()}` : 'Authorized'}`,
+        targetEntity: req.requestNumber,
+        targetId: req.id,
+        severity: 'important'
+      });
+    }
+
+    showToast('Approval request granted', 'success');
+  };
+
+  const rejectRequest = (id: string, reason: string) => {
+    setApprovals(prev => prev.map(req => {
+      if (req.id === id) {
+        return {
+          ...req,
+          status: 'rejected',
+          reviewedDate: new Date().toISOString(),
+          reviewedBy: currentUser.name,
+          remarks: reason
+        };
+      }
+      return req;
+    }));
+    showToast('Approval request rejected', 'info');
+  };
+
+  const requestMoreInfo = (id: string, query: string) => {
+    setApprovals(prev => prev.map(req => {
+      if (req.id === id) {
+        return {
+          ...req,
+          status: 'info_requested',
+          remarks: `Info Requested by Owner: ${query}`
+        };
+      }
+      return req;
+    }));
+    showToast('Information request sent to requester', 'info');
+  };
+
+  // Employee Activities
+  const logEmployeeActivity = (actData: Omit<EmployeeActivityLog, 'id' | 'timestamp'>) => {
+    const newAct: EmployeeActivityLog = {
+      ...actData,
+      id: `eact-${Date.now()}`,
+      timestamp: 'Just now'
+    };
+    setEmployeeActivities(prev => [newAct, ...prev]);
+  };
+
+  // AI Voice Agents
+  const updateAiAgent = (id: string, updates: Partial<RetellAiAgent>) => {
+    setAiAgents(prev => prev.map(agent => agent.id === id ? { ...agent, ...updates } : agent));
+    showToast('Retell AI Voice Agent settings updated', 'success');
+  };
+
+  const toggleAiAgentStatus = (id: string) => {
+    setAiAgents(prev => prev.map(agent => {
+      if (agent.id === id) {
+        const nextStatus = agent.status === 'active' ? 'paused' : 'active';
+        return { ...agent, status: nextStatus };
+      }
+      return agent;
+    }));
+    showToast('AI Agent status toggled', 'info');
+  };
+
+  // Smart Alerts
+  const acknowledgeAlert = (id: string) => {
+    setSmartAlerts(prev => prev.map(alert => alert.id === id ? { ...alert, status: 'acknowledged', acknowledgedBy: currentUser.name } : alert));
+    showToast('Alert marked as acknowledged', 'info');
+  };
+
+  const resolveAlert = (id: string) => {
+    setSmartAlerts(prev => prev.map(alert => alert.id === id ? { ...alert, status: 'resolved' } : alert));
+    showToast('Alert marked as resolved', 'success');
+  };
+
   return (
     <AppContext.Provider value={{
       currentUser,
@@ -1690,6 +1979,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateTicketStatus,
       profitability,
       employees,
+      addEmployee,
+      updateEmployee,
+      deactivateEmployee,
+      reactivateEmployee,
+      departments,
+      updateDepartment,
+      teams,
+      updateTeam,
+      transferEmployee,
+      rolesPermissions,
+      updateRolePermissions,
+      createCustomRole,
+      approvals,
+      createApprovalRequest,
+      approveRequest,
+      rejectRequest,
+      requestMoreInfo,
+      employeeActivities,
+      logEmployeeActivity,
+      aiAgents,
+      updateAiAgent,
+      toggleAiAgentStatus,
+      smartAlerts,
+      acknowledgeAlert,
+      resolveAlert,
       notifications: notifications.filter(
         notification => !notification.targetRoles || notification.targetRoles.includes(currentUser.role)
       ),

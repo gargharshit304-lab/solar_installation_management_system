@@ -457,6 +457,22 @@ export interface Employee {
   isAvailable: boolean;
   activeJobs: number;
   rating: number;
+  status?: 'active' | 'on_leave' | 'inactive';
+  reportingManagerId?: string;
+  reportingManagerName?: string;
+  joiningDate?: string;
+  address?: string;
+  emergencyContact?: {
+    name: string;
+    relation: string;
+    phone: string;
+  };
+  employmentType?: 'full_time' | 'contract' | 'part_time';
+  accountStatus?: 'active' | 'suspended' | 'invited';
+  customPermissions?: string[];
+  teamId?: string;
+  teamName?: string;
+  leaveBalanceDays?: number;
 }
 
 export interface NotificationItem {
@@ -546,4 +562,139 @@ export interface SalesActivityItem {
   timestamp: string;
   salesperson: string;
   relatedLink?: string;
+}
+
+// ==========================================
+// Owner Command Center & Enterprise Types
+// ==========================================
+
+export interface Department {
+  id: string;
+  name: string;
+  code: string;
+  headEmployeeId: string;
+  headEmployeeName: string;
+  headDesignation: string;
+  description: string;
+  teamCount: number;
+  employeeCount: number;
+  budgetAllocated: number;
+  monthlyExpense: number;
+  kpiSummary: string;
+  iconName?: string;
+}
+
+export interface Team {
+  id: string;
+  departmentId: string;
+  departmentName: string;
+  name: string;
+  teamLeadId: string;
+  teamLeadName: string;
+  memberCount: number;
+  description: string;
+  currentObjective?: string;
+}
+
+export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'assign' | 'approve' | 'export' | 'manage';
+
+export interface RoleDefinition {
+  id: string;
+  roleKey: string;
+  name: string;
+  isCustom: boolean;
+  description: string;
+  userCount: number;
+  permissions: Record<string, PermissionAction[]>;
+}
+
+export type ApprovalCategory = 
+  | 'purchase_order' 
+  | 'expense' 
+  | 'supplier_payment' 
+  | 'discount' 
+  | 'budget_overrun' 
+  | 'leave';
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'info_requested';
+
+export interface ApprovalRequest {
+  id: string;
+  requestNumber: string;
+  title: string;
+  category: ApprovalCategory;
+  department: string;
+  requestedByEmployeeId: string;
+  requestedByName: string;
+  requestedByRole: string;
+  amount?: number;
+  justification: string;
+  status: ApprovalStatus;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  createdDate: string;
+  reviewedDate?: string;
+  reviewedBy?: string;
+  remarks?: string;
+  lineItems?: { description: string; quantity: number; unitPrice: number; total: number }[];
+  attachments?: string[];
+}
+
+export type ActivityDepartment = 'Sales' | 'Field Operations' | 'Engineering' | 'Installation' | 'Warehouse' | 'Accounts';
+
+export interface EmployeeActivityLog {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  employeeCode?: string;
+  department: ActivityDepartment;
+  role: string;
+  actionType: string;
+  actionDetails: string;
+  targetEntity?: string;
+  targetId?: string;
+  timestamp: string;
+  ipAddress?: string;
+  severity?: 'normal' | 'important' | 'critical';
+}
+
+export interface RetellCallLog {
+  id: string;
+  callerPhone: string;
+  customerName?: string;
+  duration: string;
+  timestamp: string;
+  outcome: string;
+  sentiment: 'positive' | 'neutral' | 'negative';
+  recordingUrl?: string;
+  transcriptSnippet: string;
+  fullTranscript?: { speaker: 'AI Agent' | 'Customer'; text: string; time: string }[];
+}
+
+export interface RetellAiAgent {
+  id: string;
+  name: string;
+  role: string;
+  voiceModel: string;
+  status: 'active' | 'paused' | 'standby';
+  inboundNumber: string;
+  totalCallsHandled: number;
+  successConversionRate: number;
+  averageDurationSeconds: number;
+  systemPrompt: string;
+  escalationRule: string;
+  lastActive: string;
+  callLogs: RetellCallLog[];
+}
+
+export interface SmartAlert {
+  id: string;
+  title: string;
+  category: 'delayed_project' | 'low_stock' | 'overdue_payment' | 'unassigned_survey' | 'engineering_delay';
+  severity: 'critical' | 'warning' | 'info';
+  status: 'new' | 'acknowledged' | 'resolved';
+  description: string;
+  entityId?: string;
+  entityLink?: string;
+  timestamp: string;
+  acknowledgedBy?: string;
 }
