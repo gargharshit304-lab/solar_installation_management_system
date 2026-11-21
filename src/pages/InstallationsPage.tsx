@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Wrench, Calendar, CheckSquare, Clock, MapPin, 
-  UserCheck, Camera, CheckCircle2, AlertCircle, Play, 
-  FileCheck, ShieldCheck 
+  UserCheck, CheckCircle2, Play, ShieldCheck, Eye
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Installation } from '../types';
@@ -20,7 +19,7 @@ export const InstallationsPage: React.FC = () => {
     showToast 
   } = useApp();
 
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'completed'>('pending');
   const [selectedJob, setSelectedJob] = useState<Installation | null>(null);
   const [isJobModalOpen, setIsJobModalOpen] = useState(false);
 
@@ -29,9 +28,31 @@ export const InstallationsPage: React.FC = () => {
   const [signatureData, setSignatureData] = useState<string | undefined>(undefined);
   const [technicianRemarks, setTechnicianRemarks] = useState('');
 
-  const filteredInstallations = installations.filter(i => {
-    return filterStatus === 'all' || i.status === filterStatus;
-  });
+  const pendingInstallations = installations.filter(
+    item => item.status !== 'completed'
+  );
+  const completedInstallations = installations.filter(
+    item => item.status === 'completed'
+  );
+  const filteredInstallations = filterStatus === 'pending'
+    ? pendingInstallations
+    : filterStatus === 'completed'
+      ? completedInstallations
+      : installations;
+
+  const checklistItems: Array<{
+    key: keyof Installation['checklist'];
+    label: string;
+  }> = [
+    { key: 'structureMounting', label: 'Structure fastened & wind-load verified' },
+    { key: 'panelsMounted', label: 'Solar panels clamped with mid/end clamps' },
+    { key: 'earthingPitConnected', label: 'Chemical earthing resistance below 5 Ohms' },
+    { key: 'lightningArresterInstalled', label: 'Lightning arrester grounded' },
+    { key: 'inverterWired', label: 'Inverter mounted with proper ventilation' },
+    { key: 'dcWiringTested', label: 'DC polarity & open-circuit voltage tested' },
+    { key: 'acDbBoxConnected', label: 'ACDB / DCDB enclosures & SPD connected' },
+    { key: 'biDirectionalMeterSync', label: 'Bi-directional net meter synchronized' },
+  ];
 
   const handleOpenJob = (inst: Installation) => {
     setSelectedJob(inst);
@@ -90,22 +111,58 @@ export const InstallationsPage: React.FC = () => {
             Field engineer schedules, 8-point electrical safety checklist & digital customer signoffs
           </p>
         </div>
-        <select
-          value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value)}
-          className="px-3 py-2 text-xs border border-warmGrey rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-navy font-medium"
+        <span className="hidden rounded-full border border-warmGrey/70 bg-white px-3 py-1.5 text-[11px] font-semibold text-mutedGrey sm:inline-flex">
+          {installations.length} total installation jobs
+        </span>
+      </div>
+
+      {/* Task Categories */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={() => setFilterStatus('pending')}
+          className={`group text-left rounded-2xl border p-4 shadow-card transition-all duration-300 sm:p-5 ${
+            filterStatus === 'pending'
+              ? 'border-amber/50 bg-amber-50/70'
+              : 'border-warmGrey/60 bg-white hover:-translate-y-0.5 hover:border-amber/40'
+          }`}
         >
-          <option value="all">All Installation Statuses</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="assigned">Assigned</option>
-          <option value="in_progress">In Progress (Active on Site)</option>
-          <option value="completed">Completed & Commissioned</option>
-          <option value="delayed">Delayed</option>
-        </select>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber transition-transform duration-300 group-hover:scale-105">
+              <Clock className="h-5 w-5" />
+            </div>
+            <span className="rounded-full border border-amber/30 bg-white px-2.5 py-1 text-xs font-bold text-amber">
+              Pending
+            </span>
+          </div>
+          <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-mutedGrey">Pending tasks</p>
+          <p className="mt-1 text-2xl font-bold text-charcoal">{pendingInstallations.length}</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFilterStatus('completed')}
+          className={`group text-left rounded-2xl border p-4 shadow-card transition-all duration-300 sm:p-5 ${
+            filterStatus === 'completed'
+              ? 'border-sage/50 bg-sage-50'
+              : 'border-warmGrey/60 bg-white hover:-translate-y-0.5 hover:border-sage/40'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sage-50 text-sage transition-transform duration-300 group-hover:scale-105">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <span className="rounded-full border border-sage/30 bg-white px-2.5 py-1 text-xs font-bold text-sage">
+              This week
+            </span>
+          </div>
+          <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-mutedGrey">Tasks completed this week</p>
+          <p className="mt-1 text-2xl font-bold text-charcoal">{completedInstallations.length}</p>
+        </button>
       </div>
 
       {/* Installations Table */}
-      <div className="bg-white rounded-card border border-warmGrey/60 shadow-card overflow-hidden">
+      <div className="hidden bg-white rounded-card border border-warmGrey/60 shadow-card overflow-hidden md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-sand-50 text-mutedGrey font-semibold uppercase tracking-wider border-b border-warmGrey">
@@ -127,7 +184,11 @@ export const InstallationsPage: React.FC = () => {
                 const percent = Math.round((completedCount / totalChecklist) * 100);
 
                 return (
-                  <tr key={inst.id} className="hover:bg-sand-50/70 transition-colors">
+                  <tr
+                    key={inst.id}
+                    onClick={() => handleOpenJob(inst)}
+                    className="cursor-pointer hover:bg-sand-50/70 transition-colors"
+                  >
                     <td className="py-3.5 px-4 font-mono font-bold text-navy">
                       {inst.installationCode}
                     </td>
@@ -162,7 +223,10 @@ export const InstallationsPage: React.FC = () => {
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <button
-                        onClick={() => handleOpenJob(inst)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleOpenJob(inst);
+                        }}
                         className="px-3 py-1.5 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy-light transition-colors shadow-xs inline-flex items-center space-x-1"
                       >
                         <Wrench className="w-3.5 h-3.5 text-sand" />
@@ -177,6 +241,68 @@ export const InstallationsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Mobile Installation Cards */}
+      <div className="space-y-3 md:hidden">
+        {filteredInstallations.map(inst => {
+          const completedCount = Object.values(inst.checklist).filter(Boolean).length;
+          const percent = Math.round((completedCount / Object.keys(inst.checklist).length) * 100);
+
+          return (
+            <article
+              key={inst.id}
+              onClick={() => handleOpenJob(inst)}
+              className="cursor-pointer rounded-2xl border border-warmGrey/70 bg-white p-4 shadow-card transition-all duration-300 active:scale-[0.99]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-mono text-xs font-bold text-navy">{inst.installationCode}</p>
+                  <h2 className="mt-1 text-sm font-bold text-charcoal">{inst.customerName}</h2>
+                  <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-mutedGrey">{inst.customerAddress}</p>
+                </div>
+                <StatusBadge status={inst.status} />
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-sand-50 p-2.5">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-mutedGrey">System</span>
+                  <span className="mt-1 block text-xs font-bold text-navy">{inst.capacityKw} kW</span>
+                  <span className="text-[10px] capitalize text-mutedGrey">{inst.systemType.replace('_', ' ')}</span>
+                </div>
+                <div className="rounded-lg bg-sand-50 p-2.5">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-mutedGrey">Schedule</span>
+                  <span className="mt-1 block text-xs font-bold text-charcoal">{inst.scheduledDate}</span>
+                  <span className="text-[10px] text-mutedGrey">to {inst.scheduledEndDate}</span>
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <div className="mb-1.5 flex items-center justify-between text-[11px]">
+                  <span className="text-mutedGrey">Safety checklist</span>
+                  <span className="font-bold text-charcoal">{completedCount}/8 · {percent}%</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-sand-200">
+                  <div
+                    className={`h-full rounded-full ${percent === 100 ? 'bg-sage' : 'bg-navy'}`}
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleOpenJob(inst);
+                }}
+                className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-navy px-4 text-sm font-semibold text-white shadow-xs transition-colors active:bg-navy-dark"
+              >
+                <Wrench className="h-4 w-4 text-sand" />
+                <span>Execute Job</span>
+              </button>
+            </article>
+          );
+        })}
+      </div>
+
       {/* Technician Job Execution Modal */}
       {isJobModalOpen && selectedJob && (
         <Modal
@@ -184,188 +310,157 @@ export const InstallationsPage: React.FC = () => {
           onClose={() => setIsJobModalOpen(false)}
           title={`Technician Job Execution — ${selectedJob.installationCode}`}
           subtitle={`${selectedJob.customerName} (${selectedJob.capacityKw} kW Rooftop Solar)`}
-          maxWidth="3xl"
+          maxWidth="4xl"
         >
-          <form onSubmit={handleCompleteJob} className="space-y-5">
-            
-            {/* Job Header & Time Tracker */}
-            <div className="p-4 bg-sand-100 rounded-xl border border-warmGrey flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
-              <div>
-                <p><strong>Customer:</strong> {selectedJob.customerName} ({selectedJob.customerPhone})</p>
-                <p className="text-mutedGrey">{selectedJob.customerAddress}</p>
-                <p className="mt-1"><strong>Lead Engineer:</strong> {selectedJob.technicianNames.join(', ')}</p>
-              </div>
-              <div className="flex items-center space-x-2">
-                {selectedJob.status !== 'in_progress' && selectedJob.status !== 'completed' && (
-                  <button
-                    type="button"
-                    onClick={handleStartWork}
-                    className="px-3.5 py-2 bg-sage text-white font-bold rounded-lg hover:bg-sage-dark flex items-center space-x-1.5 shadow-xs"
-                  >
-                    <Play className="w-4 h-4 fill-current" />
-                    <span>Start Work Timer</span>
-                  </button>
-                )}
-                {selectedJob.status === 'in_progress' && (
-                  <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-50 text-amber border border-amber/40 rounded-lg font-bold">
-                    <Clock className="w-4 h-4 animate-spin" />
-                    <span>In Progress (Active)</span>
+          <form onSubmit={handleCompleteJob}>
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_230px]">
+              <div className="space-y-5">
+                {/* Job Summary */}
+                <section className="rounded-xl border border-warmGrey/70 bg-sand-50/50 p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div className="min-w-0 text-xs">
+                      <p className="font-bold text-charcoal">{selectedJob.customerName}</p>
+                      <p className="mt-1 text-mutedGrey">{selectedJob.customerAddress}</p>
+                      <p className="mt-2 text-mutedGrey">
+                        <span className="font-semibold text-charcoal">Contact:</span> {selectedJob.customerPhone}
+                      </p>
+                      <p className="mt-1 text-mutedGrey">
+                        <span className="font-semibold text-charcoal">Lead engineer:</span>{' '}
+                        {selectedJob.technicianNames.join(', ')}
+                      </p>
+                    </div>
+                    {selectedJob.status !== 'in_progress' && selectedJob.status !== 'completed' && (
+                      <button
+                        type="button"
+                        onClick={handleStartWork}
+                        className="shrink-0 px-3.5 py-2 bg-sage text-white text-xs font-bold rounded-lg hover:bg-sage-dark flex items-center justify-center space-x-1.5 shadow-xs"
+                      >
+                        <Play className="w-4 h-4 fill-current" />
+                        <span>Start work</span>
+                      </button>
+                    )}
+                    {selectedJob.status === 'in_progress' && (
+                      <div className="shrink-0 flex items-center space-x-1.5 px-3 py-1.5 bg-amber-50 text-amber border border-amber/40 rounded-lg text-xs font-bold">
+                        <Clock className="w-4 h-4" />
+                        <span>In progress</span>
+                      </div>
+                    )}
+                    {selectedJob.status === 'completed' && (
+                      <div className="shrink-0 flex items-center space-x-1.5 px-3 py-1.5 bg-sage-50 text-sage border border-sage/40 rounded-lg text-xs font-bold">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Commissioned</span>
+                      </div>
+                    )}
                   </div>
-                )}
-                {selectedJob.status === 'completed' && (
-                  <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-sage-50 text-sage border border-sage/40 rounded-lg font-bold">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Commissioned</span>
+                </section>
+
+                {/* Safety Checklist */}
+                <section>
+                  {(() => {
+                    const completedCount = Object.values(selectedJob.checklist).filter(Boolean).length;
+                    const progress = Math.round((completedCount / 8) * 100);
+                    return (
+                      <>
+                        <div className="mb-3 flex items-end justify-between gap-3">
+                          <div>
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-charcoal">
+                              8-point commissioning checklist
+                            </h4>
+                            <p className="mt-1 text-[11px] text-mutedGrey">All checks are required before signoff</p>
+                          </div>
+                          <span className="text-xs font-bold text-navy">{completedCount}/8</span>
+                        </div>
+                        <div className="mb-3 h-1.5 rounded-full bg-sand-200 overflow-hidden">
+                          <div className="h-full rounded-full bg-navy transition-all duration-300" style={{ width: `${progress}%` }} />
+                        </div>
+                      </>
+                    );
+                  })()}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {checklistItems.map((item, index) => (
+                      <label
+                        key={item.key}
+                        className={`flex min-h-12 items-start gap-2.5 rounded-lg border px-3 py-2.5 text-xs cursor-pointer transition-colors ${
+                          selectedJob.checklist[item.key]
+                            ? 'border-sage/30 bg-sage-50/60'
+                            : 'border-warmGrey/70 bg-white hover:bg-sand-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedJob.checklist[item.key]}
+                          onChange={() => handleToggleChecklist(item.key)}
+                          className="mt-0.5 h-4 w-4 shrink-0 rounded border-warmGrey text-navy focus:ring-navy"
+                        />
+                        <span className="leading-5">
+                          <span className="mr-1 font-bold text-mutedGrey">{index + 1}.</span>
+                          <span className="font-medium text-charcoal">{item.label}</span>
+                        </span>
+                      </label>
+                    ))}
                   </div>
-                )}
-              </div>
-            </div>
+                </section>
 
-            {/* 8-Point Electrical & Safety Checklist */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-charcoal">
-                  Mandatory 8-Point Electrical & Safety Commissioning Checklist:
-                </h4>
-                <span className="text-[11px] text-mutedGrey">All points required for signoff</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                <label className="flex items-center space-x-2.5 p-2.5 rounded-lg border border-warmGrey hover:bg-sand-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedJob.checklist.structureMounting}
-                    onChange={() => handleToggleChecklist('structureMounting')}
-                    className="w-4 h-4 text-navy rounded border-warmGrey focus:ring-navy"
+                {/* Work Notes */}
+                <section>
+                  <label className="mb-1.5 block text-xs font-bold text-charcoal">
+                    Work remarks & generation test
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={technicianRemarks}
+                    onChange={e => setTechnicianRemarks(e.target.value)}
+                    placeholder="Record generation output, test readings, and DISCOM observations..."
+                    className="w-full rounded-lg border border-warmGrey px-3 py-2.5 text-xs leading-5 focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
                   />
-                  <span className="font-medium text-charcoal">1. Structure Fastened & Wind-Load Verified</span>
-                </label>
-
-                <label className="flex items-center space-x-2.5 p-2.5 rounded-lg border border-warmGrey hover:bg-sand-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedJob.checklist.panelsMounted}
-                    onChange={() => handleToggleChecklist('panelsMounted')}
-                    className="w-4 h-4 text-navy rounded border-warmGrey focus:ring-navy"
-                  />
-                  <span className="font-medium text-charcoal">2. Solar Panels Clamped with Mid/End Clamps</span>
-                </label>
-
-                <label className="flex items-center space-x-2.5 p-2.5 rounded-lg border border-warmGrey hover:bg-sand-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedJob.checklist.earthingPitConnected}
-                    onChange={() => handleToggleChecklist('earthingPitConnected')}
-                    className="w-4 h-4 text-navy rounded border-warmGrey focus:ring-navy"
-                  />
-                  <span className="font-medium text-charcoal">3. Chemical Earthing Pit Resistance &lt; 5 Ohms</span>
-                </label>
-
-                <label className="flex items-center space-x-2.5 p-2.5 rounded-lg border border-warmGrey hover:bg-sand-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedJob.checklist.lightningArresterInstalled}
-                    onChange={() => handleToggleChecklist('lightningArresterInstalled')}
-                    className="w-4 h-4 text-navy rounded border-warmGrey focus:ring-navy"
-                  />
-                  <span className="font-medium text-charcoal">4. Early Streamer Lightning Arrester Grounded</span>
-                </label>
-
-                <label className="flex items-center space-x-2.5 p-2.5 rounded-lg border border-warmGrey hover:bg-sand-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedJob.checklist.inverterWired}
-                    onChange={() => handleToggleChecklist('inverterWired')}
-                    className="w-4 h-4 text-navy rounded border-warmGrey focus:ring-navy"
-                  />
-                  <span className="font-medium text-charcoal">5. Inverter Mounted with Proper Heat Ventilation</span>
-                </label>
-
-                <label className="flex items-center space-x-2.5 p-2.5 rounded-lg border border-warmGrey hover:bg-sand-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedJob.checklist.dcWiringTested}
-                    onChange={() => handleToggleChecklist('dcWiringTested')}
-                    className="w-4 h-4 text-navy rounded border-warmGrey focus:ring-navy"
-                  />
-                  <span className="font-medium text-charcoal">6. DC Polarity & Voltage Open-Circuit (Voc) Tested</span>
-                </label>
-
-                <label className="flex items-center space-x-2.5 p-2.5 rounded-lg border border-warmGrey hover:bg-sand-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedJob.checklist.acDbBoxConnected}
-                    onChange={() => handleToggleChecklist('acDbBoxConnected')}
-                    className="w-4 h-4 text-navy rounded border-warmGrey focus:ring-navy"
-                  />
-                  <span className="font-medium text-charcoal">7. ACDB / DCDB Enclosures with SPD Connected</span>
-                </label>
-
-                <label className="flex items-center space-x-2.5 p-2.5 rounded-lg border border-warmGrey hover:bg-sand-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedJob.checklist.biDirectionalMeterSync}
-                    onChange={() => handleToggleChecklist('biDirectionalMeterSync')}
-                    className="w-4 h-4 text-navy rounded border-warmGrey focus:ring-navy"
-                  />
-                  <span className="font-medium text-charcoal">8. Bi-directional Net Meter Grid Synchronized</span>
-                </label>
-              </div>
-            </div>
-
-            {/* Technician Remarks */}
-            <div>
-              <label className="block text-xs font-semibold text-charcoal mb-1">
-                Technician Work Remarks & Generation Testing Voltage
-              </label>
-              <textarea
-                rows={2}
-                value={technicianRemarks}
-                onChange={e => setTechnicianRemarks(e.target.value)}
-                placeholder="e.g. Generation measured at 4.8 kW at 12:45 PM. Discom officer witnessed net meter synchronization."
-                className="w-full px-3 py-2 text-xs border border-warmGrey rounded-lg focus:outline-none focus:ring-1 focus:ring-navy"
-              />
-            </div>
-
-            {/* Customer Digital Signature Pad */}
-            <div className="pt-2 border-t border-warmGrey/60 space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-charcoal">Customer Digital Signoff & Handover</label>
-                <span className="text-[11px] text-mutedGrey">Sign on canvas below</span>
+                </section>
               </div>
 
-              <div>
+              {/* Signoff Rail */}
+              <aside className="rounded-xl border border-warmGrey/70 bg-sand-50/30 p-4 h-fit">
+                <div className="mb-3">
+                  <h4 className="text-xs font-bold text-charcoal">Customer signoff</h4>
+                  <p className="mt-1 text-[11px] text-mutedGrey">Capture handover confirmation</p>
+                </div>
+                <label className="mb-1.5 block text-[11px] font-semibold text-charcoal">Customer name</label>
                 <input
                   type="text"
                   required
-                  placeholder="Customer Full Name (e.g. Nitin Patil)"
+                  placeholder="Full name"
                   value={customerSignName}
                   onChange={e => setCustomerSignName(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-warmGrey rounded-lg mb-2"
+                  className="mb-3 w-full rounded-lg border border-warmGrey bg-white px-3 py-2 text-xs focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
                 />
-              </div>
-
-              <SignaturePad
-                onSave={dataUrl => setSignatureData(dataUrl)}
-                onClear={() => setSignatureData(undefined)}
-              />
+                <SignaturePad
+                  onSave={dataUrl => setSignatureData(dataUrl)}
+                  onClear={() => setSignatureData(undefined)}
+                  width={300}
+                  height={145}
+                />
+              </aside>
             </div>
 
-            {/* Submit / Finish */}
-            <div className="pt-3 border-t border-warmGrey/60 flex items-center justify-end space-x-2">
+            {/* Fixed-style action footer */}
+            <div className="mt-5 -mx-4 border-t border-warmGrey/60 bg-white px-4 py-3 flex flex-col-reverse gap-2 sm:-mx-6 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <span className="hidden sm:block text-[11px] text-mutedGrey">
+                Review all checklist items before completion
+              </span>
+              <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
               <button
                 type="button"
                 onClick={() => setIsJobModalOpen(false)}
-                className="px-4 py-2 text-xs font-medium text-charcoal hover:bg-sand-100 rounded-lg"
+                className="min-h-11 flex-1 px-4 py-2 text-xs font-medium text-charcoal hover:bg-sand-100 rounded-lg sm:flex-none"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy-light shadow-xs"
+                className="min-h-11 flex-[1.7] px-4 py-2 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy-light shadow-xs sm:flex-none sm:px-5"
               >
                 Complete Installation Job
               </button>
+            </div>
             </div>
           </form>
         </Modal>

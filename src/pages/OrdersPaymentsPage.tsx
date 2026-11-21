@@ -58,7 +58,7 @@ export const OrdersPaymentsPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -89,20 +89,20 @@ export const OrdersPaymentsPage: React.FC = () => {
       </div>
 
       {/* Financial Overview Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-card p-4 border border-warmGrey/60 shadow-card">
           <span className="text-xs text-mutedGrey font-semibold uppercase tracking-wide">Total Contracted Orders</span>
           <p className="text-2xl font-bold text-charcoal mt-2">₹{totalContractedValue.toLocaleString('en-IN')}</p>
           <span className="text-[11px] text-mutedGrey mt-2 block">Active across {orders.length} accounts</span>
         </div>
-        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card">
+        <div className="bg-white rounded-card p-4 border border-warmGrey/60 shadow-card">
           <span className="text-xs text-mutedGrey font-semibold uppercase tracking-wide">Collected Cash Inflow</span>
           <p className="text-2xl font-bold text-sage mt-2">₹{totalCollections.toLocaleString('en-IN')}</p>
           <span className="text-[11px] text-sage font-semibold mt-2 block">
             {((totalCollections / (totalContractedValue || 1)) * 100).toFixed(1)}% Realized
           </span>
         </div>
-        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card">
+        <div className="bg-white rounded-card p-4 border border-warmGrey/60 shadow-card">
           <span className="text-xs text-mutedGrey font-semibold uppercase tracking-wide">Outstanding Milestone Balance</span>
           <p className="text-2xl font-bold text-terracotta mt-2">₹{totalReceivables.toLocaleString('en-IN')}</p>
           <span className="text-[11px] text-mutedGrey mt-2 block">Due upon dispatch & net meter</span>
@@ -112,7 +112,7 @@ export const OrdersPaymentsPage: React.FC = () => {
       {/* Tab: Orders View */}
       {activeTab === 'orders' && (
         <div className="bg-white rounded-card border border-warmGrey/60 shadow-card overflow-hidden">
-          <div className="px-5 py-4 border-b border-warmGrey/60 flex items-center justify-between">
+          <div className="px-5 py-3 border-b border-warmGrey/60 flex items-center justify-between">
             <div>
               <h2 className="text-sm font-bold text-charcoal">Project Orders</h2>
               <p className="text-[11px] text-mutedGrey mt-0.5">Contract values and milestone balances</p>
@@ -135,20 +135,20 @@ export const OrdersPaymentsPage: React.FC = () => {
               <tbody className="divide-y divide-warmGrey/40 text-charcoal">
                 {orders.map(order => (
                   <tr key={order.id} className="hover:bg-sand-50/70 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-navy">
+                    <td className="py-3 px-4 font-mono font-bold text-navy">
                       {order.orderNumber}
                     </td>
-                    <td className="py-3.5 px-4">
+                    <td className="py-3 px-4">
                       <div className="font-bold text-charcoal">{order.customerName}</div>
                       <div className="text-[11px] text-mutedGrey">{order.customerCity}</div>
                     </td>
-                    <td className="py-3.5 px-4 font-bold text-navy">
+                    <td className="py-3 px-4 font-bold text-navy">
                       {order.capacityKw} kW
                     </td>
-                    <td className="py-3.5 px-4 font-bold text-charcoal">
+                    <td className="py-3 px-4 font-bold text-charcoal">
                       ₹{order.totalOrderValue.toLocaleString('en-IN')}
                     </td>
-                    <td className="py-3.5 px-4">
+                    <td className="py-3 px-4">
                       <div className="font-semibold text-sage">
                         Paid: ₹{order.advanceAmountPaid.toLocaleString('en-IN')}
                       </div>
@@ -160,14 +160,15 @@ export const OrdersPaymentsPage: React.FC = () => {
                         <div className="text-[11px] text-sage font-bold">100% Cleared</div>
                       )}
                     </td>
-                    <td className="py-3.5 px-4">
+                    <td className="py-3 px-4">
                       <StatusBadge status={order.orderStatus} />
                     </td>
-                    <td className="py-3.5 px-4 text-right space-x-1.5">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center justify-end gap-2">
                       {order.outstandingBalance > 0 && (
                         <button
                           onClick={() => handleOpenPayment(order)}
-                          className="px-2.5 py-1 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy-light transition-colors"
+                          className="min-h-9 px-3 py-1.5 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy-light transition-colors"
                         >
                           + Record Payment
                         </button>
@@ -179,6 +180,7 @@ export const OrdersPaymentsPage: React.FC = () => {
                         <FileText className="w-3.5 h-3.5 text-navy" />
                         <span>Tax Invoice</span>
                       </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -33,6 +33,15 @@ function HomeRouter() {
   if (currentUser.role === 'sales_exec') {
     return <SalesDashboardPage />;
   }
+  if (currentUser.role === 'accountant') {
+    return <FinancePage />;
+  }
+  if (currentUser.role === 'support_exec') {
+    return <ServiceComplaintsPage />;
+  }
+  if (currentUser.role === 'install_tech') {
+    return <InstallationsPage />;
+  }
   return <DashboardPage />;
 }
 
@@ -92,7 +101,7 @@ export function App() {
                 </RoleGuard>
               } />
               <Route path="service" element={
-                <RoleGuard allowedRoles={['owner_admin', 'support_exec']}>
+                <RoleGuard allowedRoles={['owner_admin', 'support_exec', 'install_tech']}>
                   <ServiceComplaintsPage />
                 </RoleGuard>
               } />

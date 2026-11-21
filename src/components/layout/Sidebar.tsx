@@ -138,6 +138,61 @@ export const Sidebar: React.FC = () => {
     }
   ];
 
+  const accountantSections: NavSection[] = [
+    {
+      title: 'FINANCE WORKSPACE',
+      items: [
+        { name: 'Finance Dashboard', path: '/', icon: IndianRupee, allowedRoles: ['accountant'] },
+        { name: 'Orders & Payments', path: '/orders', icon: ShoppingCart, allowedRoles: ['accountant'] },
+        { name: 'Reports & Analytics', path: '/reports', icon: BarChart3, allowedRoles: ['accountant'] },
+      ]
+    },
+    {
+      title: 'ACCOUNT',
+      items: [
+        { name: 'Notifications', path: '/notifications', icon: Bell, allowedRoles: ['accountant'], badge: unreadNotifsCount > 0 ? unreadNotifsCount : undefined },
+        { name: 'My Profile', path: '/profile', icon: UserCheck, allowedRoles: ['accountant'] },
+      ]
+    }
+  ];
+
+  const supportSections: NavSection[] = [
+    {
+      title: 'CLIENT CARE',
+      items: [
+        { name: 'Service Dashboard', path: '/', icon: HeadphonesIcon, allowedRoles: ['support_exec'] },
+        { name: 'Service & Complaints', path: '/service', icon: Wrench, allowedRoles: ['support_exec'], badge: openComplaintsCount > 0 ? openComplaintsCount : undefined },
+        { name: 'Warranty Management', path: '/warranty', icon: ShieldCheck, allowedRoles: ['support_exec'] },
+        { name: 'Customers & CRM', path: '/customers', icon: Users, allowedRoles: ['support_exec'] },
+      ]
+    },
+    {
+      title: 'ACCOUNT',
+      items: [
+        { name: 'Notifications', path: '/notifications', icon: Bell, allowedRoles: ['support_exec'], badge: unreadNotifsCount > 0 ? unreadNotifsCount : undefined },
+        { name: 'My Profile', path: '/profile', icon: UserCheck, allowedRoles: ['support_exec'] },
+      ]
+    }
+  ];
+
+  const installationSections: NavSection[] = [
+    {
+      title: 'INSTALLATION WORKSPACE',
+      items: [
+        { name: 'Installation Dashboard', path: '/', icon: Wrench, allowedRoles: ['install_tech'] },
+        { name: 'Installations', path: '/installations', icon: UserCheck, allowedRoles: ['install_tech'] },
+        { name: 'Service Complaints', path: '/service', icon: HeadphonesIcon, allowedRoles: ['install_tech'], badge: openComplaintsCount > 0 ? openComplaintsCount : undefined },
+      ]
+    },
+    {
+      title: 'ACCOUNT',
+      items: [
+        { name: 'Notifications', path: '/notifications', icon: Bell, allowedRoles: ['install_tech'], badge: unreadNotifsCount > 0 ? unreadNotifsCount : undefined },
+        { name: 'My Profile', path: '/profile', icon: UserCheck, allowedRoles: ['install_tech'] },
+      ]
+    }
+  ];
+
   // Default Full Operational Sections (Preserved for Owner/Admin & Operations)
   const standardSections: NavSection[] = [
     {
@@ -272,7 +327,12 @@ export const Sidebar: React.FC = () => {
     }
   ];
 
-  const sectionsToRender = currentUser.role === 'sales_exec' ? salesSections : standardSections;
+  const sectionsToRender =
+    currentUser.role === 'sales_exec' ? salesSections :
+    currentUser.role === 'accountant' ? accountantSections :
+    currentUser.role === 'support_exec' ? supportSections :
+    currentUser.role === 'install_tech' ? installationSections :
+    standardSections;
 
   const renderContent = () => (
     <div className="flex flex-col h-full bg-white border-r border-warmGrey/80 select-none">

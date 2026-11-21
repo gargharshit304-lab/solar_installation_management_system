@@ -1095,8 +1095,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const markAllNotificationsAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    showToast('All notifications marked as read', 'info');
+    setNotifications(prev => prev.map(n => {
+      const isForCurrentRole = !n.targetRoles || n.targetRoles.includes(currentUser.role);
+      return isForCurrentRole ? { ...n, read: true } : n;
+    }));
+    showToast('Notifications marked as read', 'info');
   };
 
   // Sales Workspace Operations
@@ -1367,7 +1370,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateTicketStatus,
       profitability,
       employees,
-      notifications,
+      notifications: notifications.filter(
+        notification => !notification.targetRoles || notification.targetRoles.includes(currentUser.role)
+      ),
       markNotificationAsRead,
       markAllNotificationsAsRead,
       // Sales Workspace

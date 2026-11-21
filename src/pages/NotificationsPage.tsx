@@ -3,15 +3,53 @@ import { useApp } from '../context/AppContext';
 import { Bell, Check, Clock, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 export const NotificationsPage: React.FC = () => {
-  const { notifications, markNotificationAsRead, markAllNotificationsAsRead } = useApp();
+  const {
+    currentUser,
+    notifications,
+    markNotificationAsRead,
+    markAllNotificationsAsRead
+  } = useApp();
+
+  const roleNotificationContent: Record<string, { title: string; description: string }> = {
+    owner_admin: {
+      title: 'Executive Notifications',
+      description: 'Company-wide operational alerts, approvals and critical business updates'
+    },
+    sales_exec: {
+      title: 'Sales Notifications',
+      description: 'Customer enquiries, quotation approvals, orders and follow-up alerts'
+    },
+    survey_tech: {
+      title: 'Survey Notifications',
+      description: 'Assigned surveys, submitted measurements and approval updates'
+    },
+    warehouse_mgr: {
+      title: 'Warehouse Notifications',
+      description: 'Inventory alerts, reservations, dispatches and stock thresholds'
+    },
+    install_tech: {
+      title: 'Installation Notifications',
+      description: 'Assigned jobs, service complaints and installation updates'
+    },
+    support_exec: {
+      title: 'Client Care Notifications',
+      description: 'New complaints, warranty cases, priority tickets and resolutions'
+    },
+    accountant: {
+      title: 'Finance Notifications',
+      description: 'Payments, receivables, approvals and financial stock alerts'
+    }
+  };
+
+  const content = roleNotificationContent[currentUser.role];
 
   return (
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-charcoal tracking-tight">Sales & Operational Notifications</h1>
+          <h1 className="text-2xl font-bold text-charcoal tracking-tight">{content.title}</h1>
           <p className="text-xs text-mutedGrey mt-0.5">
-            Real-time alerts for customer enquiries, follow-ups due, survey approvals and quotation acceptances
+            {content.description}
           </p>
         </div>
         <button
@@ -23,6 +61,13 @@ export const NotificationsPage: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-card border border-warmGrey/60 shadow-card divide-y divide-warmGrey/40 overflow-hidden">
+        {notifications.length === 0 && (
+          <div className="p-8 text-center">
+            <Check className="mx-auto h-5 w-5 text-sage" />
+            <p className="mt-2 text-xs font-semibold text-charcoal">No new role-specific alerts</p>
+            <p className="mt-1 text-[11px] text-mutedGrey">You are up to date with your workspace notifications.</p>
+          </div>
+        )}
         {notifications.map(n => (
           <div
             key={n.id}
