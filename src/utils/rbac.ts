@@ -1,4 +1,4 @@
-import { UserProfile, UserRole, CapabilityPermission, OperationalDelegation, RoleDefinition } from '../types';
+import { UserProfile, UserRole, CapabilityPermission, OperationalDelegation, RoleDefinition, PermissionAction } from '../types';
 
 /**
  * Authoritative Capability Permission Mapping for SolarOS
@@ -17,6 +17,17 @@ export const ROLE_CAPABILITIES: Record<UserRole, CapabilityPermission[]> = {
     'employees.assign_roles',
     'departments.manage',
     'roles_permissions.manage',
+    'roles_permissions.view',
+    'roles_permissions.create',
+    'roles_permissions.edit',
+    'roles_permissions.delete',
+    'roles.manage',
+    'roles.view',
+    'roles.create',
+    'roles.edit',
+    'roles.delete',
+    'permissions.manage',
+    'employee_roles.assign',
     'approvals.view_all',
     'approvals.decide',
     'audit.view_all',
@@ -147,6 +158,152 @@ export const ROLE_CAPABILITIES: Record<UserRole, CapabilityPermission[]> = {
  * 2. Active Operational Delegations explicitly granted to this employee.
  * 3. Specific operational assignment context (e.g. technician assigned to this installation).
  */
+/**
+ * Central Action-Authorization Service Evaluator
+ * Evaluates whether an authenticated user can perform a specific business action on a resource.
+ * STRICT RULES:
+ * 1. VIEW never implies CREATE, EDIT, DELETE, ASSIGN, APPROVE, EXPORT, MANAGE, or EXECUTE.
+ * 2. Static capability fallbacks are bypassed when dynamic role definitions govern the module.
+ * 3. Strict administrative separation prevents Owner from field execution without delegation.
+ */
+export function checkActionPermission(
+  user: UserProfile,
+  resource: string,
+  action: 'view' | 'create' | 'edit' | 'delete' | 'assign' | 'approve' | 'export' | 'manage' | string,
+  dynamicRoles?: RoleDefinition[],
+  delegations: OperationalDelegation[] = [],
+  context?: { assignedTechnicians?: string[]; entityId?: string }
+): boolean {
+  if (!user || !user.role) return false;
+
+  // Strict Administrative Separation: Owner cannot execute field installations without explicit delegation
+  if (user.role === 'owner_admin' && (action === 'execute' || (resource === 'installations' && action.startsWith('execute')))) {
+    const hasDelegation = delegations.some(
+      d => d.active &&
+           d.employeeId === user.id &&
+           d.grantedPermission === 'installations.execute' &&
+           (!d.resourceId || d.resourceId === context?.entityId) &&
+           (!d.expiresDate || new Date(d.expiresDate) > new Date())
+    );
+    return hasDelegation;
+  }
+
+  // Canonical Owner Administrative Bootstrap: Non-circular administrative governance guarantee
+  // Owner always retains authority to manage roles, permissions, workforce, departments, approvals, settings
+  if (user.role === 'owner_admin') {
+    const adminGovResources = [
+      'roles', 'permissions', 'roles_permissions',
+      'workforce', 'employees', 'departments', 'approvals', 'settings', 'overview'
+    ];
+    if (adminGovResources.includes(resource)) {
+      if (['view', 'create', 'edit', 'delete', 'assign', 'approve', 'manage', 'export'].includes(action)) {
+        return true;
+      }
+    }
+  }
+
+  // 1. Check Dynamic Role Definition (Highest Priority Authority)
+  if (dynamicRoles && dynamicRoles.length > 0) {
+    const roleDef = dynamicRoles.find(r => r.roleKey === user.role || r.id === user.role);
+    if (roleDef && roleDef.permissions) {
+      // Map canonical resource aliases (e.g. roles <-> roles_permissions <-> permissions, workforce <-> employees)
+      const resourceAliases = [resource];
+      if (resource === 'roles' || resource === 'permissions') {
+        resourceAliases.push('roles_permissions', 'roles', 'permissions');
+      } else if (resource === 'roles_permissions') {
+        resourceAliases.push('roles', 'permissions');
+      } else if (resource === 'workforce') {
+        resourceAliases.push('employees');
+      } else if (resource === 'employees') {
+        resourceAliases.push('workforce');
+      }
+
+      let actions: PermissionAction[] = [];
+      for (const res of resourceAliases) {
+        if (roleDef.permissions[res]) {
+          actions = [...actions, ...roleDef.permissions[res]];
+        }
+      }
+
+      // View action check: view or manage grants viewing
+      if (action === 'view') {
+        if (actions.includes('view') || actions.includes('manage')) return true;
+      } else {
+        // Mutation actions: VIEW never implies CREATE, EDIT, DELETE, ASSIGN, APPROVE, EXPORT
+        if (actions.includes(action as any)) return true;
+      }
+
+      // Check specific capability string (e.g. inventory.receive)
+      const specificPerm = `${resource}.${action}`;
+      if (actions.includes(specificPerm as any)) return true;
+
+      // Check explicit operational delegations
+      const activeDelegation = delegations.find(
+        d => d.active &&
+             d.employeeId === user.id &&
+             (d.grantedPermission === specificPerm || d.grantedPermission === action) &&
+             (!d.resourceId || d.resourceId === context?.entityId) &&
+             (!d.expiresDate || new Date(d.expiresDate) > new Date())
+      );
+      if (activeDelegation) return true;
+
+      // Dynamic permissions configured for this module: DO NOT fall back to static capability table
+      return false;
+    }
+  }
+
+  // 2. Operational Delegations check
+  const specificPerm = `${resource}.${action}`;
+  const activeDelegation = delegations.find(
+    d => d.active &&
+         d.employeeId === user.id &&
+         (d.grantedPermission === specificPerm || d.grantedPermission === action) &&
+         (!d.resourceId || d.resourceId === context?.entityId) &&
+         (!d.expiresDate || new Date(d.expiresDate) > new Date())
+  );
+  if (activeDelegation) return true;
+
+  // 3. Fallback to base role capabilities table ONLY when no dynamic definitions available
+  const baseCaps = ROLE_CAPABILITIES[user.role] || [];
+  return baseCaps.includes(specificPerm as CapabilityPermission);
+}
+
+export function canView(user: UserProfile, resource: string, dynamicRoles?: RoleDefinition[]): boolean {
+  return checkActionPermission(user, resource, 'view', dynamicRoles);
+}
+
+export function canCreate(user: UserProfile, resource: string, dynamicRoles?: RoleDefinition[]): boolean {
+  return checkActionPermission(user, resource, 'create', dynamicRoles);
+}
+
+export function canEdit(user: UserProfile, resource: string, dynamicRoles?: RoleDefinition[], delegations?: OperationalDelegation[], context?: any): boolean {
+  return checkActionPermission(user, resource, 'edit', dynamicRoles, delegations, context);
+}
+
+export function canDelete(user: UserProfile, resource: string, dynamicRoles?: RoleDefinition[]): boolean {
+  return checkActionPermission(user, resource, 'delete', dynamicRoles);
+}
+
+export function canAssign(user: UserProfile, resource: string, dynamicRoles?: RoleDefinition[]): boolean {
+  return checkActionPermission(user, resource, 'assign', dynamicRoles);
+}
+
+export function canApprove(user: UserProfile, resource: string, dynamicRoles?: RoleDefinition[], delegations?: OperationalDelegation[], context?: any): boolean {
+  return checkActionPermission(user, resource, 'approve', dynamicRoles, delegations, context);
+}
+
+export function canExport(user: UserProfile, resource: string, dynamicRoles?: RoleDefinition[]): boolean {
+  return checkActionPermission(user, resource, 'export', dynamicRoles);
+}
+
+export function canManage(user: UserProfile, resource: string, dynamicRoles?: RoleDefinition[]): boolean {
+  return checkActionPermission(user, resource, 'manage', dynamicRoles);
+}
+
+export function canExecute(user: UserProfile, resource: string, action: string, dynamicRoles?: RoleDefinition[], delegations?: OperationalDelegation[], context?: any): boolean {
+  return checkActionPermission(user, resource, action, dynamicRoles, delegations, context);
+}
+
 export function verifyCapability(
   user: UserProfile,
   permission: CapabilityPermission | string,
@@ -154,62 +311,25 @@ export function verifyCapability(
   context?: { assignedTechnicians?: string[]; entityId?: string },
   dynamicRoles?: RoleDefinition[]
 ): { allowed: boolean; reason?: string } {
-  // STRICT GOVERNANCE RULE: Owner cannot execute field installations without explicit delegation
-  if (user.role === 'owner_admin' && permission.startsWith('installations.execute')) {
-    const activeDelegation = delegations.find(
-      d => d.active && 
-           d.employeeId === user.id && 
-           d.grantedPermission === permission &&
-           (!d.resourceId || d.resourceId === context?.entityId) &&
-           (!d.expiresDate || new Date(d.expiresDate) > new Date())
-    );
-    if (!activeDelegation) {
+  let moduleKey = '';
+  let actionKey = '';
+  if (permission.includes('.')) {
+    [moduleKey, actionKey] = permission.split('.');
+  } else if (permission.includes(':')) {
+    [moduleKey, actionKey] = permission.split(':');
+  } else {
+    moduleKey = permission;
+    actionKey = 'view';
+  }
+
+  const allowed = checkActionPermission(user, moduleKey, actionKey, dynamicRoles, delegations, context);
+  if (!allowed) {
+    if (user.role === 'owner_admin' && permission.startsWith('installations.execute')) {
       return {
         allowed: false,
         reason: 'Administrative authority does not include operational job execution. Only assigned installation engineers can complete installations.'
       };
     }
-  }
-
-  // 1. Check dynamic role matrix if provided
-  let hasDynamicPermission = false;
-  if (dynamicRoles && dynamicRoles.length > 0) {
-    const roleDef = dynamicRoles.find(r => r.roleKey === user.role || r.id === user.role);
-    if (roleDef && roleDef.permissions) {
-      let moduleKey = '';
-      let actionKey = '';
-      if (permission.includes('.')) {
-        [moduleKey, actionKey] = permission.split('.');
-      } else if (permission.includes(':')) {
-        [moduleKey, actionKey] = permission.split(':');
-      }
-      if (actionKey === 'read' || actionKey === 'view_all' || actionKey === 'view_assigned' || actionKey === 'view_available') {
-        actionKey = 'view';
-      }
-      if (actionKey === 'write' || actionKey === 'update' || actionKey === 'adjust') {
-        actionKey = 'edit';
-      }
-      const actions = roleDef.permissions[moduleKey] || [];
-      if (actions.includes(actionKey as any) || actions.includes('manage')) {
-        hasDynamicPermission = true;
-      }
-    }
-  }
-
-  // 2. Check if role inherently possesses capability
-  const rolePermissions = ROLE_CAPABILITIES[user.role] || [];
-  const hasBasePermission = rolePermissions.includes(permission as CapabilityPermission);
-
-  // 3. Check if there is an active explicit delegation
-  const activeDelegation = delegations.find(
-    d => d.active && 
-         d.employeeId === user.id && 
-         d.grantedPermission === permission &&
-         (!d.resourceId || d.resourceId === context?.entityId) &&
-         (!d.expiresDate || new Date(d.expiresDate) > new Date())
-  );
-
-  if (!hasDynamicPermission && !hasBasePermission && !activeDelegation) {
     return {
       allowed: false,
       reason: `User role '${user.roleTitle}' lacks permission '${permission}'.`
@@ -223,7 +343,10 @@ export function verifyCapability(
         name.toLowerCase().includes(user.name.split(' ')[0].toLowerCase()) ||
         user.name.toLowerCase().includes(name.toLowerCase())
       );
-      if (!isAssigned && !activeDelegation) {
+      const hasDelegation = delegations.some(
+        d => d.active && d.employeeId === user.id && d.grantedPermission === permission
+      );
+      if (!isAssigned && !hasDelegation) {
         return {
           allowed: false,
           reason: `Only assigned field engineers (${context.assignedTechnicians.join(', ')}) can execute this installation.`

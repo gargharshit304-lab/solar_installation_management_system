@@ -30,6 +30,8 @@ const INITIAL_ROLE_MATRIX: Record<UserRole, Record<string, string[]>> = {
     workforce: ['view', 'create', 'edit', 'delete', 'assign', 'approve', 'manage', 'export'],
     departments: ['view', 'create', 'edit', 'delete', 'manage', 'export'],
     roles_permissions: ['view', 'create', 'edit', 'delete', 'manage'],
+    roles: ['view', 'create', 'edit', 'delete', 'manage'],
+    permissions: ['view', 'create', 'edit', 'delete', 'manage'],
     approvals: ['view', 'approve', 'edit', 'delete', 'manage'],
     finance: ['view', 'create', 'edit', 'approve', 'manage', 'export'],
     reports: ['view', 'manage', 'export'],
@@ -150,6 +152,8 @@ export class RbacService {
     if (roleKey === 'owner_admin') {
       // Ensure owner maintains core governance
       permissions['roles_permissions'] = ['view', 'create', 'edit', 'delete', 'manage'];
+      permissions['roles'] = ['view', 'create', 'edit', 'delete', 'manage'];
+      permissions['permissions'] = ['view', 'create', 'edit', 'delete', 'manage'];
       permissions['approvals'] = ['view', 'approve', 'edit', 'delete', 'manage'];
     }
 
@@ -194,8 +198,8 @@ export class RbacService {
   }
 
   /**
-   * Evaluates whether a role dynamically possesses a capability.
-   * Handles both 'module.action' (e.g. 'customers.view') and legacy permissions.
+   * Evaluates whether a role dynamically possesses an action or capability.
+   * STRICT RULE: VIEW never implies CREATE, EDIT, DELETE, ASSIGN, APPROVE, EXPORT, MANAGE.
    */
   hasPermission(roleKey: string, permission: string): boolean {
     const rolePermissions = inMemoryRoleMatrix[roleKey] || {};
@@ -217,24 +221,168 @@ export class RbacService {
       const parts = permission.split(':');
       moduleKey = parts[0];
       actionKey = parts[1];
+    } else {
+      moduleKey = permission;
+      actionKey = 'view';
     }
 
-    // Normalize action synonyms
+    // Normalize read synonyms strictly to view
     if (actionKey === 'read' || actionKey === 'view_all' || actionKey === 'view_assigned' || actionKey === 'view_available') {
       actionKey = 'view';
     }
-    if (actionKey === 'write' || actionKey === 'update' || actionKey === 'adjust') {
-      actionKey = 'edit';
+
+    // Safe bootstrap for canonical Owner (owner_admin) administrative governance
+    // Ensures owner can never be locked out of governance even if dynamic tables are empty
+    if (roleKey === 'owner_admin') {
+      const adminGovModules = ['roles', 'permissions', 'roles_permissions', 'workforce', 'employees', 'departments', 'approvals', 'settings', 'overview'];
+      if (adminGovModules.includes(moduleKey)) {
+        if (['view', 'create', 'edit', 'delete', 'assign', 'approve', 'manage', 'export'].includes(actionKey)) {
+          return true;
+        }
+      }
     }
 
-    // Check module permission actions
-    const grantedActions = rolePermissions[moduleKey] || [];
-    if (grantedActions.includes(actionKey) || grantedActions.includes('manage')) {
+    // Canonical module key alias resolution
+    const moduleKeysToCheck = [moduleKey];
+    if (moduleKey === 'roles' || moduleKey === 'permissions') {
+      moduleKeysToCheck.push('roles_permissions', 'roles', 'permissions');
+    } else if (moduleKey === 'roles_permissions') {
+      moduleKeysToCheck.push('roles', 'permissions');
+    } else if (moduleKey === 'workforce') {
+      moduleKeysToCheck.push('employees');
+    } else if (moduleKey === 'employees') {
+      moduleKeysToCheck.push('workforce');
+    }
+
+    let grantedActions: string[] = [];
+    for (const m of moduleKeysToCheck) {
+      if (rolePermissions[m]) {
+        grantedActions = [...grantedActions, ...rolePermissions[m]];
+      }
+    }
+
+    // STRICT ENFORCEMENT: VIEW never implies any mutation or management
+    if (actionKey === 'view') {
+      return grantedActions.includes('view') || grantedActions.includes('manage');
+    }
+
+    // For any non-view action, it must be explicitly present in grantedActions
+    if (grantedActions.includes(actionKey)) {
       return true;
     }
 
-    // Direct string match fallback
+    // Direct string match fallback (e.g. specialized capability string)
     return grantedActions.includes(permission);
+  }
+
+  /**
+   * Central Action-Authorization Service Methods
+   * Evaluates authenticated user permissions at service and controller boundaries.
+   */
+  async checkActionPermission(
+    user: any,
+    resource: string,
+    action: 'view' | 'create' | 'edit' | 'delete' | 'assign' | 'approve' | 'export' | 'manage' | string,
+    context?: { entityId?: string; assignedStaff?: string[] }
+  ): Promise<boolean> {
+    if (!user || !user.role) return false;
+
+    // Strict Administrative Separation: Owner cannot execute field installations without explicit delegation
+    if (user.role === 'owner_admin' && (action === 'execute' || resource === 'installations' && action.startsWith('execute'))) {
+      const activeDelegations = await this.getActiveDelegationsForUser(user.id, 'installations.execute');
+      return activeDelegations.length > 0;
+    }
+
+    // Canonical Owner Administrative Bootstrap: Non-circular governance guarantee
+    if (user.role === 'owner_admin') {
+      const adminGovResources = [
+        'roles', 'permissions', 'roles_permissions',
+        'workforce', 'employees', 'departments', 'approvals', 'settings', 'overview'
+      ];
+      if (adminGovResources.includes(resource)) {
+        if (['view', 'create', 'edit', 'delete', 'assign', 'approve', 'manage', 'export'].includes(action)) {
+          return true;
+        }
+      }
+    }
+
+    const rolePermissions = inMemoryRoleMatrix[user.role] || {};
+
+    // Canonical resource alias resolution
+    const targetResources = [resource];
+    if (resource === 'roles' || resource === 'permissions') {
+      targetResources.push('roles_permissions', 'roles', 'permissions');
+    } else if (resource === 'roles_permissions') {
+      targetResources.push('roles', 'permissions');
+    } else if (resource === 'workforce') {
+      targetResources.push('employees');
+    } else if (resource === 'employees') {
+      targetResources.push('workforce');
+    }
+
+    let moduleActions: string[] = [];
+    for (const r of targetResources) {
+      if (rolePermissions[r]) {
+        moduleActions = [...moduleActions, ...rolePermissions[r]];
+      }
+    }
+
+    // 1. Strict exact action match
+    if (moduleActions.includes(action)) {
+      return true;
+    }
+
+    // 2. View synonyms
+    if (action === 'view' && (moduleActions.includes('read') || moduleActions.includes('view_all') || moduleActions.includes('manage'))) {
+      return true;
+    }
+
+    // 3. Operational Delegations check
+    const specificPerm = `${resource}.${action}`;
+    const delegations = await this.getActiveDelegationsForUser(user.id, specificPerm);
+    if (delegations.length > 0) {
+      if (!context?.entityId) return true;
+      const matching = delegations.find(d => !d.resourceId || d.resourceId === context.entityId);
+      if (matching) return true;
+    }
+
+    return false;
+  }
+
+  async canView(user: any, resource: string): Promise<boolean> {
+    return this.checkActionPermission(user, resource, 'view');
+  }
+
+  async canCreate(user: any, resource: string): Promise<boolean> {
+    return this.checkActionPermission(user, resource, 'create');
+  }
+
+  async canEdit(user: any, resource: string, context?: any): Promise<boolean> {
+    return this.checkActionPermission(user, resource, 'edit', context);
+  }
+
+  async canDelete(user: any, resource: string, context?: any): Promise<boolean> {
+    return this.checkActionPermission(user, resource, 'delete', context);
+  }
+
+  async canAssign(user: any, resource: string, context?: any): Promise<boolean> {
+    return this.checkActionPermission(user, resource, 'assign', context);
+  }
+
+  async canApprove(user: any, resource: string, context?: any): Promise<boolean> {
+    return this.checkActionPermission(user, resource, 'approve', context);
+  }
+
+  async canExport(user: any, resource: string): Promise<boolean> {
+    return this.checkActionPermission(user, resource, 'export');
+  }
+
+  async canManage(user: any, resource: string): Promise<boolean> {
+    return this.checkActionPermission(user, resource, 'manage');
+  }
+
+  async canExecute(user: any, resource: string, action: string, context?: any): Promise<boolean> {
+    return this.checkActionPermission(user, resource, action, context);
   }
 
   getEffectiveCapabilities(roleKey: string): string[] {

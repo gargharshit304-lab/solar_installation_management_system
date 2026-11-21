@@ -47,7 +47,14 @@ export const InventoryPage: React.FC = () => {
     updateWarehouseTaskStatus,
     resetDemoInventory,
     isDemoMode,
-    showToast 
+    showToast,
+    canView,
+    canCreate,
+    canEdit,
+    canDelete,
+    canAssign,
+    canApprove,
+    canExport
   } = useApp();
 
   const isOwner = currentUser.role === 'owner_admin';
@@ -229,6 +236,10 @@ export const InventoryPage: React.FC = () => {
   // Handlers
   const handleCreateProduct = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCreate('inventory')) {
+      showToast('Unauthorized: You lack inventory.create permission to catalogue products.', 'error');
+      return;
+    }
     if (!productForm.name.trim()) return;
 
     // Check duplicate SKU or duplicate name
@@ -270,6 +281,10 @@ export const InventoryPage: React.FC = () => {
   };
 
   const handleOpenAdjust = (item: InventoryItem) => {
+    if (!canEdit('inventory')) {
+      showToast('Unauthorized: You lack inventory.edit permission to adjust stock.', 'error');
+      return;
+    }
     setSelectedProductForAdjust(item);
     setAdjustmentAmount(5);
     setAdjustmentReason('audit_reconciliation');
@@ -279,6 +294,10 @@ export const InventoryPage: React.FC = () => {
 
   const handleConfirmAdjust = () => {
     if (!selectedProductForAdjust) return;
+    if (!canEdit('inventory')) {
+      showToast('Unauthorized: You lack inventory.edit permission to adjust stock.', 'error');
+      return;
+    }
     adjustStockQuantity(
       selectedProductForAdjust.id, 
       adjustmentAmount, 
@@ -291,6 +310,10 @@ export const InventoryPage: React.FC = () => {
 
   const handleCreateGrn = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCreate('inventory')) {
+      showToast('Unauthorized: You lack inventory.create permission to receive goods.', 'error');
+      return;
+    }
     const prod = inventory.find(i => i.id === grnForm.productId);
     if (!prod) return;
 
@@ -335,6 +358,10 @@ export const InventoryPage: React.FC = () => {
 
   const handleCreateTransfer = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCreate('inventory')) {
+      showToast('Unauthorized: You lack inventory.create permission to initiate transfers.', 'error');
+      return;
+    }
     const prod = inventory.find(i => i.id === transferForm.productId);
     if (!prod) return;
 
@@ -374,6 +401,10 @@ export const InventoryPage: React.FC = () => {
 
   const handleCreateCountSession = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCreate('inventory')) {
+      showToast('Unauthorized: You lack inventory.create permission to create count sessions.', 'error');
+      return;
+    }
     // Pre-populate items matching warehouse and zone
     const targetItems = inventory
       .filter(i => i.preferredWarehouseId === countForm.warehouseId)
@@ -406,6 +437,10 @@ export const InventoryPage: React.FC = () => {
 
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canAssign('inventory') && !canCreate('inventory')) {
+      showToast('Unauthorized: You lack inventory.assign permission to assign tasks.', 'error');
+      return;
+    }
     createWarehouseTask({
       taskType: taskForm.taskType,
       priority: taskForm.priority,
@@ -488,7 +523,7 @@ export const InventoryPage: React.FC = () => {
             </button>
           )}
 
-          {isWarehouseMgr && (
+          {canCreate('inventory') && (
             <>
               <button
                 onClick={() => setIsGrnModalOpen(true)}
@@ -515,6 +550,26 @@ export const InventoryPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* View-Only Read-Only Mode Banner */}
+      {!canCreate('inventory') && !canEdit('inventory') && (
+        <div className="bg-amber-50 border border-amber/30 rounded-2xl p-4 flex items-center justify-between shadow-xs">
+          <div className="flex items-center space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-amber/10 flex items-center justify-center text-amber shrink-0">
+              <Eye className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-charcoal">Read-Only View Mode Active</p>
+              <p className="text-[11px] text-mutedGrey mt-0.5">
+                You have view-only access to the Inventory & Warehouse module. Operational actions (product creation, stock adjustments, GRN receipts, and warehouse transfers) are restricted by your security profile.
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 bg-white border border-amber/30 text-amber text-[10px] font-bold rounded-lg uppercase tracking-wider">
+            View Only
+          </span>
+        </div>
+      )}
 
       {/* 2. Top-Level Metrics (Strictly fulfilling PART 4) */}
       {isWarehouseMgr ? (
@@ -772,7 +827,7 @@ export const InventoryPage: React.FC = () => {
                     <div className="mt-2 flex items-center justify-between">
                       <span className="text-terracotta font-bold">Avail: {item.availableQuantity}</span>
                       <span className="text-mutedGrey text-[11px]">Min: {item.minimumThreshold}</span>
-                      {isWarehouseMgr && (
+                      {canEdit('inventory') && (
                         <button
                           onClick={() => handleOpenAdjust(item)}
                           className="px-2 py-1 bg-amber-50 text-amber font-bold text-[10px] rounded border border-amber/40 hover:bg-amber-100"
@@ -925,7 +980,7 @@ export const InventoryPage: React.FC = () => {
                     <th className="py-3 px-4">Unit Cost / Price</th>
                     <th className="py-3 px-4">Warehouse Bin</th>
                     <th className="py-3 px-4">Status</th>
-                    {isWarehouseMgr && <th className="py-3 px-4 text-right">Actions</th>}
+                    {canEdit('inventory') && <th className="py-3 px-4 text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-warmGrey/40 text-charcoal">
@@ -966,7 +1021,7 @@ export const InventoryPage: React.FC = () => {
                       <td className="py-3.5 px-4">
                         <StatusBadge status={item.stockStatus} />
                       </td>
-                      {isWarehouseMgr && (
+                      {canEdit('inventory') && (
                         <td className="py-3.5 px-4 text-right">
                           <button
                             onClick={() => handleOpenAdjust(item)}
@@ -1172,7 +1227,7 @@ export const InventoryPage: React.FC = () => {
                 Physical goods receiving from manufacturers, QA verification, serial number registration and stock balance credit.
               </p>
             </div>
-            {isWarehouseMgr && (
+            {canCreate('inventory') && (
               <button
                 onClick={() => setIsGrnModalOpen(true)}
                 className="px-4 py-2 bg-sage text-white text-xs font-bold rounded-xl hover:bg-sage-dark flex items-center space-x-1.5 shadow-xs"
@@ -1297,7 +1352,7 @@ export const InventoryPage: React.FC = () => {
                 Multi-depot transfers with atomic balance adjustments and in-transit verification.
               </p>
             </div>
-            {isWarehouseMgr && (
+            {canCreate('inventory') && (
               <button
                 onClick={() => setIsTransferModalOpen(true)}
                 className="px-4 py-2 bg-navy text-white text-xs font-bold rounded-xl hover:bg-navy-light flex items-center space-x-1.5 shadow-xs"
@@ -1341,7 +1396,7 @@ export const InventoryPage: React.FC = () => {
                   <span className="text-[11px] text-mutedGrey">
                     Expected: {trf.expectedDate}
                   </span>
-                  {trf.status === 'in_transit' && isWarehouseMgr && (
+                  {trf.status === 'in_transit' && canEdit('inventory') && (
                     <button
                       type="button"
                       onClick={() => receiveWarehouseTransfer(trf.id)}
@@ -1369,7 +1424,7 @@ export const InventoryPage: React.FC = () => {
                 Physical inventory counting sessions with discrepancy reconciliation and manager authorization.
               </p>
             </div>
-            {isWarehouseMgr && (
+            {canCreate('inventory') && (
               <button
                 onClick={() => setIsCountModalOpen(true)}
                 className="px-4 py-2 bg-navy text-white text-xs font-bold rounded-xl hover:bg-navy-light flex items-center space-x-1.5 shadow-xs"
@@ -1427,7 +1482,7 @@ export const InventoryPage: React.FC = () => {
 
                 <div className="flex items-center justify-between pt-2 border-t border-warmGrey/40 text-xs">
                   <span className="text-mutedGrey">Assigned Auditor: <strong>{session.assignedStaffName}</strong></span>
-                  {isWarehouseMgr && session.status !== 'approved' && (
+                  {canApprove('inventory') && session.status !== 'approved' && (
                     <button
                       type="button"
                       onClick={() => approveStockCountDiscrepancy(session.id, 'Discrepancies audited and accepted')}
@@ -1455,7 +1510,7 @@ export const InventoryPage: React.FC = () => {
                 Priority order picking, packing, serial scanning and transfer check-in tasks.
               </p>
             </div>
-            {isWarehouseMgr && (
+            {(canAssign('inventory') || canCreate('inventory')) && (
               <button
                 onClick={() => setIsNewTaskModalOpen(true)}
                 className="px-4 py-2 bg-navy text-white text-xs font-bold rounded-xl hover:bg-navy-light flex items-center space-x-1.5 shadow-xs"

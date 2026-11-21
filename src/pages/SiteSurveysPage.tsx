@@ -26,6 +26,11 @@ export const SiteSurveysPage: React.FC = () => {
     employees, 
     surveyAssignments, 
     updateSurveyStatus, 
+    canView,
+    canCreate,
+    canEdit,
+    canAssign,
+    canApprove,
     showToast 
   } = useApp();
 
@@ -164,16 +169,38 @@ export const SiteSurveysPage: React.FC = () => {
             <span>View Technicians</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setIsNewSurveyModalOpen(true)}
-            className="px-4 py-2 bg-navy text-white text-xs font-bold rounded-xl hover:bg-navy-light transition-colors shadow-xs flex items-center space-x-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ Schedule Survey</span>
-          </button>
+          {canCreate('surveys') && (
+            <button
+              type="button"
+              onClick={() => setIsNewSurveyModalOpen(true)}
+              className="px-4 py-2 bg-navy text-white text-xs font-bold rounded-xl hover:bg-navy-light transition-colors shadow-xs flex items-center space-x-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Schedule Survey</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* View-Only Read-Only Mode Banner */}
+      {!canCreate('surveys') && !canEdit('surveys') && !canAssign('surveys') && !canApprove('surveys') && (
+        <div className="bg-amber-50 border border-amber/30 rounded-2xl p-4 flex items-center justify-between shadow-xs">
+          <div className="flex items-center space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-amber/10 flex items-center justify-center text-amber shrink-0">
+              <Eye className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-charcoal">Read-Only View Mode Active</p>
+              <p className="text-[11px] text-mutedGrey mt-0.5">
+                You have view-only access to Site Survey Operations. Survey scheduling, technician dispatch, report submission, and feasibility approval are restricted by your security profile.
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 bg-white border border-amber/30 text-amber text-[10px] font-bold rounded-lg uppercase tracking-wider">
+            View Only
+          </span>
+        </div>
+      )}
 
       {/* 2. Survey Overview KPI Cards (4 Compact Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -455,8 +482,8 @@ export const SiteSurveysPage: React.FC = () => {
                                 View Survey Report
                               </button>
                               
-                              {/* ONLY if Owner/Admin can approve/reject for backend testing */}
-                              {currentUser.role === 'owner_admin' && (
+                              {/* Approval/Rejection action gated strictly by surveys.approve permission */}
+                              {canApprove('surveys') && (
                                 <div className="inline-flex space-x-1 ml-1">
                                   <button
                                     onClick={() => updateSurveyStatus(survey.id, 'approved')}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Truck, CheckCircle2, Clock, Calendar, MapPin, 
-  UserCheck, Plus, Package, ShieldCheck, AlertCircle 
+  UserCheck, Plus, Package, ShieldCheck, AlertCircle, Eye
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { DispatchOrder } from '../types';
@@ -17,6 +17,8 @@ export const DispatchPage: React.FC = () => {
     confirmDelivery, 
     currentUser,
     logEmployeeActivity,
+    canCreate,
+    canEdit,
     showToast 
   } = useApp();
 
@@ -103,15 +105,37 @@ export const DispatchPage: React.FC = () => {
             Fleet tracking, serial number allocation & automatic warranty commencement upon delivery
           </p>
         </div>
-        <button
-          onClick={handleOpenCreate}
-          disabled={readyOrders.length === 0}
-          className="px-3.5 py-2 bg-navy text-white text-xs font-semibold rounded-xl hover:bg-navy-light disabled:opacity-50 transition-colors shadow-xs flex items-center space-x-1.5"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Create Dispatch Order</span>
-        </button>
+        {canCreate('dispatch') && (
+          <button
+            onClick={handleOpenCreate}
+            disabled={readyOrders.length === 0}
+            className="px-3.5 py-2 bg-navy text-white text-xs font-semibold rounded-xl hover:bg-navy-light disabled:opacity-50 transition-colors shadow-xs flex items-center space-x-1.5"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Create Dispatch Order</span>
+          </button>
+        )}
       </div>
+
+      {/* Read-Only Mode Banner */}
+      {!canCreate('dispatch') && !canEdit('dispatch') && (
+        <div className="bg-amber-50 border border-amber/30 rounded-2xl p-4 flex items-center justify-between shadow-xs">
+          <div className="flex items-center space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-amber/10 flex items-center justify-center text-amber shrink-0">
+              <Eye className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-charcoal">Read-Only View Mode Active</p>
+              <p className="text-[11px] text-mutedGrey mt-0.5">
+                You have view-only access to Material Dispatch & Logistics. Dispatch creation and delivery confirmation are restricted by your security profile.
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 bg-white border border-amber/30 text-amber text-[10px] font-bold rounded-lg uppercase tracking-wider">
+            View Only
+          </span>
+        </div>
+      )}
 
       {/* Warranty Automation Notification Banner */}
       <div className="bg-sand-100 border border-warmGrey rounded-xl p-3.5 flex items-start space-x-3 text-xs">
@@ -167,13 +191,17 @@ export const DispatchPage: React.FC = () => {
                   </td>
                   <td className="py-3.5 px-4 text-right">
                     {dsp.deliveryStatus !== 'delivered' ? (
-                      <button
-                        onClick={() => confirmDelivery(dsp.id)}
-                        className="px-3 py-1.5 bg-sage text-white text-xs font-semibold rounded-lg hover:bg-sage-dark transition-colors shadow-xs inline-flex items-center space-x-1"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Confirm Delivery & Activate Warranty</span>
-                      </button>
+                      canEdit('dispatch') ? (
+                        <button
+                          onClick={() => confirmDelivery(dsp.id)}
+                          className="px-3 py-1.5 bg-sage text-white text-xs font-semibold rounded-lg hover:bg-sage-dark transition-colors shadow-xs inline-flex items-center space-x-1"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Confirm Delivery & Activate Warranty</span>
+                        </button>
+                      ) : (
+                        <span className="text-mutedGrey text-xs italic">In Transit</span>
+                      )
                     ) : (
                       <span className="text-sage font-semibold text-xs inline-flex items-center space-x-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />

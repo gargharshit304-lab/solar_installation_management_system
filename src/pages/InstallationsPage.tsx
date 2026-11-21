@@ -22,6 +22,10 @@ export const InstallationsPage: React.FC = () => {
     reassignInstallationTechnician,
     rescheduleInstallation,
     hasPermission,
+    canCreate,
+    canEdit,
+    canAssign,
+    canExecute,
     showToast 
   } = useApp();
 
@@ -224,6 +228,26 @@ export const InstallationsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Read-Only Mode Banner */}
+      {!hasPermission('installations.execute') && !hasPermission('installations.reassign') && !hasPermission('installations.reschedule') && !isOwner && (
+        <div className="bg-amber-50 border border-amber/30 rounded-2xl p-4 flex items-center justify-between shadow-xs">
+          <div className="flex items-center space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-amber/10 flex items-center justify-center text-amber shrink-0">
+              <Eye className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-charcoal">Read-Only View Mode Active</p>
+              <p className="text-[11px] text-mutedGrey mt-0.5">
+                You have view-only access to Solar Installation Operations. Field job execution, checklist completion, customer signoffs, and crew reassignments are restricted by your security profile.
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 bg-white border border-amber/30 text-amber text-[10px] font-bold rounded-lg uppercase tracking-wider">
+            View Only
+          </span>
+        </div>
+      )}
 
       {/* 2. Overview KPI Cards */}
       {isOwner ? (

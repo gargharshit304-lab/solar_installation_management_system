@@ -42,7 +42,21 @@ import {
   generateAuthSession, 
   verifySessionToken 
 } from '../utils/authSession';
-import { verifyCapability, isRouteAllowedForRole, isRouteReadOnlyForRole } from '../utils/rbac';
+import { 
+  verifyCapability, 
+  isRouteAllowedForRole, 
+  isRouteReadOnlyForRole,
+  checkActionPermission,
+  canView as rbacCanView,
+  canCreate as rbacCanCreate,
+  canEdit as rbacCanEdit,
+  canDelete as rbacCanDelete,
+  canAssign as rbacCanAssign,
+  canApprove as rbacCanApprove,
+  canExport as rbacCanExport,
+  canManage as rbacCanManage,
+  canExecute as rbacCanExecute
+} from '../utils/rbac';
 import { authApi, rbacApi } from '../services/api';
 
 export interface Toast {
@@ -189,11 +203,20 @@ interface AppContextType {
   reassignInstallationTechnician: (installationId: string, technicianNames: string[], reason: string) => void;
   rescheduleInstallation: (installationId: string, startDate: string, endDate: string, reason: string) => void;
 
-  // RBAC Capability & Controlled Delegation
+  // Central Action-Authorization Service
   hasPermission: (permission: import('../types').CapabilityPermission | string, context?: { assignedTechnicians?: string[]; entityId?: string }) => boolean;
   canAccessRoute: (path: string) => boolean;
   isRouteReadOnly: (path: string) => boolean;
-  canPerformAction: (module: string, action: PermissionAction) => boolean;
+  canPerformAction: (module: string, action: PermissionAction | string, context?: any) => boolean;
+  canView: (resource: string) => boolean;
+  canCreate: (resource: string) => boolean;
+  canEdit: (resource: string, context?: any) => boolean;
+  canDelete: (resource: string, context?: any) => boolean;
+  canAssign: (resource: string, context?: any) => boolean;
+  canApprove: (resource: string, context?: any) => boolean;
+  canExport: (resource: string) => boolean;
+  canManage: (resource: string) => boolean;
+  canExecute: (resource: string, action: string, context?: any) => boolean;
   delegations: import('../types').OperationalDelegation[];
   createDelegation: (delegation: Omit<import('../types').OperationalDelegation, 'id' | 'delegationCode' | 'createdAt' | 'active'>) => import('../types').OperationalDelegation;
   revokeDelegation: (delegationId: string) => void;
@@ -572,6 +595,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Customers
   const addCustomer = (customerData: Omit<Customer, 'id' | 'customerCode' | 'registrationDate'>): Customer => {
+    if (!canCreate('customers')) {
+      showToast('Unauthorized: You lack customers.create permission to add new customers.', 'error');
+      throw new Error('Unauthorized: customers.create required');
+    }
     const newId = `cust-${Date.now()}`;
     const codeNum = String(customers.length + 1).padStart(3, '0');
     const newCustomer: Customer = {
@@ -586,11 +613,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateCustomerLeadStatus = (customerId: string, status: Customer['leadStatus']) => {
+    if (!canEdit('customers')) {
+      showToast('Unauthorized: You lack customers.edit permission to modify customer lead status.', 'error');
+      return;
+    }
     setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, leadStatus: status } : c));
     showToast(`Lead status updated to ${status.replace('_', ' ').toUpperCase()}`, 'info');
   };
 
   const addCustomerSite = (siteData: Omit<CustomerSite, 'id'>): CustomerSite => {
+    if (!canCreate('customers')) {
+      showToast('Unauthorized: You lack customers.create permission to add customer sites.', 'error');
+      throw new Error('Unauthorized: customers.create required');
+    }
     const newSite: CustomerSite = {
       ...siteData,
       id: `site-${Date.now()}`
@@ -1085,6 +1120,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const cancelSurvey = (surveyId: string, reason?: string) => {
+    if (!canEdit('surveys')) {
+      showToast('Unauthorized: You lack surveys.edit permission to cancel site surveys.', 'error');
+      return;
+    }
     setSurveys(prev => prev.map(s => s.id === surveyId ? {
       ...s,
       status: 'cancelled',
@@ -1094,6 +1133,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const submitSurveyForm = (surveyId: string, details: Partial<SiteSurvey>) => {
+    if (!canEdit('surveys')) {
+      showToast('Unauthorized: You lack surveys.edit permission to submit survey forms.', 'error');
+      return;
+    }
     setSurveys(prev => prev.map(s => s.id === surveyId ? {
       ...s,
       ...details,
@@ -1103,6 +1146,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSurveyStatus = (surveyId: string, status: SiteSurvey['status'], rejectionReason?: string) => {
+    if (!canEdit('surveys')) {
+      showToast('Unauthorized: You lack surveys.edit permission to change survey status.', 'error');
+      return;
+    }
     setSurveys(prev => prev.map(s => s.id === surveyId ? {
       ...s,
       status,
@@ -1113,6 +1160,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const claimSurvey = (surveyId: string): { success: boolean; message: string } => {
+    if (!canAssign('surveys') && !canEdit('surveys')) {
+      showToast('Unauthorized: You lack surveys.assign permission to claim surveys.', 'error');
+      return { success: false, message: 'Unauthorized: surveys.assign required' };
+    }
     const survey = surveys.find(s => s.id === surveyId);
     if (!survey) {
       return { success: false, message: 'Survey not found.' };
@@ -1235,6 +1286,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const submitSurveyReport = (surveyId: string, details: Partial<SiteSurvey>): { success: boolean; message: string } => {
+    if (!canEdit('surveys')) {
+      showToast('Unauthorized: You lack surveys.edit permission to submit survey reports.', 'error');
+      return { success: false, message: 'Unauthorized: surveys.edit required' };
+    }
     const survey = surveys.find(s => s.id === surveyId);
     if (!survey) return { success: false, message: 'Survey not found' };
 
@@ -1293,6 +1348,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const approveSurveyReport = (surveyId: string, notes: string) => {
+    if (!canApprove('surveys')) {
+      showToast('Unauthorized: You lack surveys.approve permission to approve survey reports.', 'error');
+      return;
+    }
     const survey = surveys.find(s => s.id === surveyId);
     if (!survey) return;
 
@@ -1336,6 +1395,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const requestSurveyCorrections = (surveyId: string, comments: string) => {
+    if (!canApprove('surveys')) {
+      showToast('Unauthorized: You lack surveys.approve permission to request survey revisions.', 'error');
+      return;
+    }
     const survey = surveys.find(s => s.id === surveyId);
     if (!survey) return;
 
@@ -1365,6 +1428,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const rejectSurveyReport = (surveyId: string, reason: string) => {
+    if (!canApprove('surveys')) {
+      showToast('Unauthorized: You lack surveys.approve permission to reject survey reports.', 'error');
+      return;
+    }
     const survey = surveys.find(s => s.id === surveyId);
     if (!survey) return;
 
@@ -1412,6 +1479,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Quotations
   const createQuotation = (quoteData: Omit<Quotation, 'id' | 'quotationNumber' | 'createdDate'>): Quotation => {
+    if (!canCreate('quotations')) {
+      showToast('Unauthorized: You lack quotations.create permission to generate quotes.', 'error');
+      throw new Error('Unauthorized: quotations.create required');
+    }
     const newId = `quot-${Date.now()}`;
     const quoteNum = `QTN-2026-${String(quotations.length + 91).padStart(3, '0')}`;
     const newQuotation: Quotation = {
@@ -1428,6 +1499,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateQuotationStatus = (quoteId: string, status: Quotation['status']) => {
+    if (!canEdit('quotations')) {
+      showToast('Unauthorized: You lack quotations.edit permission to change quote status.', 'error');
+      return;
+    }
     setQuotations(prev => prev.map(q => q.id === quoteId ? { ...q, status } : q));
     if (status === 'approved') {
       const q = quotations.find(item => item.id === quoteId);
@@ -1462,6 +1537,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Orders & Payments
   const recordPayment = (paymentData: Omit<PaymentRecord, 'id' | 'paymentNumber' | 'paymentDate' | 'recordedBy'>) => {
+    if (!canCreate('finance')) {
+      showToast('Unauthorized: You lack finance.create permission to record payment transactions.', 'error');
+      return;
+    }
     const newId = `pay-${Date.now()}`;
     const payNum = `REC-2026-${String(payments.length + 65).padStart(3, '0')}`;
     const newPayment: PaymentRecord = {
@@ -1494,6 +1573,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateOrderStatus = (orderId: string, status: Order['orderStatus']) => {
+    if (!canEdit('orders')) {
+      showToast('Unauthorized: You lack orders.edit permission to update orders.', 'error');
+      return;
+    }
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, orderStatus: status } : o));
     showToast(`Order status updated to ${status.replace(/_/g, ' ').toUpperCase()}`, 'info');
   };
@@ -1503,6 +1586,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // ---------------------------------------------------------------------------
 
   const addInventoryItem = (itemData: Omit<InventoryItem, 'id' | 'sku'>): InventoryItem => {
+    if (!canCreate('inventory')) {
+      showToast('Unauthorized: You lack inventory.create permission to catalog products.', 'error');
+      throw new Error('Unauthorized: inventory.create required');
+    }
     const newId = `prd-${Date.now()}`;
     const prefix = itemData.category.substring(0, 3).toUpperCase();
     const sku = `SKU-${prefix}-${Date.now().toString().slice(-4)}`;
@@ -1550,6 +1637,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateInventoryItem = (id: string, updates: Partial<InventoryItem>) => {
+    if (!canEdit('inventory')) {
+      showToast('Unauthorized: You lack inventory.edit permission to modify product specifications.', 'error');
+      return;
+    }
     setInventory(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
     showToast('Product specifications updated', 'info');
   };
@@ -1561,6 +1652,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     notes?: string, 
     warehouseId?: string
   ) => {
+    if (!canEdit('inventory')) {
+      showToast('Unauthorized: You lack inventory.edit permission to execute stock adjustments.', 'error');
+      return;
+    }
     const targetProduct = inventory.find(i => i.id === productId);
     if (!targetProduct) return;
 
@@ -1635,6 +1730,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const registerGoodsReceipt = (grnData: Omit<GoodsReceiptNote, 'id' | 'grnNumber' | 'totalValue'>): GoodsReceiptNote => {
+    if (!canCreate('inventory')) {
+      showToast('Unauthorized: You lack inventory.create permission to process GRN receipts.', 'error');
+      throw new Error('Unauthorized: inventory.create required');
+    }
     const newId = `grn-${Date.now()}`;
     const grnNumber = `GRN-2026-${String(goodsReceipts.length + 44).padStart(3, '0')}`;
     const totalValue = grnData.items.reduce((sum, item) => sum + (item.acceptedQty * item.unitCost), 0);
@@ -1715,6 +1814,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const registerSerialNumber = (serialData: Omit<SerialNumberRecord, 'id'>): SerialNumberRecord => {
+    if (!canCreate('inventory')) {
+      showToast('Unauthorized: You lack inventory.create permission to register serial numbers.', 'error');
+      throw new Error('Unauthorized: inventory.create required');
+    }
     // Check if duplicate
     const exists = serialNumbers.some(s => s.serialNumber.toLowerCase() === serialData.serialNumber.toLowerCase());
     if (exists) {
@@ -1733,6 +1836,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const allocateSerialsToOrder = (orderId: string, productId: string, serials: string[]) => {
+    if (!canEdit('inventory')) {
+      showToast('Unauthorized: You lack inventory.edit permission to allocate serials to orders.', 'error');
+      return;
+    }
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
@@ -1779,6 +1886,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createWarehouseTransfer = (
     transferData: Omit<WarehouseTransfer, 'id' | 'transferNumber' | 'createdAt' | 'status'>
   ): WarehouseTransfer => {
+    if (!canCreate('inventory')) {
+      showToast('Unauthorized: You lack inventory.create permission to initiate warehouse transfers.', 'error');
+      throw new Error('Unauthorized: inventory.create required');
+    }
     const newId = `trf-${Date.now()}`;
     const transferNumber = `TRF-2026-${String(warehouseTransfers.length + 16).padStart(3, '0')}`;
     const newTransfer: WarehouseTransfer = {
@@ -1836,6 +1947,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const approveWarehouseTransfer = (transferId: string) => {
+    if (!canApprove('inventory')) {
+      showToast('Unauthorized: You lack inventory.approve permission to approve transfers.', 'error');
+      return;
+    }
     setWarehouseTransfers(prev => prev.map(t => t.id === transferId ? {
       ...t,
       status: 'approved',
@@ -1846,6 +1961,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const dispatchWarehouseTransfer = (transferId: string) => {
+    if (!canEdit('inventory')) {
+      showToast('Unauthorized: You lack inventory.edit permission to dispatch transfers.', 'error');
+      return;
+    }
     setWarehouseTransfers(prev => prev.map(t => t.id === transferId ? {
       ...t,
       status: 'in_transit'
@@ -1854,6 +1973,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const receiveWarehouseTransfer = (transferId: string, receivedNotes?: string) => {
+    if (!canEdit('inventory')) {
+      showToast('Unauthorized: You lack inventory.edit permission to receive transfers.', 'error');
+      return;
+    }
     const transfer = warehouseTransfers.find(t => t.id === transferId);
     if (!transfer) return;
 
@@ -1923,6 +2046,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createStockCountSession = (sessionData: Omit<StockCountSession, 'id' | 'sessionCode'>): StockCountSession => {
+    if (!canCreate('inventory')) {
+      showToast('Unauthorized: You lack inventory.create permission to initiate physical stock count sessions.', 'error');
+      throw new Error('Unauthorized: inventory.create required');
+    }
     const newSession: StockCountSession = {
       ...sessionData,
       id: `cnt-${Date.now()}`,
@@ -1934,6 +2061,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const submitStockCount = (sessionId: string, items: StockCountItem[]) => {
+    if (!canEdit('inventory')) {
+      showToast('Unauthorized: You lack inventory.edit permission to submit physical stock counts.', 'error');
+      return;
+    }
     setStockCountSessions(prev => prev.map(s => {
       if (s.id === sessionId) {
         return {
@@ -1949,6 +2080,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const approveStockCountDiscrepancy = (sessionId: string, notes?: string) => {
+    if (!canApprove('inventory')) {
+      showToast('Unauthorized: You lack inventory.approve permission to reconcile audit discrepancies.', 'error');
+      return;
+    }
     const session = stockCountSessions.find(s => s.id === sessionId);
     if (!session) return;
 
@@ -1977,6 +2112,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createWarehouseTask = (taskData: Omit<WarehouseTask, 'id' | 'taskCode'>): WarehouseTask => {
+    if (!canAssign('inventory') && !canCreate('inventory')) {
+      showToast('Unauthorized: You lack inventory.assign permission to assign warehouse tasks.', 'error');
+      throw new Error('Unauthorized: inventory.assign required');
+    }
     const newTask: WarehouseTask = {
       ...taskData,
       id: `tsk-${Date.now()}`,
@@ -1988,6 +2127,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateWarehouseTaskStatus = (taskId: string, status: WarehouseTask['status'], discrepancyReport?: string) => {
+    if (!canEdit('inventory')) {
+      showToast('Unauthorized: You lack inventory.edit permission to update warehouse tasks.', 'error');
+      return;
+    }
     setWarehouseTasks(prev => prev.map(t => {
       if (t.id === taskId) {
         return {
@@ -2020,6 +2163,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Dispatch & Warranty calculation on confirmed delivery
   const createDispatchOrder = (dispatchData: Omit<DispatchOrder, 'id' | 'dispatchNumber' | 'dispatchDate'>) => {
+    if (!canCreate('dispatch')) {
+      showToast('Unauthorized: You lack dispatch.create permission to generate dispatch orders.', 'error');
+      return;
+    }
     const newId = `dsp-${Date.now()}`;
     const dspNum = `DSP-2026-${String(dispatches.length + 30).padStart(3, '0')}`;
     const newDispatch: DispatchOrder = {
@@ -2056,6 +2203,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const confirmDelivery = (dispatchId: string, receivedByName?: string, remarks?: string, proofUrl?: string) => {
+    if (!canEdit('dispatch')) {
+      showToast('Unauthorized: You lack dispatch.edit permission to confirm delivery signoff.', 'error');
+      return;
+    }
     const todayStr = new Date().toISOString().split('T')[0];
     const dispatch = dispatches.find(d => d.id === dispatchId);
     
@@ -2208,11 +2359,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return isRouteReadOnlyForRole(path, currentUser.role, rolesPermissions);
   };
 
-  const canPerformAction = (module: string, action: PermissionAction): boolean => {
-    const roleDef = rolesPermissions.find(r => r.roleKey === currentUser.role || r.id === currentUser.role);
-    if (!roleDef) return false;
-    const actions = roleDef.permissions[module] || [];
-    return actions.includes(action) || actions.includes('manage' as PermissionAction);
+  const canPerformAction = (module: string, action: PermissionAction | string, context?: any): boolean => {
+    return checkActionPermission(currentUser, module, action, rolesPermissions, delegations, context);
+  };
+
+  const canView = (resource: string): boolean => {
+    return rbacCanView(currentUser, resource, rolesPermissions);
+  };
+
+  const canCreate = (resource: string): boolean => {
+    return rbacCanCreate(currentUser, resource, rolesPermissions);
+  };
+
+  const canEdit = (resource: string, context?: any): boolean => {
+    return rbacCanEdit(currentUser, resource, rolesPermissions, delegations, context);
+  };
+
+  const canDelete = (resource: string, context?: any): boolean => {
+    return rbacCanDelete(currentUser, resource, rolesPermissions);
+  };
+
+  const canAssign = (resource: string, context?: any): boolean => {
+    return rbacCanAssign(currentUser, resource, rolesPermissions);
+  };
+
+  const canApprove = (resource: string, context?: any): boolean => {
+    return rbacCanApprove(currentUser, resource, rolesPermissions, delegations, context);
+  };
+
+  const canExport = (resource: string): boolean => {
+    return rbacCanExport(currentUser, resource, rolesPermissions);
+  };
+
+  const canManage = (resource: string): boolean => {
+    return rbacCanManage(currentUser, resource, rolesPermissions);
+  };
+
+  const canExecute = (resource: string, action: string, context?: any): boolean => {
+    return rbacCanExecute(currentUser, resource, action, rolesPermissions, delegations, context);
   };
 
   const createDelegation = (
@@ -2350,6 +2534,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Service Complaints
   const createServiceTicket = (complaintData: Omit<ServiceComplaint, 'id' | 'complaintId' | 'complaintDate' | 'status'>) => {
+    if (!canCreate('service')) {
+      showToast('Unauthorized: You lack service.create permission to open support tickets.', 'error');
+      return;
+    }
     const newId = `cmp-${Date.now()}`;
     const code = `TKT-2026-${String(complaints.length + 20).padStart(3, '0')}`;
     const newTicket: ServiceComplaint = {
@@ -2364,6 +2552,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateTicketStatus = (ticketId: string, status: ServiceComplaint['status'], resolutionNotes?: string) => {
+    if (!canEdit('service')) {
+      showToast('Unauthorized: You lack service.edit permission to update ticket status.', 'error');
+      return;
+    }
     setComplaints(prev => prev.map(t => t.id === ticketId ? {
       ...t,
       status,
@@ -2601,6 +2793,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Employee Management
   const addEmployee = (empData: Omit<Employee, 'id'>): Employee => {
+    if (!canCreate('workforce')) {
+      showToast('Unauthorized: You lack workforce.create permission to onboard employees.', 'error');
+      throw new Error('Unauthorized: workforce.create required');
+    }
     const newEmp: Employee = {
       ...empData,
       id: `emp-${Date.now()}`,
@@ -2628,11 +2824,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateEmployee = (id: string, updates: Partial<Employee>) => {
+    if (!canEdit('workforce')) {
+      showToast('Unauthorized: You lack workforce.edit permission to modify employee profiles.', 'error');
+      return;
+    }
     setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, ...updates } : emp));
     showToast('Employee profile updated successfully', 'success');
   };
 
   const deactivateEmployee = (id: string, reason?: string) => {
+    if (!canDelete('workforce')) {
+      showToast('Unauthorized: You lack workforce.delete permission to deactivate employees.', 'error');
+      return;
+    }
     setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, status: 'inactive', isAvailable: false } : emp));
     const emp = employees.find(e => e.id === id);
     if (emp) {
@@ -2652,22 +2856,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const reactivateEmployee = (id: string) => {
+    if (!canEdit('workforce')) {
+      showToast('Unauthorized: You lack workforce.edit permission to reactivate employees.', 'error');
+      return;
+    }
     setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, status: 'active', isAvailable: true } : emp));
     showToast('Employee account reactivated to Active status', 'success');
   };
 
   // Departments & Teams
   const updateDepartment = (id: string, updates: Partial<Department>) => {
+    if (!canManage('departments') && !canEdit('departments')) {
+      showToast('Unauthorized: You lack departments.manage permission.', 'error');
+      return;
+    }
     setDepartments(prev => prev.map(dept => dept.id === id ? { ...dept, ...updates } : dept));
     showToast('Department details updated', 'success');
   };
 
   const updateTeam = (id: string, updates: Partial<Team>) => {
+    if (!canManage('departments') && !canEdit('departments')) {
+      showToast('Unauthorized: You lack departments.manage permission.', 'error');
+      return;
+    }
     setTeams(prev => prev.map(team => team.id === id ? { ...team, ...updates } : team));
     showToast('Team details updated', 'success');
   };
 
   const transferEmployee = (empId: string, targetDept: string, targetTeamId?: string, newRole?: UserRole) => {
+    if (!canManage('workforce') && !canEdit('workforce')) {
+      showToast('Unauthorized: You lack workforce.manage permission to transfer employees.', 'error');
+      return;
+    }
     const emp = employees.find(e => e.id === empId);
     if (!emp) return;
     const oldDept = emp.department;
@@ -2703,6 +2923,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Roles & Permissions
   const updateRolePermissions = async (roleId: string, updatedPermissions: Record<string, PermissionAction[]>) => {
+    if (!canManage('roles_permissions') && !canManage('roles') && !canEdit('roles_permissions') && !canEdit('roles')) {
+      showToast('Unauthorized: You lack roles.manage permission to configure permissions.', 'error');
+      return;
+    }
     // 1. Optimistic local React state update
     setRolesPermissions(prev => prev.map(r => (r.id === roleId || r.roleKey === roleId) ? { ...r, permissions: updatedPermissions } : r));
 
@@ -2720,6 +2944,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createCustomRole = (roleData: Omit<RoleDefinition, 'id' | 'isCustom'>): RoleDefinition => {
+    if (!canCreate('roles_permissions') && !canCreate('roles') && !canManage('roles_permissions') && !canManage('roles')) {
+      showToast('Unauthorized: You lack roles.create permission to define custom roles.', 'error');
+      throw new Error('Unauthorized: roles.create required');
+    }
     const newRole: RoleDefinition = {
       ...roleData,
       id: `role-${Date.now()}`,
@@ -2732,6 +2960,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Approvals & Requests
   const createApprovalRequest = (reqData: Omit<ApprovalRequest, 'id' | 'requestNumber' | 'createdDate' | 'status'>): ApprovalRequest => {
+    if (!canCreate('approvals')) {
+      showToast('Unauthorized: You lack approvals.create permission to submit requests.', 'error');
+      throw new Error('Unauthorized: approvals.create required');
+    }
     const newReq: ApprovalRequest = {
       ...reqData,
       id: `appr-${Date.now()}`,
@@ -2745,6 +2977,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const approveRequest = (id: string, remarks?: string) => {
+    if (!canApprove('approvals')) {
+      showToast('Unauthorized: You lack approvals.approve permission.', 'error');
+      return;
+    }
     setApprovals(prev => prev.map(req => {
       if (req.id === id) {
         return {
@@ -2777,6 +3013,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const rejectRequest = (id: string, reason: string) => {
+    if (!canApprove('approvals')) {
+      showToast('Unauthorized: You lack approvals.approve permission.', 'error');
+      return;
+    }
     setApprovals(prev => prev.map(req => {
       if (req.id === id) {
         return {
@@ -2793,6 +3033,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const requestMoreInfo = (id: string, query: string) => {
+    if (!canApprove('approvals')) {
+      showToast('Unauthorized: You lack approvals.approve permission.', 'error');
+      return;
+    }
     setApprovals(prev => prev.map(req => {
       if (req.id === id) {
         return {
@@ -2818,11 +3062,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // AI Voice Agents
   const updateAiAgent = (id: string, updates: Partial<RetellAiAgent>) => {
+    if (!canManage('ai_agents') && !canEdit('ai_agents')) {
+      showToast('Unauthorized: You lack ai_agents.manage permission to modify agents.', 'error');
+      return;
+    }
     setAiAgents(prev => prev.map(agent => agent.id === id ? { ...agent, ...updates } : agent));
     showToast('Retell AI Voice Agent settings updated', 'success');
   };
 
   const toggleAiAgentStatus = (id: string) => {
+    if (!canManage('ai_agents') && !canEdit('ai_agents')) {
+      showToast('Unauthorized: You lack ai_agents.manage permission.', 'error');
+      return;
+    }
     setAiAgents(prev => prev.map(agent => {
       if (agent.id === id) {
         const nextStatus = agent.status === 'active' ? 'paused' : 'active';
@@ -2846,6 +3098,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Enquiry Lost Disposition
   const markEnquiryLost = (id: string, reason: string, notes?: string) => {
+    if (!canEdit('enquiries')) {
+      showToast('Unauthorized: You lack enquiries.edit permission.', 'error');
+      return;
+    }
     setEnquiries(prev => prev.map(enq => {
       if (enq.id === id) {
         return {
@@ -3004,6 +3260,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       canAccessRoute,
       isRouteReadOnly,
       canPerformAction,
+      canView,
+      canCreate,
+      canEdit,
+      canDelete,
+      canAssign,
+      canApprove,
+      canExport,
+      canManage,
+      canExecute,
       delegations,
       createDelegation,
       revokeDelegation,

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   IndianRupee, TrendingUp, TrendingDown, DollarSign, 
-  PieChart, FileText, Download, Plus, ArrowUpRight, CheckCircle2 
+  PieChart, FileText, Download, Plus, ArrowUpRight, CheckCircle2, Eye
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ProjectProfitability } from '../types';
@@ -9,7 +9,7 @@ import { StatusBadge } from '../components/common/StatusBadge';
 import { Modal } from '../components/common/Modal';
 
 export const FinancePage: React.FC = () => {
-  const { profitability, orders, payments, showToast } = useApp();
+  const { profitability, orders, payments, showToast, canCreate, canEdit } = useApp();
 
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [expenseForm, setExpenseForm] = useState({
@@ -45,15 +45,37 @@ export const FinancePage: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setIsExpenseModalOpen(true)}
-            className="px-3.5 py-2 bg-navy text-white text-xs font-semibold rounded-xl hover:bg-navy-light transition-colors shadow-xs flex items-center space-x-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Record Direct Expense</span>
-          </button>
+          {canCreate('finance') && (
+            <button
+              onClick={() => setIsExpenseModalOpen(true)}
+              className="px-3.5 py-2 bg-navy text-white text-xs font-semibold rounded-xl hover:bg-navy-light transition-colors shadow-xs flex items-center space-x-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Record Direct Expense</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Read-Only Mode Banner */}
+      {!canCreate('finance') && !canEdit('finance') && (
+        <div className="bg-amber-50 border border-amber/30 rounded-2xl p-4 flex items-center justify-between shadow-xs">
+          <div className="flex items-center space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-amber/10 flex items-center justify-center text-amber shrink-0">
+              <Eye className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-charcoal">Read-Only View Mode Active</p>
+              <p className="text-[11px] text-mutedGrey mt-0.5">
+                You have view-only access to Financial Accounts & Profitability. Transaction recording, expense creation, and payment verification are restricted by your security profile.
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 bg-white border border-amber/30 text-amber text-[10px] font-bold rounded-lg uppercase tracking-wider">
+            View Only
+          </span>
+        </div>
+      )}
 
       {/* Financial Scorecards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">

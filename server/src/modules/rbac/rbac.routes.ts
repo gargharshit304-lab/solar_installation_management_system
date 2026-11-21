@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { rbacController } from './rbac.controller';
 import { requireAuth } from '../../middleware/auth.middleware';
-import { requireRole } from '../../middleware/rbac.middleware';
+import { requireRole, requireAction } from '../../middleware/rbac.middleware';
 import { validateRequest } from '../../middleware/validate.middleware';
 import { z } from 'zod';
 
@@ -30,6 +30,7 @@ router.put(
   '/roles/:roleKey/permissions',
   requireAuth,
   requireRole(['owner_admin']),
+  requireAction('roles_permissions', 'manage'),
   validateRequest({ body: updatePermissionsSchema }),
   (req, res, next) => {
     rbacController.updatePermissions(req, res, next);

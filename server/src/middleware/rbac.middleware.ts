@@ -25,11 +25,40 @@ export function requireRole(allowedRoles: UserRole[]) {
 }
 
 /**
+ * Action-level authorization middleware
+ * Checks exact resource action permission (e.g. resource='inventory', action='create')
+ */
+export function requireAction(resource: string, action: string) {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!req.user) {
+      return next(new AppError(401, 'AUTHENTICATION_REQUIRED', 'Authentication required.'));
+    }
+
+    const isAllowed = await rbacService.checkActionPermission(
+      req.user,
+      resource,
+      action,
+      { entityId: req.params.id }
+    );
+
+    if (!isAllowed) {
+      return next(new AppError(
+        403,
+        'INSUFFICIENT_PERMISSIONS',
+        `Access denied. Requires '${resource}.${action}' permission.`
+      ));
+    }
+
+    next();
+  };
+}
+
+/**
  * Capability-based authorization middleware
  * Checks:
- * 1. Role's base capability permissions
- * 2. Active Operational Delegations granted to user
- * 3. Strict governance: Owner Admin cannot execute field installations directly
+ * 1. Strict governance: Owner Admin cannot execute field installations directly
+ * 2. Exact dynamic role permissions from database / in-memory matrix
+ * 3. Active Operational Delegations granted to user
  */
 export function requireCapability(permission: string) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -56,13 +85,7 @@ export function requireCapability(permission: string) {
       return next();
     }
 
-    // 3. Check inherent role capabilities fallback
-    const baseCapabilities = ROLE_CAPABILITIES[user.role as UserRole] || [];
-    if (baseCapabilities.includes(permission)) {
-      return next();
-    }
-
-    // 4. Check operational delegations
+    // 3. Check operational delegations
     const activeDelegations = await rbacService.getActiveDelegationsForUser(user.id, permission);
     if (activeDelegations.length > 0) {
       return next();

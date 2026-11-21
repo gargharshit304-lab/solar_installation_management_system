@@ -3466,6 +3466,8 @@ export const INITIAL_ROLES_PERMISSIONS: RoleDefinition[] = [
       workforce: ['view', 'create', 'edit', 'delete', 'assign', 'approve', 'manage', 'export'],
       departments: ['view', 'create', 'edit', 'delete', 'manage', 'export'],
       roles_permissions: ['view', 'create', 'edit', 'delete', 'manage'],
+      roles: ['view', 'create', 'edit', 'delete', 'manage'],
+      permissions: ['view', 'create', 'edit', 'delete', 'manage'],
       approvals: ['view', 'approve', 'edit', 'delete', 'manage'],
       finance: ['view', 'create', 'edit', 'approve', 'manage', 'export'],
       reports: ['view', 'manage', 'export'],
