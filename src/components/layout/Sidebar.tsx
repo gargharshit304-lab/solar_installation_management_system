@@ -6,7 +6,7 @@ import {
   HeadphonesIcon, IndianRupee, BarChart3, Bot,
   Cpu, Settings as SettingsIcon, ChevronRight, ChevronDown,
   UserPlus, CalendarClock, Bell, ClipboardList, CheckCircle2,
-  Building2, Activity, CheckSquare, Layers, Mic
+  Building2, Activity, CheckSquare, Layers, Mic, Landmark
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { UserRole } from '../../types';
@@ -255,6 +255,12 @@ export const Sidebar: React.FC = () => {
           icon: ShoppingCart, 
           allowedRoles: ['sales_exec'] 
         },
+        { 
+          name: 'Subsidy Tracking', 
+          path: '/subsidies', 
+          icon: Landmark, 
+          allowedRoles: ['sales_exec'] 
+        },
       ]
     },
     {
@@ -289,6 +295,7 @@ export const Sidebar: React.FC = () => {
       items: [
         { name: 'Finance Dashboard', path: '/', icon: IndianRupee, allowedRoles: ['accountant'] },
         { name: 'Orders & Payments', path: '/orders', icon: ShoppingCart, allowedRoles: ['accountant'] },
+        { name: 'PM Surya Ghar Subsidies', path: '/subsidies', icon: Landmark, allowedRoles: ['accountant'] },
         { name: 'Reports & Analytics', path: '/reports', icon: BarChart3, allowedRoles: ['accountant'] },
       ]
     },
@@ -420,6 +427,12 @@ export const Sidebar: React.FC = () => {
           name: 'Finance & Accounts', 
           path: '/finance', 
           icon: IndianRupee, 
+          allowedRoles: ['owner_admin'] 
+        },
+        { 
+          name: 'PM Surya Ghar Subsidies', 
+          path: '/subsidies', 
+          icon: Landmark, 
           allowedRoles: ['owner_admin'] 
         },
       ]

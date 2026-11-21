@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { 
   Download, Calendar, Users, Wrench, Package, ShieldCheck,
-  IndianRupee, ArrowUpRight, CircleCheck
+  IndianRupee, ArrowUpRight, CircleCheck, Share2, Copy, ExternalLink, Lock
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { Modal } from '../components/common/Modal';
 
 type ReportType = 'sales' | 'installations' | 'inventory' | 'warranty' | 'profitability';
 
@@ -46,11 +47,26 @@ export const ReportsPage: React.FC = () => {
     warranties,
     profitability,
     complaints,
+    currentUser,
     showToast
   } = useApp();
 
   const [dateRange, setDateRange] = useState('month');
   const [reportType, setReportType] = useState<ReportType>('sales');
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [snapshotUrl, setSnapshotUrl] = useState('');
+
+  const generateSnapshot = () => {
+    const token = Math.random().toString(36).substring(2, 10);
+    const url = `https://solaros.internal/reports/snapshot/snp-2026-${token}?type=${reportType}&range=${dateRange}&auth=read_only`;
+    setSnapshotUrl(url);
+    setIsShareModalOpen(true);
+  };
+
+  const copySnapshotUrl = () => {
+    navigator.clipboard?.writeText(snapshotUrl);
+    showToast('Secure snapshot link copied to clipboard (Expires in 7 days)', 'success');
+  };
 
   const exportReport = () => {
     showToast(`Exported ${reportType.toUpperCase()} report (${dateRange}) to CSV`, 'success');
@@ -143,13 +159,23 @@ export const ReportsPage: React.FC = () => {
             Operational KPIs, customer acquisition velocity, installation throughput & financial yields
           </p>
         </div>
-        <button
-          onClick={exportReport}
-          className="px-3.5 py-2 bg-navy text-white text-xs font-semibold rounded-xl hover:bg-navy-light transition-colors shadow-xs flex items-center space-x-1.5"
-        >
-          <Download className="w-4 h-4" />
-          <span>Export Dataset (CSV)</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={generateSnapshot}
+            className="px-3 py-2 bg-white text-charcoal border border-warmGrey text-xs font-semibold rounded-xl hover:bg-sand-100 transition-colors shadow-xs flex items-center space-x-1.5"
+          >
+            <Share2 className="w-3.5 h-3.5 text-navy" />
+            <span>Share Snapshot</span>
+          </button>
+
+          <button
+            onClick={exportReport}
+            className="px-3.5 py-2 bg-navy text-white text-xs font-semibold rounded-xl hover:bg-navy-light transition-colors shadow-xs flex items-center space-x-1.5"
+          >
+            <Download className="w-4 h-4" />
+            <span>Export Dataset (CSV)</span>
+          </button>
+        </div>
       </div>
 
       {/* Date Range & Category Filter Shelf */}
@@ -306,6 +332,73 @@ export const ReportsPage: React.FC = () => {
           )}
         </div>
       </section>
+
+      {/* Shareable Snapshot Modal */}
+      {isShareModalOpen && (
+        <Modal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          title="Share Immutable Report Snapshot"
+          subtitle="Generate a tamper-proof, tokenized read-only link for executive review"
+          maxWidth="md"
+        >
+          <div className="space-y-4">
+            <div className="p-3 bg-sand-100 rounded-xl border border-warmGrey space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-mutedGrey">Report Focus:</span>
+                <span className="font-bold uppercase text-navy">{reportType} Analytics</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-mutedGrey">Time Horizon:</span>
+                <span className="font-semibold text-charcoal capitalize">{dateRange} Period</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-mutedGrey">Created By:</span>
+                <span className="font-semibold text-charcoal">{currentUser.name}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-mutedGrey">Access Level:</span>
+                <span className="flex items-center space-x-1 text-sage font-bold">
+                  <Lock className="w-3 h-3" />
+                  <span>Read-Only (7 Days Expiry)</span>
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-charcoal mb-1">
+                Shareable Snapshot URL
+              </label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={snapshotUrl}
+                  className="w-full px-2.5 py-2 text-xs border border-warmGrey rounded-lg font-mono bg-sand-50/50 text-charcoal select-all"
+                />
+                <button
+                  type="button"
+                  onClick={copySnapshotUrl}
+                  className="px-3 py-2 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy-light transition-colors shrink-0 flex items-center space-x-1"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-warmGrey/60 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsShareModalOpen(false)}
+                className="px-4 py-2 text-xs font-medium text-charcoal hover:bg-sand-100 rounded-lg"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
     </div>
   );

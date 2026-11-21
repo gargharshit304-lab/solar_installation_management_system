@@ -7,7 +7,8 @@ import {
   CustomerEnquiry, CommunicationHistoryItem, SalesActivityItem,
   TechnicianLeave, SurveyAssignmentAudit, CustomerSite,
   Department, Team, RoleDefinition, ApprovalRequest,
-  EmployeeActivityLog, RetellAiAgent, SmartAlert
+  EmployeeActivityLog, RetellAiAgent, SmartAlert,
+  SubsidyApplication
 } from '../types';
 
 export const SYSTEM_USERS: UserProfile[] = [
@@ -3157,5 +3158,87 @@ export const INITIAL_SMART_ALERTS: SmartAlert[] = [
     entityId: 'appr-1',
     entityLink: '/approvals',
     timestamp: '3 hours ago'
+  }
+];
+
+export const INITIAL_SUBSIDY_APPLICATIONS: SubsidyApplication[] = [
+  {
+    id: 'sub-1',
+    applicationNumber: 'SUB-2026-001',
+    customerId: 'cust-1',
+    customerName: 'Rajesh Sharma',
+    customerPhone: '+91 98201 44512',
+    customerAddress: 'Plot 42, Green Park Avenue, Kothrud, Pune',
+    orderId: 'ord-28',
+    orderNumber: 'ORD-2026-028',
+    capacityKw: 3.3,
+    schemeName: 'PM Surya Ghar: Muft Bijli Yojana',
+    applicationAmount: 78000,
+    approvedAmount: 78000,
+    disbursedAmount: 78000,
+    submittedDate: '2026-10-15',
+    status: 'disbursed',
+    discomName: 'MSEDCL Pune Circle',
+    consumerNumber: '015520984412',
+    sanctionLoadKw: 5.0,
+    documents: [
+      { name: 'Electricity Bill (Last 6 Months)', type: 'electricity_bill', uploaded: true, verified: true },
+      { name: 'Aadhaar Card (Applicant)', type: 'aadhaar', uploaded: true, verified: true },
+      { name: 'Cancelled Bank Cheque', type: 'bank_passbook', uploaded: true, verified: true },
+      { name: 'Rooftop Ownership Undertaking', type: 'roof_undertaking', uploaded: true, verified: true },
+      { name: 'Bi-Directional Meter Commissioning JCR', type: 'commissioning_report', uploaded: true, verified: true }
+    ],
+    disbursementDate: '2026-11-10',
+    remarks: 'Disbursed directly into customer bank account via DBT.'
+  },
+  {
+    id: 'sub-2',
+    applicationNumber: 'SUB-2026-002',
+    customerId: 'cust-4',
+    customerName: 'Anand Joshi',
+    customerPhone: '+91 98902 33419',
+    customerAddress: 'Flat 402, Shanti Niketan Apartments, Aundh, Pune',
+    orderId: 'ord-31',
+    orderNumber: 'ORD-2026-031',
+    capacityKw: 5.0,
+    schemeName: 'PM Surya Ghar: Muft Bijli Yojana',
+    applicationAmount: 78000,
+    approvedAmount: 78000,
+    submittedDate: '2026-11-12',
+    status: 'under_review',
+    discomName: 'MSEDCL Ganeshkhind Division',
+    consumerNumber: '015890214488',
+    sanctionLoadKw: 6.0,
+    documents: [
+      { name: 'Electricity Bill (September 2026)', type: 'electricity_bill', uploaded: true, verified: true },
+      { name: 'Aadhaar Card (Applicant)', type: 'aadhaar', uploaded: true, verified: true },
+      { name: 'Bank Passbook Front Page', type: 'bank_passbook', uploaded: true, verified: true },
+      { name: 'Society NOC & Roof Undertaking', type: 'roof_undertaking', uploaded: true, verified: true },
+      { name: 'Bi-Directional Meter Commissioning JCR', type: 'commissioning_report', uploaded: false, verified: false }
+    ],
+    remarks: 'Awaiting final MSEDCL bi-directional net-meter sync report to initiate disbursement.'
+  },
+  {
+    id: 'sub-3',
+    applicationNumber: 'SUB-2026-003',
+    customerId: 'cust-6',
+    customerName: 'Kiran Thorat',
+    customerPhone: '+91 97654 32109',
+    customerAddress: 'Survey 44, Hadapsar Bypass Road, Hadapsar, Pune',
+    capacityKw: 2.0,
+    schemeName: 'PM Surya Ghar: Muft Bijli Yojana',
+    applicationAmount: 60000,
+    status: 'documents_pending',
+    discomName: 'MSEDCL Rasta Peth Division',
+    consumerNumber: '015772391004',
+    sanctionLoadKw: 3.0,
+    documents: [
+      { name: 'Electricity Bill', type: 'electricity_bill', uploaded: true, verified: true },
+      { name: 'Aadhaar Card', type: 'aadhaar', uploaded: true, verified: false },
+      { name: 'Bank Passbook Copy', type: 'bank_passbook', uploaded: false, verified: false },
+      { name: 'Rooftop Self-Declaration', type: 'roof_undertaking', uploaded: false, verified: false },
+      { name: 'Commissioning JCR', type: 'commissioning_report', uploaded: false, verified: false }
+    ],
+    remarks: 'Awaiting customer submission of bank passbook copy with IFSC code.'
   }
 ];

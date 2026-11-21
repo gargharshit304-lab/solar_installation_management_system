@@ -24,6 +24,7 @@ import { WarrantyPage } from './pages/WarrantyPage';
 import { ServiceComplaintsPage } from './pages/ServiceComplaintsPage';
 import { FinancePage } from './pages/FinancePage';
 import { ReportsPage } from './pages/ReportsPage';
+import { SubsidyTrackingPage } from './pages/SubsidyTrackingPage';
 import { AiCommandCenterPage } from './pages/AiCommandCenterPage';
 import { AgentActivityPage } from './pages/AgentActivityPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -117,6 +118,11 @@ export function App() {
               <Route path="orders" element={
                 <RoleGuard allowedRoles={['owner_admin', 'sales_exec', 'accountant']}>
                   <OrdersPaymentsPage />
+                </RoleGuard>
+              } />
+              <Route path="subsidies" element={
+                <RoleGuard allowedRoles={['owner_admin', 'sales_exec', 'accountant']}>
+                  <SubsidyTrackingPage />
                 </RoleGuard>
               } />
 

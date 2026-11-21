@@ -15,6 +15,8 @@ export const DispatchPage: React.FC = () => {
     serialNumbers, 
     createDispatchOrder, 
     confirmDelivery, 
+    currentUser,
+    logEmployeeActivity,
     showToast 
   } = useApp();
 
@@ -23,6 +25,8 @@ export const DispatchPage: React.FC = () => {
   const [selectedSerial, setSelectedSerial] = useState('');
   const [deliveryPersonnel, setDeliveryPersonnel] = useState('Tukaram Jadhav (Logistics Driver)');
   const [vehicleNumber, setVehicleNumber] = useState('MH-12-RN-8840');
+  const [overrideUnpaid, setOverrideUnpaid] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
 
   const readyOrders = orders.filter(o => o.orderStatus === 'confirmed' || o.orderStatus === 'processing' || o.orderStatus === 'ready_for_dispatch');
 
@@ -34,6 +38,8 @@ export const DispatchPage: React.FC = () => {
         setSelectedSerial(availableSerial.serialNumber);
       }
     }
+    setOverrideUnpaid(false);
+    setOverrideReason('');
     setIsCreateModalOpen(true);
   };
 
@@ -41,6 +47,35 @@ export const DispatchPage: React.FC = () => {
     e.preventDefault();
     const order = orders.find(o => o.id === selectedOrderId);
     if (!order) return;
+
+    // Chain 2: Order -> Dispatch Payment Gate
+    const isAdvancePaid = order.paymentStatus === 'fully_paid' || 
+                          order.paymentStatus === 'partially_paid' || 
+                          (order.totalOrderValue - order.outstandingBalance > 0);
+
+    if (!isAdvancePaid) {
+      if (!overrideUnpaid || !overrideReason.trim()) {
+        showToast(
+          'Payment Gate Blocked: Order has no verified advance payment receipt. Enter management override authorization with reason to proceed.',
+          'error'
+        );
+        return;
+      }
+
+      // Log Management Override in Employee Activities Audit Log
+      logEmployeeActivity({
+        employeeId: currentUser.id,
+        employeeName: currentUser.name,
+        department: 'Warehouse',
+        role: currentUser.role,
+        actionType: 'dispatch_override',
+        actionDetails: `Management Override: Authorized dispatch for unpaid order ${order.orderNumber} (${order.customerName}). Reason: ${overrideReason.trim()}`,
+        targetEntity: 'DispatchOrder',
+        targetId: order.id,
+        severity: 'important'
+      });
+      showToast(`Management Override logged for order ${order.orderNumber}`, 'info');
+    }
 
     createDispatchOrder({
       orderId: order.id,
@@ -172,11 +207,76 @@ export const DispatchPage: React.FC = () => {
               >
                 {readyOrders.map(o => (
                   <option key={o.id} value={o.id}>
-                    {o.orderNumber} — {o.customerName} ({o.capacityKw} kW, {o.customerCity})
+                    {o.orderNumber} — {o.customerName} ({o.capacityKw} kW, {o.customerCity}) [{o.paymentStatus.toUpperCase()}]
                   </option>
                 ))}
               </select>
             </div>
+
+            {/* Payment Gate Status Indicator & Override */}
+            {(() => {
+              const currentOrder = orders.find(o => o.id === selectedOrderId);
+              if (!currentOrder) return null;
+              const isPaid = currentOrder.paymentStatus === 'fully_paid' || 
+                             currentOrder.paymentStatus === 'partially_paid' || 
+                             (currentOrder.totalOrderValue - currentOrder.outstandingBalance > 0);
+
+              if (isPaid) {
+                const advanceCollected = currentOrder.totalOrderValue - currentOrder.outstandingBalance;
+                return (
+                  <div className="p-3 bg-sage/10 border border-sage/40 rounded-xl flex items-center space-x-2 text-xs text-charcoal">
+                    <CheckCircle2 className="w-4 h-4 text-sage shrink-0" />
+                    <div>
+                      <span className="font-bold text-sage">Payment Milestone Verified:</span> Advance of ₹{advanceCollected.toLocaleString('en-IN')} confirmed. Authorized for physical delivery.
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="p-3.5 bg-terracotta/10 border border-terracotta/40 rounded-xl space-y-2.5 text-xs">
+                  <div className="flex items-start space-x-2">
+                    <AlertCircle className="w-4 h-4 text-terracotta shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-terracotta">Payment Gate Active (Unpaid Order):</span>
+                      <p className="text-mutedGrey text-[11px] mt-0.5">
+                        No advance payment has been recorded for this order (Balance: ₹{currentOrder.outstandingBalance.toLocaleString('en-IN')}). Dispatching requires explicit management override.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-terracotta/20 space-y-2">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={overrideUnpaid}
+                        onChange={e => setOverrideUnpaid(e.target.checked)}
+                        className="rounded text-navy focus:ring-navy h-4 w-4"
+                      />
+                      <span className="font-semibold text-charcoal text-xs">
+                        Authorize Management Dispatch Override
+                      </span>
+                    </label>
+
+                    {overrideUnpaid && (
+                      <div>
+                        <label className="block text-[11px] font-semibold text-charcoal mb-1">
+                          Override Authorization Reason *
+                        </label>
+                        <input
+                          type="text"
+                          required={overrideUnpaid}
+                          value={overrideReason}
+                          onChange={e => setOverrideReason(e.target.value)}
+                          placeholder="e.g. Approved by Vikramaditya Rao for post-delivery payment"
+                          className="w-full px-2.5 py-1.5 text-xs border border-terracotta/40 rounded-lg bg-white"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div>
               <label className="block text-xs font-semibold text-charcoal mb-1">Allocate Inverter Serial Number *</label>
@@ -222,12 +322,29 @@ export const DispatchPage: React.FC = () => {
               >
                 Cancel
               </button>
-              <button
-                type="submit"
-                className="px-5 py-2 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy-light"
-              >
-                Dispatch Materials
-              </button>
+              {(() => {
+                const currentOrder = orders.find(o => o.id === selectedOrderId);
+                const isPaid = currentOrder && (
+                  currentOrder.paymentStatus === 'fully_paid' || 
+                  currentOrder.paymentStatus === 'partially_paid' || 
+                  (currentOrder.totalOrderValue - currentOrder.outstandingBalance > 0)
+                );
+                const isBlocked = !isPaid && (!overrideUnpaid || !overrideReason.trim());
+
+                return (
+                  <button
+                    type="submit"
+                    disabled={isBlocked}
+                    className={`px-5 py-2 text-xs font-semibold rounded-lg transition-colors ${
+                      isBlocked
+                        ? 'bg-warmGrey text-mutedGrey cursor-not-allowed opacity-75'
+                        : 'bg-navy text-white hover:bg-navy-light shadow-xs'
+                    }`}
+                  >
+                    Dispatch Materials
+                  </button>
+                );
+              })()}
             </div>
           </form>
         </Modal>

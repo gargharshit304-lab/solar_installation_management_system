@@ -70,15 +70,23 @@ export const QuotationsPage: React.FC = () => {
     const pkg = packages.find(p => p.id === selectedPackageId);
     if (!customer || !pkg) return;
 
-    // Survey check
-    const survey = surveys.find(s => s.customerId === customer.id && s.status === 'approved');
+    // Chain 1: Strict Quote Gate - Quotation cannot be generated without an approved site survey
+    const survey = surveys.find(s => s.customerId === customer.id && (s.status === 'approved' || s.reviewStatus === 'approved'));
+
+    if (!survey) {
+      showToast(
+        `Quote Gate Blocked: Cannot generate quotation for ${customer.fullName}. A technical site survey must be approved by the Engineering Lead first.`,
+        'error'
+      );
+      return;
+    }
 
     createQuotation({
       customerId: customer.id,
       customerName: customer.fullName,
       customerPhone: customer.phone,
       customerAddress: `${customer.address}, ${customer.city}`,
-      surveyId: survey?.id,
+      surveyId: survey.id,
       packageId: pkg.id,
       packageName: pkg.name,
       packageType: pkg.type,
@@ -96,6 +104,7 @@ export const QuotationsPage: React.FC = () => {
       preparedBy: 'Pooja Kulkarni (Senior Consultant)'
     });
 
+    showToast(`Quotation generated successfully with approved survey link #${survey.surveyNumber || survey.id}`, 'success');
     setIsCreateModalOpen(false);
   };
 
@@ -221,6 +230,30 @@ export const QuotationsPage: React.FC = () => {
         maxWidth="3xl"
       >
         <form onSubmit={handleSaveQuotation} className="space-y-4">
+          {(() => {
+            const customerSurvey = surveys.find(
+              s => s.customerId === selectedCustomerId && (s.status === 'approved' || s.reviewStatus === 'approved')
+            );
+            if (customerSurvey) {
+              return (
+                <div className="p-3 bg-sage/10 border border-sage/40 rounded-xl flex items-start space-x-2.5 text-xs text-charcoal">
+                  <CheckCircle2 className="w-4 h-4 text-sage shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-sage">Engineering Feasibility Verified:</span> Survey #{customerSurvey.surveyNumber || customerSurvey.id} is formally approved by Engineering Lead. Usable Roof Area: {customerSurvey.totalRoofAreaSqm ? `${customerSurvey.totalRoofAreaSqm} m² (~${Math.round(customerSurvey.totalRoofAreaSqm * 10.764)} sq.ft)` : '380 sq.ft'}, Target Feasibility: {customCapacityKw} kW.
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div className="p-3 bg-terracotta/10 border border-terracotta/40 rounded-xl flex items-start space-x-2.5 text-xs text-charcoal">
+                <AlertCircle className="w-4 h-4 text-terracotta shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-terracotta">Quote Gate Enforcement Active:</span> No approved site survey found for this customer. Engineering Lead must review and approve the feasibility survey before a binding quotation can be generated.
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-charcoal mb-1">Select Customer Account *</label>
@@ -360,12 +393,25 @@ export const QuotationsPage: React.FC = () => {
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              className="px-5 py-2 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy-light"
-            >
-              Issue Quotation
-            </button>
+            {(() => {
+              const hasApprovedSurvey = surveys.some(
+                s => s.customerId === selectedCustomerId && (s.status === 'approved' || s.reviewStatus === 'approved')
+              );
+              return (
+                <button
+                  type="submit"
+                  disabled={!hasApprovedSurvey}
+                  className={`px-5 py-2 text-xs font-semibold rounded-lg transition-colors flex items-center space-x-1.5 ${
+                    hasApprovedSurvey
+                      ? 'bg-navy text-white hover:bg-navy-light shadow-xs'
+                      : 'bg-warmGrey text-mutedGrey cursor-not-allowed opacity-75'
+                  }`}
+                  title={!hasApprovedSurvey ? 'Site survey must be approved by Engineering Lead first' : undefined}
+                >
+                  <span>Issue Quotation</span>
+                </button>
+              );
+            })()}
           </div>
         </form>
       </Modal>

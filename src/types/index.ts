@@ -530,6 +530,50 @@ export interface CustomerEnquiry {
   nextFollowUpDate?: string;
   assignedSalesperson: string;
   notes?: string;
+  slaDeadline?: string;
+  slaBreached?: boolean;
+  lostReason?: string;
+  lostNotes?: string;
+  territory?: string;
+}
+
+export type SubsidyStatus = 
+  | 'draft' 
+  | 'documents_pending' 
+  | 'submitted' 
+  | 'under_review' 
+  | 'approved' 
+  | 'rejected' 
+  | 'disbursed';
+
+export interface SubsidyApplication {
+  id: string;
+  applicationNumber: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  orderId?: string;
+  orderNumber?: string;
+  capacityKw: number;
+  schemeName: string;
+  applicationAmount: number;
+  approvedAmount?: number;
+  disbursedAmount?: number;
+  submittedDate?: string;
+  status: SubsidyStatus;
+  discomName: string;
+  consumerNumber: string;
+  nationalPortalRef?: string;
+  sanctionLoadKw: number;
+  documents: {
+    name: string;
+    type: 'electricity_bill' | 'aadhaar' | 'bank_passbook' | 'roof_undertaking' | 'commissioning_report';
+    uploaded: boolean;
+    verified: boolean;
+  }[];
+  disbursementDate?: string;
+  remarks?: string;
 }
 
 export interface CommunicationHistoryItem {

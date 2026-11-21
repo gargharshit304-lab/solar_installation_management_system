@@ -23,7 +23,7 @@ import {
   INITIAL_CUSTOMER_SITES, INITIAL_DEPARTMENTS, INITIAL_TEAMS,
   INITIAL_ROLES_PERMISSIONS, INITIAL_APPROVALS,
   INITIAL_EMPLOYEE_ACTIVITIES, INITIAL_AI_AGENTS,
-  INITIAL_SMART_ALERTS
+  INITIAL_SMART_ALERTS, INITIAL_SUBSIDY_APPLICATIONS
 } from '../data/mockData';
 
 export interface Toast {
@@ -169,6 +169,11 @@ interface AppContextType {
   acknowledgeAlert: (id: string) => void;
   resolveAlert: (id: string) => void;
 
+  // Subsidy Applications (PM Surya Ghar)
+  subsidyApplications: import('../types').SubsidyApplication[];
+  updateSubsidyStatus: (id: string, status: import('../types').SubsidyStatus, remarks?: string) => void;
+  submitSubsidyApplication: (app: Omit<import('../types').SubsidyApplication, 'id' | 'applicationNumber'>) => import('../types').SubsidyApplication;
+
   notifications: NotificationItem[];
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
@@ -181,6 +186,7 @@ interface AppContextType {
   
   enquiries: CustomerEnquiry[];
   createEnquiry: (enquiry: Omit<CustomerEnquiry, 'id' | 'enquiryNumber' | 'receivedDate'>) => CustomerEnquiry;
+  markEnquiryLost: (id: string, reason: string, notes?: string) => void;
   
   communicationHistory: CommunicationHistoryItem[];
   addCommunicationRecord: (record: Omit<CommunicationHistoryItem, 'id' | 'timestamp'>) => void;
@@ -243,6 +249,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [employeeActivities, setEmployeeActivities] = useState<EmployeeActivityLog[]>(INITIAL_EMPLOYEE_ACTIVITIES);
   const [aiAgents, setAiAgents] = useState<RetellAiAgent[]>(INITIAL_AI_AGENTS);
   const [smartAlerts, setSmartAlerts] = useState<SmartAlert[]>(INITIAL_SMART_ALERTS);
+  const [subsidyApplications, setSubsidyApplications] = useState<import('../types').SubsidyApplication[]>(INITIAL_SUBSIDY_APPLICATIONS);
   
   // AI Command Center state
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([
@@ -1911,6 +1918,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Alert marked as resolved', 'success');
   };
 
+  // Enquiry Lost Disposition
+  const markEnquiryLost = (id: string, reason: string, notes?: string) => {
+    setEnquiries(prev => prev.map(enq => {
+      if (enq.id === id) {
+        return {
+          ...enq,
+          leadStatus: 'lost',
+          lostReason: reason,
+          lostNotes: notes
+        };
+      }
+      return enq;
+    }));
+    const enq = enquiries.find(e => e.id === id);
+    if (enq) {
+      logEmployeeActivity({
+        employeeId: currentUser.id,
+        employeeName: currentUser.name,
+        department: 'Sales',
+        role: currentUser.roleTitle,
+        actionType: 'Enquiry Disposed (Lost)',
+        actionDetails: `Marked enquiry ${enq.enquiryNumber} for ${enq.customerName} as Lost. Reason: ${reason}${notes ? ` (${notes})` : ''}`,
+        targetEntity: enq.enquiryNumber,
+        targetId: enq.id,
+        severity: 'normal'
+      });
+    }
+    showToast('Enquiry disposition saved as Lost', 'info');
+  };
+
+  // Subsidy Applications (PM Surya Ghar)
+  const updateSubsidyStatus = (id: string, status: import('../types').SubsidyStatus, remarks?: string) => {
+    setSubsidyApplications(prev => prev.map(app => {
+      if (app.id === id) {
+        return {
+          ...app,
+          status,
+          remarks: remarks || app.remarks,
+          disbursementDate: status === 'disbursed' ? new Date().toISOString().split('T')[0] : app.disbursementDate
+        };
+      }
+      return app;
+    }));
+    showToast(`Subsidy application status updated to ${status.replace('_', ' ').toUpperCase()}`, 'success');
+  };
+
+  const submitSubsidyApplication = (appData: Omit<import('../types').SubsidyApplication, 'id' | 'applicationNumber'>): import('../types').SubsidyApplication => {
+    const newApp: import('../types').SubsidyApplication = {
+      ...appData,
+      id: `sub-${Date.now()}`,
+      applicationNumber: `SUB-2026-${String(subsidyApplications.length + 1).padStart(3, '0')}`
+    };
+    setSubsidyApplications(prev => [newApp, ...prev]);
+    showToast(`Subsidy application ${newApp.applicationNumber} registered`, 'success');
+    return newApp;
+  };
+
   return (
     <AppContext.Provider value={{
       currentUser,
@@ -2004,6 +2068,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       smartAlerts,
       acknowledgeAlert,
       resolveAlert,
+      // Subsidy Applications (PM Surya Ghar)
+      subsidyApplications,
+      updateSubsidyStatus,
+      submitSubsidyApplication,
       notifications: notifications.filter(
         notification => !notification.targetRoles || notification.targetRoles.includes(currentUser.role)
       ),
@@ -2016,6 +2084,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       rescheduleFollowUp,
       enquiries,
       createEnquiry,
+      markEnquiryLost,
       communicationHistory,
       addCommunicationRecord,
       salesActivities,
