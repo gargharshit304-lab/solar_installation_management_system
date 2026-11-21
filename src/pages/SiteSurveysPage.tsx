@@ -38,6 +38,7 @@ export const SiteSurveysPage: React.FC = () => {
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
 
   const [surveyForAssign, setSurveyForAssign] = useState<SiteSurvey | null>(null);
+  const [selectedLockedTech, setSelectedLockedTech] = useState<Employee | null>(null);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isReassignMode, setIsReassignMode] = useState(false);
   const [prefilledTechId, setPrefilledTechId] = useState<string | undefined>();
@@ -78,6 +79,7 @@ export const SiteSurveysPage: React.FC = () => {
 
   // Handlers for modal interactions
   const handleOpenAssign = (survey: SiteSurvey, reassign = false) => {
+    setSelectedLockedTech(null);
     setSurveyForAssign(survey);
     setIsReassignMode(reassign);
     setPrefilledTechId(undefined);
@@ -102,35 +104,21 @@ export const SiteSurveysPage: React.FC = () => {
   };
 
   const handleAssignFromTechnicianCard = (tech: Employee) => {
-    // Look for an unassigned survey first
-    const unassignedSurvey = surveys.find(s => s.status === 'unassigned');
-    if (unassignedSurvey) {
-      setSurveyForAssign(unassignedSurvey);
-      setIsReassignMode(false);
-      setPrefilledTechId(tech.id);
-      setIsAssignModalOpen(true);
-    } else {
-      // If no unassigned survey, open the Schedule New Survey modal with this technician preselected
-      setPrefilledTechId(tech.id);
-      setIsNewSurveyModalOpen(true);
-    }
+    setSelectedLockedTech(tech);
+    setSurveyForAssign(null);
+    setIsReassignMode(false);
+    setPrefilledDate(undefined);
+    setPrefilledSlot(undefined);
+    setIsAssignModalOpen(true);
   };
 
   const handleBookSlotFromSchedule = (tech: Employee, date: string, slot: string) => {
-    const unassignedSurvey = surveys.find(s => s.status === 'unassigned');
-    if (unassignedSurvey) {
-      setSurveyForAssign(unassignedSurvey);
-      setIsReassignMode(false);
-      setPrefilledTechId(tech.id);
-      setPrefilledDate(date);
-      setPrefilledSlot(slot);
-      setIsAssignModalOpen(true);
-    } else {
-      setPrefilledTechId(tech.id);
-      setPrefilledDate(date);
-      setPrefilledSlot(slot);
-      setIsNewSurveyModalOpen(true);
-    }
+    setSelectedLockedTech(tech);
+    setSurveyForAssign(null);
+    setIsReassignMode(false);
+    setPrefilledDate(date);
+    setPrefilledSlot(slot);
+    setIsAssignModalOpen(true);
   };
 
   const handleProceedToQuotation = (survey: SiteSurvey) => {
@@ -602,11 +590,13 @@ export const SiteSurveysPage: React.FC = () => {
         onClose={() => {
           setIsAssignModalOpen(false);
           setSurveyForAssign(null);
+          setSelectedLockedTech(null);
           setIsReassignMode(false);
         }}
+        workflowMode={selectedLockedTech ? 'technician_first' : 'survey_first'}
+        lockedTechnician={selectedLockedTech}
         survey={surveyForAssign}
         isReassign={isReassignMode}
-        initialTechnicianId={prefilledTechId}
         initialDate={prefilledDate}
         initialTimeSlot={prefilledSlot}
       />

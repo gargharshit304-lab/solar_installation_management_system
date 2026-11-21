@@ -5,7 +5,7 @@ import {
   WarrantyRecord, ServiceComplaint, ProjectProfitability,
   Employee, NotificationItem, FollowUpItem,
   CustomerEnquiry, CommunicationHistoryItem, SalesActivityItem,
-  TechnicianLeave, SurveyAssignmentAudit
+  TechnicianLeave, SurveyAssignmentAudit, CustomerSite
 } from '../types';
 
 export const SYSTEM_USERS: UserProfile[] = [
@@ -74,6 +74,129 @@ export const SYSTEM_USERS: UserProfile[] = [
   }
 ];
 
+export const INITIAL_CUSTOMER_SITES: CustomerSite[] = [
+  {
+    id: 'site-1',
+    customerId: 'cust-1',
+    siteLabel: 'Primary Residence (Baner)',
+    address: 'Bunglow 14, Baner Hill View Society',
+    city: 'Pune',
+    state: 'Maharashtra',
+    pincode: '411045',
+    propertyType: 'RCC Flat Terrace',
+    sanctionedLoadKw: 7.0,
+    phaseType: 'three_phase'
+  },
+  {
+    id: 'site-2',
+    customerId: 'cust-1',
+    siteLabel: 'Rental Property (Aundh)',
+    address: 'Flat 302, Sai Sagar Apt, ITI Road',
+    city: 'Pune',
+    state: 'Maharashtra',
+    pincode: '411007',
+    propertyType: 'RCC Flat Terrace',
+    sanctionedLoadKw: 4.0,
+    phaseType: 'single_phase'
+  },
+  {
+    id: 'site-3',
+    customerId: 'cust-2',
+    siteLabel: 'Healthcare Clinic (MG Road)',
+    address: 'Deshmukh Healthcare Centre, MG Road',
+    city: 'Nashik',
+    state: 'Maharashtra',
+    pincode: '422001',
+    propertyType: 'Commercial RCC Slab',
+    sanctionedLoadKw: 10.0,
+    phaseType: 'three_phase'
+  },
+  {
+    id: 'site-4',
+    customerId: 'cust-2',
+    siteLabel: 'Private Residence (Gangapur Rd)',
+    address: 'Row House 4, Palm Springs',
+    city: 'Nashik',
+    state: 'Maharashtra',
+    pincode: '422013',
+    propertyType: 'Sloping Tiled Roof',
+    sanctionedLoadKw: 5.0,
+    phaseType: 'single_phase'
+  },
+  {
+    id: 'site-5',
+    customerId: 'cust-4',
+    siteLabel: 'Residence (Kothrud Woods)',
+    address: 'Row House 9, Kothrud Woods',
+    city: 'Pune',
+    state: 'Maharashtra',
+    pincode: '411038',
+    propertyType: 'Sloping Tiled Roof',
+    sanctionedLoadKw: 5.0,
+    phaseType: 'three_phase'
+  },
+  {
+    id: 'site-6',
+    customerId: 'cust-5',
+    siteLabel: 'Penthouse Terrace (Koregaon Park)',
+    address: 'Flat 402, Ganga Carnation, Koregaon Park',
+    city: 'Pune',
+    state: 'Maharashtra',
+    pincode: '411001',
+    propertyType: 'RCC Flat Terrace',
+    sanctionedLoadKw: 6.0,
+    phaseType: 'three_phase'
+  },
+  {
+    id: 'site-7',
+    customerId: 'cust-6',
+    siteLabel: 'Residence (Hadapsar)',
+    address: 'Survey 44, Hadapsar Bypass Road',
+    city: 'Pune',
+    state: 'Maharashtra',
+    pincode: '411028',
+    propertyType: 'RCC Flat Terrace',
+    sanctionedLoadKw: 3.0,
+    phaseType: 'single_phase'
+  },
+  {
+    id: 'site-8',
+    customerId: 'cust-7',
+    siteLabel: 'Factory Unit 1 (MIDC Bhosari)',
+    address: 'Plot 48, MIDC Bhosari Industrial Area',
+    city: 'Pune',
+    state: 'Maharashtra',
+    pincode: '411026',
+    propertyType: 'Sloped Metal Tin Shed',
+    sanctionedLoadKw: 25.0,
+    phaseType: 'three_phase'
+  },
+  {
+    id: 'site-9',
+    customerId: 'cust-7',
+    siteLabel: 'Precision Machine Shop (Sector 10)',
+    address: 'Gat 112, MIDC Bhosari Sector 10',
+    city: 'Pune',
+    state: 'Maharashtra',
+    pincode: '411026',
+    propertyType: 'Sloped Metal Tin Shed',
+    sanctionedLoadKw: 15.0,
+    phaseType: 'three_phase'
+  },
+  {
+    id: 'site-10',
+    customerId: 'cust-8',
+    siteLabel: 'Colony Bungalow (Kothrud)',
+    address: 'Plot 19, Mayur Colony, Kothrud',
+    city: 'Pune',
+    state: 'Maharashtra',
+    pincode: '411038',
+    propertyType: 'RCC Flat Terrace',
+    sanctionedLoadKw: 7.0,
+    phaseType: 'three_phase'
+  }
+];
+
 export const INITIAL_CUSTOMERS: Customer[] = [
   {
     id: 'cust-1',
@@ -93,7 +216,33 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     assignedSalesperson: 'Pooja Kulkarni',
     leadStatus: 'survey_completed',
     registrationDate: '2026-11-02',
-    notes: 'High daytime consumption with 3 ACs. Wants Tier-1 bifacial panels.'
+    notes: 'High daytime consumption with 3 ACs. Wants Tier-1 bifacial panels.',
+    sites: [
+      {
+        id: 'site-1',
+        customerId: 'cust-1',
+        siteLabel: 'Primary Residence (Baner)',
+        address: 'Bunglow 14, Baner Hill View Society',
+        city: 'Pune',
+        state: 'Maharashtra',
+        pincode: '411045',
+        propertyType: 'RCC Flat Terrace',
+        sanctionedLoadKw: 7.0,
+        phaseType: 'three_phase'
+      },
+      {
+        id: 'site-2',
+        customerId: 'cust-1',
+        siteLabel: 'Rental Property (Aundh)',
+        address: 'Flat 302, Sai Sagar Apt, ITI Road',
+        city: 'Pune',
+        state: 'Maharashtra',
+        pincode: '411007',
+        propertyType: 'RCC Flat Terrace',
+        sanctionedLoadKw: 4.0,
+        phaseType: 'single_phase'
+      }
+    ]
   },
   {
     id: 'cust-2',
@@ -113,7 +262,33 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     assignedSalesperson: 'Pooja Kulkarni',
     leadStatus: 'quotation_sent',
     registrationDate: '2026-11-04',
-    notes: 'Needs battery backup for medical refrigeration during load shedding.'
+    notes: 'Needs battery backup for medical refrigeration during load shedding.',
+    sites: [
+      {
+        id: 'site-3',
+        customerId: 'cust-2',
+        siteLabel: 'Healthcare Clinic (MG Road)',
+        address: 'Deshmukh Healthcare Centre, MG Road',
+        city: 'Nashik',
+        state: 'Maharashtra',
+        pincode: '422001',
+        propertyType: 'Commercial RCC Slab',
+        sanctionedLoadKw: 10.0,
+        phaseType: 'three_phase'
+      },
+      {
+        id: 'site-4',
+        customerId: 'cust-2',
+        siteLabel: 'Private Residence (Gangapur Rd)',
+        address: 'Row House 4, Palm Springs',
+        city: 'Nashik',
+        state: 'Maharashtra',
+        pincode: '422013',
+        propertyType: 'Sloping Tiled Roof',
+        sanctionedLoadKw: 5.0,
+        phaseType: 'single_phase'
+      }
+    ]
   },
   {
     id: 'cust-3',
@@ -133,7 +308,21 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     assignedSalesperson: 'Pooja Kulkarni',
     leadStatus: 'converted',
     registrationDate: '2026-10-18',
-    notes: 'Small factory phase 1 test installation before 50kW expansion.'
+    notes: 'Small factory phase 1 test installation before 50kW expansion.',
+    sites: [
+      {
+        id: 'site-3-a',
+        customerId: 'cust-3',
+        siteLabel: 'MIDC Factory Plant 1',
+        address: 'Plot F-18, MIDC Industrial Area',
+        city: 'Aurangabad',
+        state: 'Maharashtra',
+        pincode: '431001',
+        propertyType: 'Sloped Metal Tin Shed',
+        sanctionedLoadKw: 30.0,
+        phaseType: 'three_phase'
+      }
+    ]
   },
   {
     id: 'cust-4',
@@ -153,7 +342,21 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     assignedSalesperson: 'Pooja Kulkarni',
     leadStatus: 'survey_scheduled',
     registrationDate: '2026-11-12',
-    notes: 'Looking for net metering subsidy under PM Surya Ghar Muft Bijli Yojana.'
+    notes: 'Looking for net metering subsidy under PM Surya Ghar Muft Bijli Yojana.',
+    sites: [
+      {
+        id: 'site-5',
+        customerId: 'cust-4',
+        siteLabel: 'Residence (Kothrud Woods)',
+        address: 'Row House 9, Kothrud Woods',
+        city: 'Pune',
+        state: 'Maharashtra',
+        pincode: '411038',
+        propertyType: 'Sloping Tiled Roof',
+        sanctionedLoadKw: 5.0,
+        phaseType: 'three_phase'
+      }
+    ]
   },
   {
     id: 'cust-5',
@@ -161,7 +364,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     fullName: 'Venkatesh Iyer',
     phone: '+91 98190 22345',
     email: 'v.iyer@iyerconsultants.com',
-    address: 'Villa 7, Green Meadows, Viman Nagar',
+    address: 'Flat 402, Ganga Carnation, Koregaon Park',
     city: 'Pune',
     state: 'Maharashtra',
     monthlyElectricityBill: 11000,
@@ -173,7 +376,21 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     assignedSalesperson: 'Pooja Kulkarni',
     leadStatus: 'negotiation',
     registrationDate: '2026-10-25',
-    notes: 'Requested customized hybrid system with 5kWh lithium battery storage.'
+    notes: 'Requested customized hybrid system with 5kWh lithium battery storage.',
+    sites: [
+      {
+        id: 'site-6',
+        customerId: 'cust-5',
+        siteLabel: 'Penthouse Terrace (Koregaon Park)',
+        address: 'Flat 402, Ganga Carnation, Koregaon Park',
+        city: 'Pune',
+        state: 'Maharashtra',
+        pincode: '411001',
+        propertyType: 'RCC Flat Terrace',
+        sanctionedLoadKw: 6.0,
+        phaseType: 'three_phase'
+      }
+    ]
   },
   {
     id: 'cust-6',
@@ -193,7 +410,101 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     assignedSalesperson: 'Pooja Kulkarni',
     leadStatus: 'new',
     registrationDate: '2026-11-20',
-    notes: 'Walk-in customer at Hadapsar branch. Enquired about 2kW system.'
+    notes: 'Walk-in customer at Hadapsar branch. Enquired about 2kW system.',
+    sites: [
+      {
+        id: 'site-7',
+        customerId: 'cust-6',
+        siteLabel: 'Residence (Hadapsar)',
+        address: 'Survey 44, Hadapsar Bypass Road',
+        city: 'Pune',
+        state: 'Maharashtra',
+        pincode: '411028',
+        propertyType: 'RCC Flat Terrace',
+        sanctionedLoadKw: 3.0,
+        phaseType: 'single_phase'
+      }
+    ]
+  },
+  {
+    id: 'cust-7',
+    customerCode: 'CUST-2026-007',
+    fullName: 'Mahendra Patil (Precision Gears)',
+    phone: '+91 94220 88712',
+    email: 'patil@precisiongears.in',
+    address: 'Plot 48, MIDC Bhosari Industrial Area',
+    city: 'Pune',
+    state: 'Maharashtra',
+    monthlyElectricityBill: 46000,
+    interestedCapacityKw: 15.0,
+    preferredSystemType: 'on_grid',
+    roofSpaceSqft: 2400,
+    roofType: 'Sloped Metal Tin Shed',
+    enquirySource: 'referral',
+    assignedSalesperson: 'Pooja Kulkarni',
+    leadStatus: 'new',
+    registrationDate: '2026-11-20',
+    notes: '15kW commercial solar project for industrial factory shed.',
+    sites: [
+      {
+        id: 'site-8',
+        customerId: 'cust-7',
+        siteLabel: 'Factory Unit 1 (MIDC Bhosari)',
+        address: 'Plot 48, MIDC Bhosari Industrial Area',
+        city: 'Pune',
+        state: 'Maharashtra',
+        pincode: '411026',
+        propertyType: 'Sloped Metal Tin Shed',
+        sanctionedLoadKw: 25.0,
+        phaseType: 'three_phase'
+      },
+      {
+        id: 'site-9',
+        customerId: 'cust-7',
+        siteLabel: 'Precision Machine Shop (Sector 10)',
+        address: 'Gat 112, MIDC Bhosari Sector 10',
+        city: 'Pune',
+        state: 'Maharashtra',
+        pincode: '411026',
+        propertyType: 'Sloped Metal Tin Shed',
+        sanctionedLoadKw: 15.0,
+        phaseType: 'three_phase'
+      }
+    ]
+  },
+  {
+    id: 'cust-8',
+    customerCode: 'CUST-2026-008',
+    fullName: 'Sanjay Deshpande',
+    phone: '+91 98224 11980',
+    email: 'sanjay.d@deshpandearch.com',
+    address: 'Plot 19, Mayur Colony, Kothrud',
+    city: 'Pune',
+    state: 'Maharashtra',
+    monthlyElectricityBill: 6400,
+    interestedCapacityKw: 5.0,
+    preferredSystemType: 'on_grid',
+    roofSpaceSqft: 580,
+    roofType: 'RCC Flat Terrace',
+    enquirySource: 'website',
+    assignedSalesperson: 'Pooja Kulkarni',
+    leadStatus: 'survey_scheduled',
+    registrationDate: '2026-11-19',
+    notes: 'Architect bungalow. Requires aesthetic structure mounting.',
+    sites: [
+      {
+        id: 'site-10',
+        customerId: 'cust-8',
+        siteLabel: 'Colony Bungalow (Kothrud)',
+        address: 'Plot 19, Mayur Colony, Kothrud',
+        city: 'Pune',
+        state: 'Maharashtra',
+        pincode: '411038',
+        propertyType: 'RCC Flat Terrace',
+        sanctionedLoadKw: 7.0,
+        phaseType: 'three_phase'
+      }
+    ]
   }
 ];
 

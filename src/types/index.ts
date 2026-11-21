@@ -29,6 +29,19 @@ export type LeadStatus =
 
 export type SystemType = 'on_grid' | 'off_grid' | 'hybrid';
 
+export interface CustomerSite {
+  id: string;
+  customerId: string;
+  siteLabel: string; // e.g. "Primary Residence", "Branch Warehouse", "Plot 48 MIDC Plant"
+  address: string;
+  city: string;
+  state: string;
+  pincode: string;
+  propertyType: string; // e.g. "RCC Flat Terrace", "Sloped Metal Tin Shed", "Sloping Tiled Roof", "Commercial RCC Slab"
+  sanctionedLoadKw?: number;
+  phaseType?: 'single_phase' | 'three_phase';
+}
+
 export interface Customer {
   id: string;
   customerCode: string;
@@ -48,6 +61,7 @@ export interface Customer {
   leadStatus: LeadStatus;
   registrationDate: string;
   notes?: string;
+  sites?: CustomerSite[];
 }
 
 export type SurveyStatus = 
@@ -96,6 +110,10 @@ export interface SiteSurvey {
   customerName: string;
   customerPhone: string;
   customerAddress: string;
+  siteId?: string;
+  siteLabel?: string;
+  propertyType?: string;
+  pincode?: string;
   scheduledDate: string;
   timeSlot?: string; // e.g. "10:00 AM - 12:00 PM"
   estimatedDurationMinutes?: number;

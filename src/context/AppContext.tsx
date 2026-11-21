@@ -6,7 +6,7 @@ import {
   WarrantyRecord, ServiceComplaint, ProjectProfitability,
   Employee, NotificationItem, AiMessage, FollowUpItem,
   CustomerEnquiry, CommunicationHistoryItem, SalesActivityItem,
-  TechnicianLeave, SurveyAssignmentAudit
+  TechnicianLeave, SurveyAssignmentAudit, CustomerSite
 } from '../types';
 import {
   SYSTEM_USERS, INITIAL_CUSTOMERS, INITIAL_SURVEYS,
@@ -16,7 +16,8 @@ import {
   INITIAL_COMPLAINTS, INITIAL_PROFITABILITY, INITIAL_EMPLOYEES,
   INITIAL_NOTIFICATIONS, INITIAL_FOLLOW_UPS, INITIAL_ENQUIRIES,
   INITIAL_COMMUNICATION_HISTORY, INITIAL_SALES_ACTIVITIES,
-  INITIAL_TECHNICIAN_LEAVES, INITIAL_SURVEY_ASSIGNMENTS
+  INITIAL_TECHNICIAN_LEAVES, INITIAL_SURVEY_ASSIGNMENTS,
+  INITIAL_CUSTOMER_SITES
 } from '../data/mockData';
 
 export interface Toast {
@@ -47,13 +48,34 @@ interface AppContextType {
   
   // Data Collections
   customers: Customer[];
+  customerSites: CustomerSite[];
   addCustomer: (customer: Omit<Customer, 'id' | 'customerCode' | 'registrationDate'>) => Customer;
+  addCustomerSite: (site: Omit<CustomerSite, 'id'>) => CustomerSite;
   updateCustomerLeadStatus: (customerId: string, status: Customer['leadStatus']) => void;
   
   surveys: SiteSurvey[];
   surveyAssignments: SurveyAssignmentAudit[];
   technicianLeaves: TechnicianLeave[];
-  assignSurveyTechnician: (surveyId: string, technicianId: string, scheduledDate?: string, timeSlot?: string, instructions?: string) => void;
+  getNextSurveyNumber: () => string;
+  assignSurveyTechnician: (
+    surveyIdOrParams: string | {
+      surveyId?: string;
+      customerId: string;
+      technicianId: string;
+      scheduledDate: string;
+      timeSlot: string;
+      siteAddress?: string;
+      siteLabel?: string;
+      propertyType?: string;
+      pincode?: string;
+      instructions?: string;
+      estimatedDurationMinutes?: number;
+    },
+    technicianId?: string,
+    scheduledDate?: string,
+    timeSlot?: string,
+    instructions?: string
+  ) => SiteSurvey | void;
   reassignSurveyTechnician: (surveyId: string, newTechnicianId: string, reason: string, scheduledDate?: string, timeSlot?: string) => void;
   rescheduleSurvey: (surveyId: string, newDate: string, newTimeSlot: string, instructions?: string) => void;
   createSurveyRequest: (data: { customerId: string; scheduledDate: string; timeSlot?: string; technicianId?: string; instructions?: string }) => SiteSurvey;
@@ -134,6 +156,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   
   // Core Business Entities
   const [customers, setCustomers] = useState<Customer[]>(INITIAL_CUSTOMERS);
+  const [customerSites, setCustomerSites] = useState<CustomerSite[]>(INITIAL_CUSTOMER_SITES);
   const [surveys, setSurveys] = useState<SiteSurvey[]>(INITIAL_SURVEYS);
   const [surveyAssignments, setSurveyAssignments] = useState<SurveyAssignmentAudit[]>(INITIAL_SURVEY_ASSIGNMENTS);
   const [technicianLeaves, setTechnicianLeaves] = useState<TechnicianLeave[]>(INITIAL_TECHNICIAN_LEAVES);
@@ -233,86 +256,278 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Lead status updated to ${status.replace('_', ' ').toUpperCase()}`, 'info');
   };
 
-  // Site Surveys
-  const assignSurveyTechnician = (
-    surveyId: string, 
-    technicianId: string, 
-    scheduledDate?: string, 
-    timeSlot?: string, 
-    instructions?: string
-  ) => {
-    const tech = employees.find(e => e.id === technicianId);
-    const techName = tech ? tech.fullName : technicianId;
-
-    let targetSurveyNumber = '';
-    let targetCustomerName = '';
-    let targetCustomerId = '';
-
-    setSurveys(prev => prev.map(s => {
-      if (s.id === surveyId) {
-        targetSurveyNumber = s.surveyNumber;
-        targetCustomerName = s.customerName;
-        targetCustomerId = s.customerId;
+  const addCustomerSite = (siteData: Omit<CustomerSite, 'id'>): CustomerSite => {
+    const newSite: CustomerSite = {
+      ...siteData,
+      id: `site-${Date.now()}`
+    };
+    setCustomerSites(prev => [newSite, ...prev]);
+    setCustomers(prev => prev.map(c => {
+      if (c.id === siteData.customerId) {
         return {
-          ...s,
-          technicianId,
-          technicianName: techName,
-          scheduledDate: scheduledDate || s.scheduledDate,
-          timeSlot: timeSlot || s.timeSlot || '10:00 AM - 12:00 PM',
-          instructions: instructions !== undefined ? instructions : s.instructions,
-          status: 'assigned'
+          ...c,
+          sites: [newSite, ...(c.sites || [])]
         };
       }
-      return s;
+      return c;
     }));
+    showToast(`New site "${newSite.siteLabel}" added for customer!`, 'success');
+    return newSite;
+  };
 
-    // Record audit history
-    const auditRecord: SurveyAssignmentAudit = {
-      id: `asg-${Date.now()}`,
-      surveyId,
-      surveyNumber: targetSurveyNumber || surveyId,
-      technicianId,
-      technicianName: techName,
-      assignedAt: new Date().toISOString(),
-      assignedBy: currentUser.name,
-      action: 'assigned',
-      scheduledDate: scheduledDate || new Date().toISOString(),
-      timeSlot: timeSlot || '10:00 AM - 12:00 PM'
-    };
-    setSurveyAssignments(prev => [auditRecord, ...prev]);
+  const getNextSurveyNumber = (): string => {
+    let maxNum = 40;
+    surveys.forEach(s => {
+      const match = s.surveyNumber.match(/SRV-2026-(\d+)/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    });
+    return `SRV-2026-${String(maxNum + 1).padStart(3, '0')}`;
+  };
 
-    // Notification
-    const newNotif: NotificationItem = {
-      id: `notif-${Date.now()}`,
-      title: `Technician Assigned: ${techName}`,
-      message: `Survey ${targetSurveyNumber} for ${targetCustomerName} assigned to ${techName}.`,
-      timeAgo: 'Just now',
-      type: 'info',
-      read: false,
-      link: '/surveys'
-    };
-    setNotifications(prev => [newNotif, ...prev]);
+  // Site Surveys
+  const assignSurveyTechnician = (
+    surveyIdOrParams: string | {
+      surveyId?: string;
+      customerId: string;
+      technicianId: string;
+      scheduledDate: string;
+      timeSlot: string;
+      siteAddress?: string;
+      siteLabel?: string;
+      propertyType?: string;
+      pincode?: string;
+      instructions?: string;
+      estimatedDurationMinutes?: number;
+    },
+    legacyTechId?: string,
+    legacyDate?: string,
+    legacySlot?: string,
+    legacyInstructions?: string
+  ): SiteSurvey | void => {
+    if (typeof surveyIdOrParams === 'object') {
+      const params = surveyIdOrParams;
+      const tech = employees.find(e => e.id === params.technicianId);
+      const techName = tech ? tech.fullName : params.technicianId;
+      const customer = customers.find(c => c.id === params.customerId);
 
-    // Sales Activity & Communication History
-    if (targetCustomerId) {
-      addSalesActivity({
-        type: 'survey_scheduled',
-        customerName: targetCustomerName,
-        customerId: targetCustomerId,
-        description: `Assigned technician ${techName} to survey ${targetSurveyNumber}`,
-        salesperson: currentUser.name,
-        relatedLink: '/surveys'
-      });
-      addCommunicationRecord({
-        customerId: targetCustomerId,
-        authorName: currentUser.name,
-        type: 'survey_requested',
-        summary: `Technician ${techName} Assigned`,
-        details: `Survey ${targetSurveyNumber} assigned. Scheduled slot: ${timeSlot || '10:00 AM - 12:00 PM'}.`
-      });
+      if (params.surveyId) {
+        // Updating an existing survey
+        let targetSurveyNum = '';
+        setSurveys(prev => prev.map(s => {
+          if (s.id === params.surveyId) {
+            targetSurveyNum = s.surveyNumber;
+            return {
+              ...s,
+              technicianId: params.technicianId,
+              technicianName: techName,
+              scheduledDate: params.scheduledDate,
+              timeSlot: params.timeSlot,
+              customerAddress: params.siteAddress || s.customerAddress,
+              siteLabel: params.siteLabel || s.siteLabel,
+              propertyType: params.propertyType || s.propertyType,
+              pincode: params.pincode || s.pincode,
+              instructions: params.instructions !== undefined ? params.instructions : s.instructions,
+              estimatedDurationMinutes: params.estimatedDurationMinutes || s.estimatedDurationMinutes || 90,
+              status: 'assigned'
+            };
+          }
+          return s;
+        }));
+
+        // Audit Record
+        const auditRecord: SurveyAssignmentAudit = {
+          id: `asg-${Date.now()}`,
+          surveyId: params.surveyId,
+          surveyNumber: targetSurveyNum || params.surveyId,
+          technicianId: params.technicianId,
+          technicianName: techName,
+          assignedAt: new Date().toISOString(),
+          assignedBy: currentUser.name,
+          action: 'assigned',
+          scheduledDate: params.scheduledDate,
+          timeSlot: params.timeSlot
+        };
+        setSurveyAssignments(prev => [auditRecord, ...prev]);
+
+        // Notifications & logs
+        setNotifications(prev => [{
+          id: `notif-${Date.now()}`,
+          title: `Technician Assigned: ${techName}`,
+          message: `Survey ${targetSurveyNum} for ${customer?.fullName || 'Customer'} assigned to ${techName}.`,
+          timeAgo: 'Just now',
+          type: 'info',
+          read: false,
+          link: '/surveys'
+        }, ...prev]);
+
+        addSalesActivity({
+          type: 'survey_scheduled',
+          customerName: customer?.fullName || 'Customer',
+          customerId: params.customerId,
+          description: `Assigned specialist ${techName} to survey ${targetSurveyNum}`,
+          salesperson: currentUser.name,
+          relatedLink: '/surveys'
+        });
+
+        addCommunicationRecord({
+          customerId: params.customerId,
+          authorName: currentUser.name,
+          type: 'survey_requested',
+          summary: `Technician ${techName} Assigned`,
+          details: `Survey ${targetSurveyNum} assigned. Slot: ${params.timeSlot}.`
+        });
+
+        showToast(`Technician ${techName} assigned to survey ${targetSurveyNum}`, 'success');
+      } else {
+        // Creating a new survey request in technician-first workflow
+        const newSurveyNum = getNextSurveyNumber();
+        const newSurveyId = `surv-${Date.now()}`;
+
+        const createdSurvey: SiteSurvey = {
+          id: newSurveyId,
+          surveyNumber: newSurveyNum,
+          customerId: params.customerId,
+          customerName: customer ? customer.fullName : 'Customer',
+          customerPhone: customer ? customer.phone : '',
+          customerAddress: params.siteAddress || (customer ? customer.address : ''),
+          siteLabel: params.siteLabel,
+          propertyType: params.propertyType,
+          pincode: params.pincode,
+          scheduledDate: params.scheduledDate,
+          timeSlot: params.timeSlot,
+          instructions: params.instructions,
+          technicianId: params.technicianId,
+          technicianName: techName,
+          estimatedDurationMinutes: params.estimatedDurationMinutes || 90,
+          status: 'assigned',
+          technicianObservations: params.instructions
+        };
+
+        setSurveys(prev => [createdSurvey, ...prev]);
+        updateCustomerLeadStatus(params.customerId, 'survey_scheduled');
+
+        // Audit Record
+        const auditRecord: SurveyAssignmentAudit = {
+          id: `asg-${Date.now()}`,
+          surveyId: newSurveyId,
+          surveyNumber: newSurveyNum,
+          technicianId: params.technicianId,
+          technicianName: techName,
+          assignedAt: new Date().toISOString(),
+          assignedBy: currentUser.name,
+          action: 'assigned',
+          scheduledDate: params.scheduledDate,
+          timeSlot: params.timeSlot
+        };
+        setSurveyAssignments(prev => [auditRecord, ...prev]);
+
+        // Notifications & logs
+        setNotifications(prev => [{
+          id: `notif-${Date.now()}`,
+          title: `New Survey Booked: ${newSurveyNum}`,
+          message: `${customer?.fullName} assigned to ${techName} on ${new Date(params.scheduledDate).toLocaleDateString()} (${params.timeSlot}).`,
+          timeAgo: 'Just now',
+          type: 'success',
+          read: false,
+          link: '/surveys'
+        }, ...prev]);
+
+        addSalesActivity({
+          type: 'survey_scheduled',
+          customerName: customer ? customer.fullName : 'Customer',
+          customerId: params.customerId,
+          description: `Created & assigned survey ${newSurveyNum} to specialist ${techName}`,
+          salesperson: currentUser.name,
+          relatedLink: '/surveys'
+        });
+
+        addCommunicationRecord({
+          customerId: params.customerId,
+          authorName: currentUser.name,
+          type: 'survey_requested',
+          summary: `Site Survey ${newSurveyNum} Scheduled & Assigned`,
+          details: `Specialist: ${techName}. Slot: ${params.timeSlot}. Address: ${params.siteAddress || customer?.address}`
+        });
+
+        showToast(`Survey ${newSurveyNum} created and assigned to ${techName}`, 'success');
+        return createdSurvey;
+      }
+    } else {
+      // Legacy positional call: (surveyId, technicianId, scheduledDate, timeSlot, instructions)
+      const surveyId = surveyIdOrParams;
+      const technicianId = legacyTechId || '';
+      const tech = employees.find(e => e.id === technicianId);
+      const techName = tech ? tech.fullName : technicianId;
+
+      let targetSurveyNumber = '';
+      let targetCustomerName = '';
+      let targetCustomerId = '';
+
+      setSurveys(prev => prev.map(s => {
+        if (s.id === surveyId) {
+          targetSurveyNumber = s.surveyNumber;
+          targetCustomerName = s.customerName;
+          targetCustomerId = s.customerId;
+          return {
+            ...s,
+            technicianId,
+            technicianName: techName,
+            scheduledDate: legacyDate || s.scheduledDate,
+            timeSlot: legacySlot || s.timeSlot || '10:00 AM - 12:00 PM',
+            instructions: legacyInstructions !== undefined ? legacyInstructions : s.instructions,
+            status: 'assigned'
+          };
+        }
+        return s;
+      }));
+
+      const auditRecord: SurveyAssignmentAudit = {
+        id: `asg-${Date.now()}`,
+        surveyId,
+        surveyNumber: targetSurveyNumber || surveyId,
+        technicianId,
+        technicianName: techName,
+        assignedAt: new Date().toISOString(),
+        assignedBy: currentUser.name,
+        action: 'assigned',
+        scheduledDate: legacyDate || new Date().toISOString(),
+        timeSlot: legacySlot || '10:00 AM - 12:00 PM'
+      };
+      setSurveyAssignments(prev => [auditRecord, ...prev]);
+
+      setNotifications(prev => [{
+        id: `notif-${Date.now()}`,
+        title: `Technician Assigned: ${techName}`,
+        message: `Survey ${targetSurveyNumber} for ${targetCustomerName} assigned to ${techName}.`,
+        timeAgo: 'Just now',
+        type: 'info',
+        read: false,
+        link: '/surveys'
+      }, ...prev]);
+
+      if (targetCustomerId) {
+        addSalesActivity({
+          type: 'survey_scheduled',
+          customerName: targetCustomerName,
+          customerId: targetCustomerId,
+          description: `Assigned technician ${techName} to survey ${targetSurveyNumber}`,
+          salesperson: currentUser.name,
+          relatedLink: '/surveys'
+        });
+        addCommunicationRecord({
+          customerId: targetCustomerId,
+          authorName: currentUser.name,
+          type: 'survey_requested',
+          summary: `Technician ${techName} Assigned`,
+          details: `Survey ${targetSurveyNumber} assigned. Scheduled slot: ${legacySlot || '10:00 AM - 12:00 PM'}.`
+        });
+      }
+
+      showToast(`Technician ${techName} assigned to survey ${targetSurveyNumber}`, 'success');
     }
-
-    showToast(`Technician ${techName} assigned to survey ${targetSurveyNumber}`, 'success');
   };
 
   const reassignSurveyTechnician = (
@@ -1112,11 +1327,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast,
       removeToast,
       customers,
+      customerSites,
       addCustomer,
+      addCustomerSite,
       updateCustomerLeadStatus,
       surveys,
       surveyAssignments,
       technicianLeaves,
+      getNextSurveyNumber,
       assignSurveyTechnician,
       reassignSurveyTechnician,
       rescheduleSurvey,
