@@ -42,8 +42,8 @@ import {
   generateAuthSession, 
   verifySessionToken 
 } from '../utils/authSession';
-import { verifyCapability } from '../utils/rbac';
-import { authApi } from '../services/api';
+import { verifyCapability, isRouteAllowedForRole, isRouteReadOnlyForRole } from '../utils/rbac';
+import { authApi, rbacApi } from '../services/api';
 
 export interface Toast {
   id: string;
@@ -190,7 +190,10 @@ interface AppContextType {
   rescheduleInstallation: (installationId: string, startDate: string, endDate: string, reason: string) => void;
 
   // RBAC Capability & Controlled Delegation
-  hasPermission: (permission: import('../types').CapabilityPermission, context?: { assignedTechnicians?: string[]; entityId?: string }) => boolean;
+  hasPermission: (permission: import('../types').CapabilityPermission | string, context?: { assignedTechnicians?: string[]; entityId?: string }) => boolean;
+  canAccessRoute: (path: string) => boolean;
+  isRouteReadOnly: (path: string) => boolean;
+  canPerformAction: (module: string, action: PermissionAction) => boolean;
   delegations: import('../types').OperationalDelegation[];
   createDelegation: (delegation: Omit<import('../types').OperationalDelegation, 'id' | 'delegationCode' | 'createdAt' | 'active'>) => import('../types').OperationalDelegation;
   revokeDelegation: (delegationId: string) => void;
@@ -2191,10 +2194,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Installations & RBAC Enforcement
   const hasPermission = (
-    permission: import('../types').CapabilityPermission, 
+    permission: import('../types').CapabilityPermission | string, 
     context?: { assignedTechnicians?: string[]; entityId?: string }
   ): boolean => {
-    return verifyCapability(currentUser, permission, delegations, context).allowed;
+    return verifyCapability(currentUser, permission, delegations, context, rolesPermissions).allowed;
+  };
+
+  const canAccessRoute = (path: string): boolean => {
+    return isRouteAllowedForRole(path, currentUser.role, rolesPermissions);
+  };
+
+  const isRouteReadOnly = (path: string): boolean => {
+    return isRouteReadOnlyForRole(path, currentUser.role, rolesPermissions);
+  };
+
+  const canPerformAction = (module: string, action: PermissionAction): boolean => {
+    const roleDef = rolesPermissions.find(r => r.roleKey === currentUser.role || r.id === currentUser.role);
+    if (!roleDef) return false;
+    const actions = roleDef.permissions[module] || [];
+    return actions.includes(action) || actions.includes('manage' as PermissionAction);
   };
 
   const createDelegation = (
@@ -2684,9 +2702,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Roles & Permissions
-  const updateRolePermissions = (roleId: string, permissions: Record<string, PermissionAction[]>) => {
-    setRolesPermissions(prev => prev.map(r => r.id === roleId ? { ...r, permissions } : r));
-    showToast('Role permissions matrix updated successfully', 'success');
+  const updateRolePermissions = async (roleId: string, updatedPermissions: Record<string, PermissionAction[]>) => {
+    // 1. Optimistic local React state update
+    setRolesPermissions(prev => prev.map(r => (r.id === roleId || r.roleKey === roleId) ? { ...r, permissions: updatedPermissions } : r));
+
+    // 2. Resolve target role key
+    const targetRole = rolesPermissions.find(r => r.id === roleId || r.roleKey === roleId);
+    const roleKey = targetRole?.roleKey || roleId;
+
+    try {
+      await rbacApi.updateRolePermissions(roleKey, updatedPermissions as any, session?.token);
+      showToast(`Permissions for '${targetRole?.name || roleKey}' synchronized with database`, 'success');
+    } catch (err: any) {
+      console.warn('Backend RBAC sync offline, maintained locally:', err.message);
+      showToast('Role permissions updated locally', 'info');
+    }
   };
 
   const createCustomRole = (roleData: Omit<RoleDefinition, 'id' | 'isCustom'>): RoleDefinition => {
@@ -2971,6 +3001,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       reassignInstallationTechnician,
       rescheduleInstallation,
       hasPermission,
+      canAccessRoute,
+      isRouteReadOnly,
+      canPerformAction,
       delegations,
       createDelegation,
       revokeDelegation,

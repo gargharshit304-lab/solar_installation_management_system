@@ -32,6 +32,8 @@ export const Sidebar: React.FC = () => {
     setIsSidebarCollapsed,
     isMobileMenuOpen,
     setIsMobileMenuOpen,
+    canAccessRoute,
+    isRouteReadOnly,
     inventory,
     complaints,
     surveys,
@@ -634,7 +636,32 @@ export const Sidebar: React.FC = () => {
     }
   ];
 
-  const sectionsToRender =
+  // Master catalog of all available modules for dynamic permission discovery
+  const ALL_MODULE_NAV_ITEMS: NavItem[] = [
+    { name: 'Customers & CRM', path: '/customers', icon: Users, allowedRoles: ['owner_admin', 'sales_exec', 'support_exec'] },
+    { name: 'Customer Enquiries', path: '/enquiries', icon: UserPlus, allowedRoles: ['owner_admin', 'sales_exec'], badge: newEnquiriesCount > 0 ? newEnquiriesCount : undefined },
+    { name: 'Follow-ups', path: '/follow-ups', icon: CalendarClock, allowedRoles: ['owner_admin', 'sales_exec'], badge: overdueFollowUpsCount > 0 ? overdueFollowUpsCount : undefined },
+    { name: 'Site Surveys', path: '/surveys', icon: Compass, allowedRoles: ['owner_admin', 'sales_exec'], badge: pendingSurveysCount > 0 ? pendingSurveysCount : undefined },
+    { name: 'Quotations', path: '/quotations', icon: FileText, allowedRoles: ['owner_admin', 'sales_exec'], badge: pendingQuotesCount > 0 ? pendingQuotesCount : undefined },
+    { name: 'Orders & Payments', path: '/orders', icon: ShoppingCart, allowedRoles: ['owner_admin', 'sales_exec', 'accountant'], badge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined },
+    { name: 'PM Surya Ghar Subsidies', path: '/subsidies', icon: Landmark, allowedRoles: ['owner_admin', 'sales_exec', 'accountant'] },
+    { name: 'Inventory & Stock', path: '/inventory', icon: Package, allowedRoles: ['owner_admin', 'warehouse_mgr'], badge: lowStockCount > 0 ? lowStockCount : undefined },
+    { name: 'Dispatch Orders', path: '/dispatch', icon: Truck, allowedRoles: ['owner_admin', 'warehouse_mgr'] },
+    { name: 'Installations', path: '/installations', icon: Wrench, allowedRoles: ['owner_admin', 'install_tech'] },
+    { name: 'Warranty Traceability', path: '/warranty', icon: ShieldCheck, allowedRoles: ['owner_admin', 'support_exec', 'warehouse_mgr'] },
+    { name: 'Service & Complaints', path: '/service', icon: HeadphonesIcon, allowedRoles: ['owner_admin', 'support_exec', 'install_tech'], badge: openComplaintsCount > 0 ? openComplaintsCount : undefined },
+    { name: 'Finance & Accounts', path: '/finance', icon: IndianRupee, allowedRoles: ['owner_admin', 'accountant'] },
+    { name: 'Reports & Analytics', path: '/reports', icon: BarChart3, allowedRoles: ['owner_admin', 'accountant'] },
+    { name: 'Employees & Workforce', path: '/workforce', icon: UserCheck, allowedRoles: ['owner_admin'] },
+    { name: 'Departments & Teams', path: '/departments', icon: Building2, allowedRoles: ['owner_admin'] },
+    { name: 'Roles & Permissions', path: '/roles-permissions', icon: Layers, allowedRoles: ['owner_admin'] },
+    { name: 'Approvals & Requests', path: '/approvals', icon: CheckSquare, allowedRoles: ['owner_admin'], badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : undefined },
+    { name: 'Activity Center', path: '/activity-center', icon: Activity, allowedRoles: ['owner_admin'] },
+    { name: 'AI Voice Agents', path: '/ai-agents', icon: Mic, allowedRoles: ['owner_admin'] },
+    { name: 'AI Command Center', path: '/ai', icon: Bot, allowedRoles: ['owner_admin'] },
+  ];
+
+  const baseSections =
     currentUser.role === 'owner_admin' ? ownerSections :
     currentUser.role === 'sales_exec' ? salesSections :
     currentUser.role === 'survey_tech' ? fieldSections :
@@ -644,6 +671,23 @@ export const Sidebar: React.FC = () => {
     currentUser.role === 'install_tech' ? installationSections :
     currentUser.role === 'warehouse_mgr' ? warehouseSections :
     standardSections;
+
+  // Identify any dynamically granted items from the master catalog that are accessible but not in base sections
+  const existingPaths = new Set(baseSections.flatMap(s => s.items.map(i => i.path)));
+  const dynamicGrantedItems = ALL_MODULE_NAV_ITEMS.filter(item => 
+    !existingPaths.has(item.path) && canAccessRoute(item.path)
+  );
+
+  const sectionsToRender = dynamicGrantedItems.length > 0 
+    ? [
+        ...baseSections.slice(0, 1),
+        {
+          title: 'PERMITTED WORKSPACES',
+          items: dynamicGrantedItems
+        },
+        ...baseSections.slice(1)
+      ]
+    : baseSections;
 
   const renderContent = () => (
     <div className="flex flex-col h-full bg-white border-r border-warmGrey/80 select-none">
@@ -663,11 +707,8 @@ export const Sidebar: React.FC = () => {
       {/* Navigation Sections */}
       <div className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
         {sectionsToRender.map(section => {
-          // Strictly filter items using both allowedRoles and authoritative isRouteAllowedForRole
-          const visibleItems = section.items.filter(item => 
-            item.allowedRoles.includes(currentUser.role) && 
-            isRouteAllowedForRole(item.path, currentUser.role)
-          );
+          // Dynamically filter items using authoritative capability resolution
+          const visibleItems = section.items.filter(item => canAccessRoute(item.path));
 
           if (visibleItems.length === 0) return null;
 
@@ -689,6 +730,7 @@ export const Sidebar: React.FC = () => {
                 <div className="space-y-0.5 mt-1">
                   {visibleItems.map(item => {
                     const Icon = item.icon;
+                    const isReadOnly = isRouteReadOnly(item.path);
                     return (
                       <NavLink
                         key={item.path}
@@ -711,15 +753,27 @@ export const Sidebar: React.FC = () => {
                               <span className="truncate">{item.name}</span>
                             </div>
 
-                            {item.badge !== undefined && (
-                              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold shrink-0 ${
-                                isActive 
-                                  ? 'bg-sand text-navy' 
-                                  : 'bg-amber-50 text-amber border border-amber/30'
-                              }`}>
-                                {item.badge}
-                              </span>
-                            )}
+                            <div className="flex items-center space-x-1.5 shrink-0">
+                              {isReadOnly && (
+                                <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                  isActive
+                                    ? 'bg-white/20 text-white'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                }`}>
+                                  View
+                                </span>
+                              )}
+
+                              {item.badge !== undefined && (
+                                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold shrink-0 ${
+                                  isActive 
+                                    ? 'bg-sand text-navy' 
+                                    : 'bg-amber-50 text-amber border border-amber/30'
+                                }`}>
+                                  {item.badge}
+                                </span>
+                              )}
+                            </div>
                           </>
                         )}
                       </NavLink>

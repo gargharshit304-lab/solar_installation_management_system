@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Users, Search, Filter, Plus, Download, Mail, Phone, MapPin, 
-  Eye, Calendar, ArrowRight, Zap, CheckCircle2, XCircle, FileText
+  Eye, Calendar, ArrowRight, Zap, CheckCircle2, XCircle, FileText, ShieldCheck
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Customer, LeadStatus, SystemType } from '../types';
@@ -18,8 +18,12 @@ export const CustomersPage: React.FC = () => {
     orders, 
     warranties, 
     payments,
-    showToast 
+    showToast,
+    isRouteReadOnly,
+    canPerformAction
   } = useApp();
+
+  const isReadOnly = isRouteReadOnly('/customers') || !canPerformAction('customers', 'create');
 
   // Search & Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -124,15 +128,35 @@ export const CustomersPage: React.FC = () => {
             <Download className="w-3.5 h-3.5 text-navy" />
             <span>Export CSV</span>
           </button>
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="px-3.5 py-2 bg-navy text-white text-xs font-semibold rounded-xl hover:bg-navy-light transition-colors shadow-xs flex items-center space-x-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Customer</span>
-          </button>
+          {!isReadOnly && (
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="px-3.5 py-2 bg-navy text-white text-xs font-semibold rounded-xl hover:bg-navy-light transition-colors shadow-xs flex items-center space-x-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Customer</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Read-Only Mode Banner */}
+      {isReadOnly && (
+        <div className="bg-amber-50/90 border border-amber-200/90 rounded-2xl p-3.5 flex items-center justify-between text-xs text-amber-950 shadow-xs">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-6 h-6 rounded-lg bg-amber-100 flex items-center justify-center shrink-0 text-amber-700">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-bold text-amber-900">Read-Only Directory Access: </span>
+              <span className="text-amber-800">Your role has been granted customer directory inspection permissions. Creating or altering customer records is restricted.</span>
+            </div>
+          </div>
+          <span className="px-2 py-0.5 rounded bg-amber-200/80 text-amber-900 text-[10px] font-bold uppercase tracking-wider shrink-0">
+            Read Only
+          </span>
+        </div>
+      )}
 
       {/* Filter and Search Controls */}
       <div className="bg-white rounded-card p-4 border border-warmGrey/60 shadow-card space-y-3">

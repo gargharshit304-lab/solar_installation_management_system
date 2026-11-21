@@ -1,21 +1,257 @@
 import { prisma } from '../../db/prisma';
-import { ROLE_DEFINITIONS, ROLE_CAPABILITIES, UserRole } from '../../config/constants';
+import { ROLE_DEFINITIONS, UserRole } from '../../config/constants';
 import { auditService } from '../audit/audit.service';
 import { AppError } from '../../utils/response';
 import { INITIAL_DELEGATIONS } from '../../db/seed';
 
-// In-memory fallback delegations for offline dev/tests
+export interface DynamicRoleDefinition {
+  id: string;
+  roleKey: UserRole;
+  name: string;
+  department: string;
+  description: string;
+  permissions: Record<string, string[]>;
+}
+
+// Initial baseline matrix permissions matching INITIAL_ROLES_PERMISSIONS
+const INITIAL_ROLE_MATRIX: Record<UserRole, Record<string, string[]>> = {
+  owner_admin: {
+    overview: ['view', 'manage', 'export'],
+    customers: ['view', 'create', 'edit', 'delete', 'manage', 'export'],
+    enquiries: ['view', 'create', 'edit', 'delete', 'assign', 'manage', 'export'],
+    follow_ups: ['view', 'create', 'edit', 'delete', 'manage', 'export'],
+    surveys: ['view', 'create', 'edit', 'delete', 'assign', 'approve', 'manage', 'export'],
+    survey_review: ['view', 'approve', 'edit', 'manage'],
+    quotations: ['view', 'create', 'edit', 'delete', 'approve', 'manage', 'export'],
+    orders: ['view', 'create', 'edit', 'delete', 'approve', 'manage', 'export'],
+    inventory: ['view', 'create', 'edit', 'delete', 'manage', 'export'],
+    dispatch: ['view', 'create', 'edit', 'approve', 'manage', 'export'],
+    installations: ['view', 'create', 'edit', 'assign', 'approve', 'manage', 'export'],
+    workforce: ['view', 'create', 'edit', 'delete', 'assign', 'approve', 'manage', 'export'],
+    departments: ['view', 'create', 'edit', 'delete', 'manage', 'export'],
+    roles_permissions: ['view', 'create', 'edit', 'delete', 'manage'],
+    approvals: ['view', 'approve', 'edit', 'delete', 'manage'],
+    finance: ['view', 'create', 'edit', 'approve', 'manage', 'export'],
+    reports: ['view', 'manage', 'export'],
+    ai_agents: ['view', 'create', 'edit', 'manage'],
+    warranty: ['view', 'create', 'edit', 'approve', 'manage', 'export'],
+    service: ['view', 'create', 'edit', 'delete', 'manage'],
+    subsidies: ['view', 'create', 'edit', 'approve', 'manage', 'export'],
+    activity_center: ['view', 'export'],
+    settings: ['view', 'edit', 'manage']
+  },
+  sales_exec: {
+    overview: ['view'],
+    customers: ['view', 'create', 'edit'],
+    enquiries: ['view', 'create', 'edit'],
+    follow_ups: ['view', 'create', 'edit'],
+    surveys: ['view', 'create', 'assign'],
+    quotations: ['view', 'create', 'edit', 'export'],
+    orders: ['view', 'create'],
+    subsidies: ['view', 'create'],
+    reports: ['view']
+  },
+  survey_tech: {
+    overview: ['view'],
+    surveys: ['view', 'create', 'edit'],
+    customers: ['view']
+  },
+  engineering_lead: {
+    overview: ['view'],
+    surveys: ['view', 'edit'],
+    survey_review: ['view', 'approve', 'edit'],
+    installations: ['view'],
+    reports: ['view']
+  },
+  warehouse_mgr: {
+    overview: ['view'],
+    inventory: ['view', 'create', 'edit', 'manage', 'export'],
+    dispatch: ['view', 'create', 'edit', 'manage', 'export'],
+    warranty: ['view'], // Read-only warranty trace
+    installations: ['view']
+  },
+  install_tech: {
+    overview: ['view'],
+    installations: ['view', 'edit'],
+    service: ['view', 'edit'],
+    inventory: ['view'],
+    surveys: ['view']
+  },
+  support_exec: {
+    overview: ['view'],
+    service: ['view', 'create', 'edit', 'manage'],
+    warranty: ['view', 'create', 'edit', 'approve', 'manage'],
+    customers: ['view']
+  },
+  accountant: {
+    overview: ['view'],
+    finance: ['view', 'create', 'edit', 'approve', 'manage', 'export'],
+    orders: ['view', 'edit', 'export'],
+    subsidies: ['view', 'edit', 'approve'],
+    reports: ['view', 'export'],
+    approvals: ['view', 'create']
+  }
+};
+
+// Dynamic in-memory store synchronized with DB
+let inMemoryRoleMatrix: Record<string, Record<string, string[]>> = JSON.parse(JSON.stringify(INITIAL_ROLE_MATRIX));
 let inMemoryDelegations: any[] = [...INITIAL_DELEGATIONS];
 
 export class RbacService {
-  getRoleDefinitions() {
+  async getRoleDefinitions(): Promise<DynamicRoleDefinition[]> {
+    try {
+      const dbRoles = await prisma.role.findMany();
+      if (dbRoles.length > 0) {
+        return dbRoles.map(r => {
+          const roleKey = r.id as UserRole;
+          const def = ROLE_DEFINITIONS[roleKey] || {
+            title: r.name,
+            department: 'General',
+            description: r.description || ''
+          };
+          const permissions = (r.permissions && typeof r.permissions === 'object')
+            ? (r.permissions as Record<string, string[]>)
+            : inMemoryRoleMatrix[roleKey] || {};
+
+          return {
+            id: r.id,
+            roleKey,
+            name: r.name || def.title,
+            department: def.department,
+            description: r.description || def.description,
+            permissions
+          };
+        });
+      }
+    } catch {
+      // Fallback to in-memory store
+    }
+
     return Object.entries(ROLE_DEFINITIONS).map(([key, val]) => ({
+      id: key,
       roleKey: key as UserRole,
-      title: val.title,
+      name: val.title,
       department: val.department,
       description: val.description,
-      capabilities: ROLE_CAPABILITIES[key as UserRole] || []
+      permissions: inMemoryRoleMatrix[key] || {}
     }));
+  }
+
+  async getRoleByKey(roleKey: string): Promise<DynamicRoleDefinition | null> {
+    const roles = await this.getRoleDefinitions();
+    return roles.find(r => r.roleKey === roleKey || r.id === roleKey) || null;
+  }
+
+  async updateRolePermissions(
+    roleKey: string,
+    permissions: Record<string, string[]>,
+    actor: any
+  ): Promise<DynamicRoleDefinition> {
+    if (roleKey === 'owner_admin') {
+      // Ensure owner maintains core governance
+      permissions['roles_permissions'] = ['view', 'create', 'edit', 'delete', 'manage'];
+      permissions['approvals'] = ['view', 'approve', 'edit', 'delete', 'manage'];
+    }
+
+    const previousRole = await this.getRoleByKey(roleKey);
+    const previousPermissions = previousRole?.permissions || {};
+
+    // 1. Update In-Memory cache immediately for zero latency
+    inMemoryRoleMatrix[roleKey] = permissions;
+
+    // 2. Persist to PostgreSQL / Prisma
+    try {
+      await prisma.role.upsert({
+        where: { id: roleKey },
+        update: { permissions },
+        create: {
+          id: roleKey,
+          name: ROLE_DEFINITIONS[roleKey as UserRole]?.title || roleKey,
+          description: ROLE_DEFINITIONS[roleKey as UserRole]?.description || '',
+          permissions
+        }
+      });
+    } catch {
+      // Offline fallback: already updated in memory
+    }
+
+    // 3. Immutable Enterprise Audit Trail
+    await auditService.record({
+      actorId: actor?.id,
+      actorName: actor?.name || 'Administrator',
+      actorRole: actor?.role || 'owner_admin',
+      permissionUsed: 'roles_permissions.manage',
+      action: 'ROLE_PERMISSIONS_UPDATE',
+      entity: 'Role',
+      entityId: roleKey,
+      previousState: previousPermissions,
+      newState: permissions,
+      reason: `Role permissions for '${roleKey}' updated by ${actor?.name || 'Administrator'}`
+    });
+
+    const updated = await this.getRoleByKey(roleKey);
+    return updated!;
+  }
+
+  /**
+   * Evaluates whether a role dynamically possesses a capability.
+   * Handles both 'module.action' (e.g. 'customers.view') and legacy permissions.
+   */
+  hasPermission(roleKey: string, permission: string): boolean {
+    const rolePermissions = inMemoryRoleMatrix[roleKey] || {};
+
+    // STRICT GOVERNANCE RULE: Owner cannot execute field installations directly
+    if (roleKey === 'owner_admin' && permission.startsWith('installations.execute')) {
+      return false;
+    }
+
+    // Parse module and action
+    let moduleKey = '';
+    let actionKey = '';
+
+    if (permission.includes('.')) {
+      const parts = permission.split('.');
+      moduleKey = parts[0];
+      actionKey = parts[1];
+    } else if (permission.includes(':')) {
+      const parts = permission.split(':');
+      moduleKey = parts[0];
+      actionKey = parts[1];
+    }
+
+    // Normalize action synonyms
+    if (actionKey === 'read' || actionKey === 'view_all' || actionKey === 'view_assigned' || actionKey === 'view_available') {
+      actionKey = 'view';
+    }
+    if (actionKey === 'write' || actionKey === 'update' || actionKey === 'adjust') {
+      actionKey = 'edit';
+    }
+
+    // Check module permission actions
+    const grantedActions = rolePermissions[moduleKey] || [];
+    if (grantedActions.includes(actionKey) || grantedActions.includes('manage')) {
+      return true;
+    }
+
+    // Direct string match fallback
+    return grantedActions.includes(permission);
+  }
+
+  getEffectiveCapabilities(roleKey: string): string[] {
+    const rolePermissions = inMemoryRoleMatrix[roleKey] || {};
+    const capabilities: string[] = [];
+
+    for (const [moduleKey, actions] of Object.entries(rolePermissions)) {
+      for (const action of actions) {
+        capabilities.push(`${moduleKey}.${action}`);
+        if (action === 'view') {
+          capabilities.push(`${moduleKey}.view_all`);
+          capabilities.push(`${moduleKey}.read`);
+        }
+      }
+    }
+
+    return Array.from(new Set(capabilities));
   }
 
   async getActiveDelegationsForUser(userId: string, permission?: string): Promise<any[]> {

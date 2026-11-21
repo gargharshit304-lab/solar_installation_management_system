@@ -3,10 +3,21 @@ import { rbacService } from './rbac.service';
 import { sendSuccess } from '../../utils/response';
 
 export class RbacController {
-  getRoles(req: Request, res: Response, next: NextFunction): void {
+  async getRoles(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const roles = rbacService.getRoleDefinitions();
+      const roles = await rbacService.getRoleDefinitions();
       sendSuccess(res, roles);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async updatePermissions(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { roleKey } = req.params;
+      const { permissions } = req.body;
+      const updatedRole = await rbacService.updateRolePermissions(roleKey, permissions, req.user);
+      sendSuccess(res, updatedRole, 200);
     } catch (err) {
       next(err);
     }

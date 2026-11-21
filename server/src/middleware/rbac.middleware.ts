@@ -39,7 +39,7 @@ export function requireCapability(permission: string) {
 
     const user = req.user;
 
-    // Strict Administrative Separation: Owner cannot execute field installations without explicit delegation
+    // 1. Strict Administrative Separation: Owner cannot execute field installations directly
     if (user.role === 'owner_admin' && permission.startsWith('installations.execute')) {
       const delegations = await rbacService.getActiveDelegationsForUser(user.id, permission);
       if (delegations.length === 0) {
@@ -51,13 +51,18 @@ export function requireCapability(permission: string) {
       }
     }
 
-    // Check inherent role capabilities
+    // 2. Check dynamic role permissions from database / in-memory matrix
+    if (rbacService.hasPermission(user.role, permission)) {
+      return next();
+    }
+
+    // 3. Check inherent role capabilities fallback
     const baseCapabilities = ROLE_CAPABILITIES[user.role as UserRole] || [];
     if (baseCapabilities.includes(permission)) {
       return next();
     }
 
-    // Check operational delegations
+    // 4. Check operational delegations
     const activeDelegations = await rbacService.getActiveDelegationsForUser(user.id, permission);
     if (activeDelegations.length > 0) {
       return next();

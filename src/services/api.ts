@@ -135,10 +135,36 @@ export const rbacApi = {
     if (token) headers['Authorization'] = `Bearer ${token}`;
     return request<any[]>('/rbac/roles', { method: 'GET', headers });
   },
+  updateRolePermissions: async (roleKey: string, permissions: Record<string, string[]>, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/rbac/roles/${roleKey}/permissions`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ permissions })
+    });
+  },
   getDelegations: async (token?: string) => {
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
     return request<any[]>('/rbac/delegations', { method: 'GET', headers });
+  },
+  createDelegation: async (data: any, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>('/rbac/delegations', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data)
+    });
+  },
+  revokeDelegation: async (id: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/rbac/delegations/${id}`, {
+      method: 'DELETE',
+      headers
+    });
   }
 };
 

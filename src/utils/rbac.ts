@@ -1,4 +1,4 @@
-import { UserProfile, UserRole, CapabilityPermission, OperationalDelegation } from '../types';
+import { UserProfile, UserRole, CapabilityPermission, OperationalDelegation, RoleDefinition } from '../types';
 
 /**
  * Authoritative Capability Permission Mapping for SolarOS
@@ -149,15 +149,58 @@ export const ROLE_CAPABILITIES: Record<UserRole, CapabilityPermission[]> = {
  */
 export function verifyCapability(
   user: UserProfile,
-  permission: CapabilityPermission,
+  permission: CapabilityPermission | string,
   delegations: OperationalDelegation[] = [],
-  context?: { assignedTechnicians?: string[]; entityId?: string }
+  context?: { assignedTechnicians?: string[]; entityId?: string },
+  dynamicRoles?: RoleDefinition[]
 ): { allowed: boolean; reason?: string } {
-  // Check if role inherently possesses capability
-  const rolePermissions = ROLE_CAPABILITIES[user.role] || [];
-  const hasBasePermission = rolePermissions.includes(permission);
+  // STRICT GOVERNANCE RULE: Owner cannot execute field installations without explicit delegation
+  if (user.role === 'owner_admin' && permission.startsWith('installations.execute')) {
+    const activeDelegation = delegations.find(
+      d => d.active && 
+           d.employeeId === user.id && 
+           d.grantedPermission === permission &&
+           (!d.resourceId || d.resourceId === context?.entityId) &&
+           (!d.expiresDate || new Date(d.expiresDate) > new Date())
+    );
+    if (!activeDelegation) {
+      return {
+        allowed: false,
+        reason: 'Administrative authority does not include operational job execution. Only assigned installation engineers can complete installations.'
+      };
+    }
+  }
 
-  // Check if there is an active explicit delegation
+  // 1. Check dynamic role matrix if provided
+  let hasDynamicPermission = false;
+  if (dynamicRoles && dynamicRoles.length > 0) {
+    const roleDef = dynamicRoles.find(r => r.roleKey === user.role || r.id === user.role);
+    if (roleDef && roleDef.permissions) {
+      let moduleKey = '';
+      let actionKey = '';
+      if (permission.includes('.')) {
+        [moduleKey, actionKey] = permission.split('.');
+      } else if (permission.includes(':')) {
+        [moduleKey, actionKey] = permission.split(':');
+      }
+      if (actionKey === 'read' || actionKey === 'view_all' || actionKey === 'view_assigned' || actionKey === 'view_available') {
+        actionKey = 'view';
+      }
+      if (actionKey === 'write' || actionKey === 'update' || actionKey === 'adjust') {
+        actionKey = 'edit';
+      }
+      const actions = roleDef.permissions[moduleKey] || [];
+      if (actions.includes(actionKey as any) || actions.includes('manage')) {
+        hasDynamicPermission = true;
+      }
+    }
+  }
+
+  // 2. Check if role inherently possesses capability
+  const rolePermissions = ROLE_CAPABILITIES[user.role] || [];
+  const hasBasePermission = rolePermissions.includes(permission as CapabilityPermission);
+
+  // 3. Check if there is an active explicit delegation
   const activeDelegation = delegations.find(
     d => d.active && 
          d.employeeId === user.id && 
@@ -166,20 +209,14 @@ export function verifyCapability(
          (!d.expiresDate || new Date(d.expiresDate) > new Date())
   );
 
-  if (!hasBasePermission && !activeDelegation) {
-    if (user.role === 'owner_admin' && permission.startsWith('installations.execute')) {
-      return {
-        allowed: false,
-        reason: 'Administrative authority does not include operational job execution. Only assigned installation engineers can complete installations.'
-      };
-    }
+  if (!hasDynamicPermission && !hasBasePermission && !activeDelegation) {
     return {
       allowed: false,
       reason: `User role '${user.roleTitle}' lacks permission '${permission}'.`
     };
   }
 
-  // If operational execution of installation, verify assignment
+  // If operational execution of installation, verify technician assignment
   if (permission === 'installations.execute' || permission === 'installations.submit_report') {
     if (context?.assignedTechnicians && context.assignedTechnicians.length > 0) {
       const isAssigned = context.assignedTechnicians.some(name => 
@@ -440,21 +477,101 @@ export const ROUTE_PERMISSIONS: Record<string, RoutePermission> = {
   }
 };
 
+export const ROUTE_TO_MODULE_MAP: Record<string, string> = {
+  '/': 'overview',
+  '/overview': 'overview',
+  '/sales-overview': 'overview',
+  '/enquiries': 'enquiries',
+  '/customers': 'customers',
+  '/follow-ups': 'follow_ups',
+  '/surveys': 'surveys',
+  '/quotations': 'quotations',
+  '/orders': 'orders',
+  '/subsidies': 'subsidies',
+  '/field': 'surveys',
+  '/field/dashboard': 'surveys',
+  '/field/assignments': 'surveys',
+  '/field/available-surveys': 'surveys',
+  '/field/schedule': 'surveys',
+  '/field/reports': 'surveys',
+  '/field/team': 'surveys',
+  '/engineering': 'survey_review',
+  '/engineering/dashboard': 'survey_review',
+  '/engineering/review': 'survey_review',
+  '/engineering/approved': 'survey_review',
+  '/inventory': 'inventory',
+  '/dispatch': 'dispatch',
+  '/installations': 'installations',
+  '/workforce': 'workforce',
+  '/activity-center': 'activity_center',
+  '/departments': 'departments',
+  '/roles-permissions': 'roles_permissions',
+  '/approvals': 'approvals',
+  '/ai-agents': 'ai_agents',
+  '/warranty': 'warranty',
+  '/service': 'service',
+  '/finance': 'finance',
+  '/reports': 'reports',
+  '/ai': 'ai_agents',
+  '/agent-activity': 'ai_agents'
+};
+
 /**
- * Checks whether a given route path is accessible for a user's role
+ * Authoritatively checks whether a route is accessible for a user's role.
+ * Dynamically evaluates dynamic role definitions first if supplied.
  */
-export function isRouteAllowedForRole(path: string, role: UserRole): boolean {
+export function isRouteAllowedForRole(
+  path: string, 
+  role: UserRole, 
+  dynamicRoles?: RoleDefinition[]
+): boolean {
   const normalizedPath = path === '/' ? '/' : path.replace(/\/$/, '');
+
+  // Universal routes allowed for all authenticated users
+  if (['/notifications', '/profile', '/settings'].includes(normalizedPath)) {
+    return true;
+  }
+
+  // Home routes always resolve to role-specific workspace
+  if (normalizedPath === '/' || normalizedPath === '/overview') {
+    return true;
+  }
+
+  // Find corresponding module key
+  let moduleKey = ROUTE_TO_MODULE_MAP[normalizedPath];
+  if (!moduleKey) {
+    const parentKey = Object.keys(ROUTE_TO_MODULE_MAP).find(
+      key => key !== '/' && normalizedPath.startsWith(key)
+    );
+    if (parentKey) {
+      moduleKey = ROUTE_TO_MODULE_MAP[parentKey];
+    }
+  }
+
+  // If dynamicRoles matrix provided and route maps to a module, evaluate dynamic permissions
+  if (dynamicRoles && dynamicRoles.length > 0 && moduleKey) {
+    const roleDef = dynamicRoles.find(r => r.roleKey === role || r.id === role);
+    if (roleDef && roleDef.permissions) {
+      const moduleActions = roleDef.permissions[moduleKey] || [];
+      // If user has view or manage permission on this module, route access is GRANTED
+      if (moduleActions.includes('view') || moduleActions.includes('manage')) {
+        return true;
+      }
+      // If module is configured in dynamic permissions and view is NOT granted, deny access
+      return false;
+    }
+  }
+
+  // Fallback to static ROUTE_PERMISSIONS
   const permission = ROUTE_PERMISSIONS[normalizedPath];
   if (!permission) {
-    // Check for parent route match (e.g. /field/*)
     const parentKey = Object.keys(ROUTE_PERMISSIONS).find(
       key => key !== '/' && normalizedPath.startsWith(key)
     );
     if (parentKey) {
       return ROUTE_PERMISSIONS[parentKey].allowedRoles.includes(role);
     }
-    return true; // Default allow for unconfigured utility routes
+    return true;
   }
   return permission.allowedRoles.includes(role);
 }
@@ -462,8 +579,34 @@ export function isRouteAllowedForRole(path: string, role: UserRole): boolean {
 /**
  * Checks whether a role has read-only access to a specific route
  */
-export function isRouteReadOnlyForRole(path: string, role: UserRole): boolean {
+export function isRouteReadOnlyForRole(
+  path: string, 
+  role: UserRole, 
+  dynamicRoles?: RoleDefinition[]
+): boolean {
   const normalizedPath = path === '/' ? '/' : path.replace(/\/$/, '');
+
+  let moduleKey = ROUTE_TO_MODULE_MAP[normalizedPath];
+  if (!moduleKey) {
+    const parentKey = Object.keys(ROUTE_TO_MODULE_MAP).find(
+      key => key !== '/' && normalizedPath.startsWith(key)
+    );
+    if (parentKey) {
+      moduleKey = ROUTE_TO_MODULE_MAP[parentKey];
+    }
+  }
+
+  if (dynamicRoles && dynamicRoles.length > 0 && moduleKey) {
+    const roleDef = dynamicRoles.find(r => r.roleKey === role || r.id === role);
+    if (roleDef && roleDef.permissions) {
+      const moduleActions = roleDef.permissions[moduleKey] || [];
+      const hasView = moduleActions.includes('view') || moduleActions.includes('manage');
+      const hasWrite = moduleActions.some(a => ['create', 'edit', 'delete', 'manage', 'assign', 'approve'].includes(a));
+      // Read-only if user can view but has no write actions
+      return hasView && !hasWrite;
+    }
+  }
+
   const permission = ROUTE_PERMISSIONS[normalizedPath];
   return permission?.readOnlyRoles?.includes(role) || false;
 }

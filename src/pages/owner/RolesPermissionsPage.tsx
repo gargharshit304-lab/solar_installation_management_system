@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Layers, ShieldCheck, Check, X, Plus, Edit2, 
-  Trash2, AlertCircle, Info, Lock, Save
+  Trash2, AlertCircle, Info, Lock, Save, Loader2, CheckCircle2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { RoleDefinition, PermissionAction } from '../../types';
@@ -14,6 +14,7 @@ export const RolesPermissionsPage: React.FC = () => {
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleDesc, setNewRoleDesc] = useState('');
   const [newRoleBaseId, setNewRoleBaseId] = useState(rolesPermissions[0]?.id || 'role-1');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('saved');
 
   const activeRole = rolesPermissions.find(r => r.id === selectedRoleId) || rolesPermissions[0];
 
@@ -26,13 +27,17 @@ export const RolesPermissionsPage: React.FC = () => {
     { key: 'survey_review', label: 'Survey Review & Approval', category: 'Engineering' },
     { key: 'quotations', label: 'Solar Quotations & Pricing', category: 'Sales' },
     { key: 'orders', label: 'Customer Orders & Payments', category: 'Finance' },
+    { key: 'subsidies', label: 'PM Surya Ghar Subsidies', category: 'Finance' },
     { key: 'inventory', label: 'Warehouse Stock & Panels', category: 'Supply Chain' },
     { key: 'dispatch', label: 'Material Dispatch & Logistics', category: 'Supply Chain' },
     { key: 'installations', label: 'Rooftop Installations & Sync', category: 'Operations' },
+    { key: 'warranty', label: 'Hardware Warranty Traceability', category: 'After-sales' },
+    { key: 'service', label: 'Customer Service & Complaints', category: 'After-sales' },
     { key: 'workforce', label: 'Workforce & Technicians', category: 'Human Resources' },
     { key: 'departments', label: 'Departments & Teams', category: 'Executive' },
     { key: 'roles_permissions', label: 'Roles & Security Matrix', category: 'Executive' },
     { key: 'approvals', label: 'Company Authorization Inbox', category: 'Executive' },
+    { key: 'activity_center', label: 'Employee Activity & Audit', category: 'Executive' },
     { key: 'finance', label: 'P&L, Margins & Financials', category: 'Finance' },
     { key: 'reports', label: 'Business Analytics & Exports', category: 'Finance' },
     { key: 'ai_agents', label: 'Retell AI Voice Agents', category: 'Automation' },
@@ -50,7 +55,7 @@ export const RolesPermissionsPage: React.FC = () => {
     { key: 'manage', label: 'Manage' },
   ];
 
-  const handleTogglePermission = (moduleKey: string, action: PermissionAction) => {
+  const handleTogglePermission = async (moduleKey: string, action: PermissionAction) => {
     if (!activeRole) return;
     if (activeRole.roleKey === 'owner_admin') {
       showToast('Owner & Managing Director role permissions cannot be altered', 'warning');
@@ -69,7 +74,13 @@ export const RolesPermissionsPage: React.FC = () => {
       [moduleKey]: updatedModuleActions
     };
 
-    updateRolePermissions(activeRole.id, updatedPermissions);
+    setSaveStatus('saving');
+    try {
+      await updateRolePermissions(activeRole.id, updatedPermissions);
+      setSaveStatus('saved');
+    } catch {
+      setSaveStatus('error');
+    }
   };
 
   const handleCreateRole = (e: React.FormEvent) => {
@@ -181,8 +192,25 @@ export const RolesPermissionsPage: React.FC = () => {
               Click individual cell checkboxes to toggle module authorization
             </p>
           </div>
-          <div className="text-[11px] text-mutedGrey font-medium">
-            Changes auto-save immediately
+          <div className="flex items-center space-x-2">
+            {saveStatus === 'saving' && (
+              <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                <span>Saving to database...</span>
+              </span>
+            )}
+            {saveStatus === 'saved' && (
+              <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Saved to database</span>
+              </span>
+            )}
+            {saveStatus === 'error' && (
+              <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-800 border border-rose-200">
+                <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                <span>Save failed</span>
+              </span>
+            )}
           </div>
         </div>
 

@@ -7,6 +7,10 @@ import { z } from 'zod';
 
 const router = Router();
 
+const updatePermissionsSchema = z.object({
+  permissions: z.record(z.array(z.string()))
+});
+
 const createDelegationSchema = z.object({
   employeeId: z.string().min(1, 'Employee ID is required'),
   employeeName: z.string().min(1, 'Employee Name is required'),
@@ -21,6 +25,16 @@ const createDelegationSchema = z.object({
 router.get('/roles', requireAuth, (req, res, next) => {
   rbacController.getRoles(req, res, next);
 });
+
+router.put(
+  '/roles/:roleKey/permissions',
+  requireAuth,
+  requireRole(['owner_admin']),
+  validateRequest({ body: updatePermissionsSchema }),
+  (req, res, next) => {
+    rbacController.updatePermissions(req, res, next);
+  }
+);
 
 router.get('/delegations', requireAuth, (req, res, next) => {
   rbacController.getDelegations(req, res, next);

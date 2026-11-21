@@ -82,13 +82,18 @@ function RoleGuard({
   allowedRoles?: string[]; 
   children: React.ReactNode 
 }) {
-  const { currentUser, isInitializing } = useApp();
+  const { currentUser, isInitializing, canAccessRoute } = useApp();
   if (isInitializing) {
     return null;
   }
-  if (routePath && !isRouteAllowedForRole(routePath, currentUser.role)) {
+  // Dynamic capability evaluation takes priority
+  if (routePath) {
+    if (canAccessRoute(routePath)) {
+      return <>{children}</>;
+    }
     return <AccessDeniedPage />;
   }
+  // Fallback to static allowed roles if no specific route path defined
   if (allowedRoles && !allowedRoles.includes(currentUser.role)) {
     return <AccessDeniedPage />;
   }
