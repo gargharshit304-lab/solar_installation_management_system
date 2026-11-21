@@ -289,43 +289,361 @@ export type ProductCategory =
   | 'Solar Panels'
   | 'Inverters'
   | 'Batteries'
+  | 'Controllers'
   | 'Charge Controllers'
   | 'Connectors'
+  | 'Wires and Cables'
   | 'Wires'
   | 'Wiring Boxes'
+  | 'Mounting Stands and Structures'
   | 'Metal Stands'
   | 'Safety Equipment';
+
+export type ProductTrackingType = 'quantity_tracked' | 'serialized';
+
+export interface Warehouse {
+  id: string;
+  code: string;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  pincode: string;
+  managerId: string;
+  managerName: string;
+  contactPhone: string;
+  status: 'active' | 'maintenance' | 'inactive';
+  totalCapacitySqft: number;
+  activeZones: string[];
+}
+
+export interface StorageLocation {
+  id: string;
+  warehouseId: string;
+  warehouseName: string;
+  zone: string;
+  rack: string;
+  shelf: string;
+  bin: string;
+  fullCode: string; // e.g. "MAIN-WH-ZONE-A-RACK-01-SH-02-BIN-05"
+  barcode: string;
+  status: 'available' | 'full' | 'maintenance';
+}
+
+export interface Supplier {
+  id: string;
+  code: string;
+  name: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  address: string;
+  city: string;
+  gstNumber?: string;
+  leadTimeDays: number;
+  paymentTerms: string;
+  status: 'active' | 'preferred' | 'inactive';
+  productCategories: ProductCategory[];
+}
 
 export interface InventoryItem {
   id: string;
   sku: string;
   name: string;
   category: ProductCategory;
+  brand?: string;
+  model?: string;
+  description?: string;
+  imageUrl?: string;
+  unitOfMeasure?: string;
   availableQuantity: number;
   reservedQuantity: number;
+  inTransitQuantity?: number;
+  damagedQuantity?: number;
   minimumThreshold: number;
+  reorderLevel?: number;
   unitCost: number;
   sellingPrice: number;
   supplier: string;
+  supplierId?: string;
   hasSerialTracking: boolean;
+  trackingType?: ProductTrackingType;
   stockStatus: 'in_stock' | 'low_stock' | 'out_of_stock';
+  preferredWarehouseId?: string;
+  preferredWarehouseName?: string;
   locationBin: string;
+  specifications?: {
+    capacityKw?: number;
+    voltage?: string;
+    powerRating?: string;
+    phaseType?: 'single_phase' | 'three_phase';
+    dimensions?: string;
+    weightKg?: number;
+  };
 }
+
+export type SerialNumberStatus = 
+  | 'received'
+  | 'in_stock'
+  | 'reserved'
+  | 'allocated'
+  | 'picked'
+  | 'packed'
+  | 'dispatched'
+  | 'delivered'
+  | 'installed'
+  | 'under_service'
+  | 'returned'
+  | 'damaged'
+  | 'written_off'
+  // Legacy aliases
+  | 'in_warehouse'
+  | 'defective';
 
 export interface SerialNumberRecord {
   id: string;
   serialNumber: string;
   productId: string;
   productName: string;
+  brand?: string;
+  model?: string;
   category: string;
+  warehouseId?: string;
+  warehouseName?: string;
+  locationBin?: string;
   purchaseDate: string;
   supplier: string;
-  currentStatus: 'in_warehouse' | 'reserved' | 'dispatched' | 'installed' | 'defective';
+  supplierId?: string;
+  receivingReference?: string;
+  currentStatus: SerialNumberStatus;
   assignedCustomer?: string;
+  customerId?: string;
   relatedOrderId?: string;
+  orderNumber?: string;
+  dispatchId?: string;
+  dispatchNumber?: string;
   deliveryDate?: string;
+  warrantyRecordId?: string;
   warrantyStartDate?: string;
   warrantyEndDate?: string;
+  notes?: string;
+}
+
+export interface GoodsReceiptItem {
+  id: string;
+  productId: string;
+  sku: string;
+  productName: string;
+  category: ProductCategory;
+  orderedQty: number;
+  receivedQty: number;
+  acceptedQty: number;
+  rejectedQty: number;
+  unitCost: number;
+  serialNumbers: string[];
+  batchNumber?: string;
+  rejectionReason?: string;
+}
+
+export interface GoodsReceiptNote {
+  id: string;
+  grnNumber: string;
+  supplierId: string;
+  supplierName: string;
+  poReference?: string;
+  deliveryChallanNo: string;
+  receivingDate: string;
+  warehouseId: string;
+  warehouseName: string;
+  receivedById: string;
+  receivedByName: string;
+  status: 'draft' | 'under_inspection' | 'confirmed' | 'rejected';
+  items: GoodsReceiptItem[];
+  totalReceivedQty: number;
+  totalAcceptedQty: number;
+  totalRejectedQty: number;
+  totalValue: number;
+  remarks?: string;
+  documents?: string[];
+  confirmedAt?: string;
+}
+
+export type StockMovementType =
+  | 'opening_stock'
+  | 'goods_receipt'
+  | 'stock_adjustment'
+  | 'transfer_out'
+  | 'transfer_in'
+  | 'order_reservation'
+  | 'reservation_release'
+  | 'picking'
+  | 'packing'
+  | 'dispatch'
+  | 'delivery'
+  | 'return'
+  | 'damage'
+  | 'write_off'
+  | 'installation_consumption'
+  | 'correction';
+
+export interface StockMovementRecord {
+  id: string;
+  movementNumber: string;
+  timestamp: string;
+  productId: string;
+  sku: string;
+  productName: string;
+  category: ProductCategory;
+  movementType: StockMovementType;
+  sourceWarehouse?: string;
+  destinationWarehouse?: string;
+  sourceLocation?: string;
+  destinationLocation?: string;
+  quantity: number;
+  unitCost?: number;
+  totalValue?: number;
+  referenceType: string; // 'GRN' | 'ORDER' | 'DISPATCH' | 'TRANSFER' | 'AUDIT'
+  referenceNumber: string;
+  orderId?: string;
+  customerName?: string;
+  serialNumbers?: string[];
+  executedById: string;
+  executedByName: string;
+  approvedById?: string;
+  approvedByName?: string;
+  remarks?: string;
+}
+
+export interface StockAdjustment {
+  id: string;
+  adjustmentCode: string;
+  productId: string;
+  sku: string;
+  productName: string;
+  warehouseId: string;
+  warehouseName: string;
+  locationBin: string;
+  previousQuantity: number;
+  newQuantity: number;
+  quantityDelta: number;
+  adjustmentReason: 'damaged_goods' | 'counting_discrepancy' | 'supplier_shortage' | 'write_off' | 'audit_reconciliation' | 'other';
+  supportingNotes: string;
+  requestedById: string;
+  requestedByName: string;
+  status: 'pending_approval' | 'approved' | 'rejected';
+  approvedById?: string;
+  approvedByName?: string;
+  createdAt: string;
+}
+
+export interface StockReservation {
+  id: string;
+  reservationCode: string;
+  orderId: string;
+  orderNumber: string;
+  customerId: string;
+  customerName: string;
+  productId: string;
+  sku: string;
+  productName: string;
+  quantityReserved: number;
+  allocatedSerials: string[];
+  warehouseId: string;
+  warehouseName: string;
+  status: 'pending_allocation' | 'partially_allocated' | 'fully_allocated' | 'shortage' | 'released' | 'cancelled';
+  createdAt: string;
+}
+
+export interface WarehouseTransferItem {
+  productId: string;
+  sku: string;
+  productName: string;
+  category: ProductCategory;
+  requestedQty: number;
+  transferredQty: number;
+  receivedQty: number;
+  serialNumbers?: string[];
+}
+
+export interface WarehouseTransfer {
+  id: string;
+  transferNumber: string;
+  sourceWarehouseId: string;
+  sourceWarehouseName: string;
+  destinationWarehouseId: string;
+  destinationWarehouseName: string;
+  sourceLocation: string;
+  destinationLocation: string;
+  items: WarehouseTransferItem[];
+  status: 'draft' | 'requested' | 'approved' | 'picking' | 'in_transit' | 'received' | 'completed' | 'rejected' | 'discrepancy';
+  requestedById: string;
+  requestedByName: string;
+  approvedById?: string;
+  approvedByName?: string;
+  assignedStaffId?: string;
+  assignedStaffName?: string;
+  expectedDate: string;
+  notes?: string;
+  discrepancyNotes?: string;
+  createdAt: string;
+  receivedAt?: string;
+}
+
+export interface StockCountItem {
+  productId: string;
+  sku: string;
+  productName: string;
+  category: ProductCategory;
+  locationBin: string;
+  expectedQty: number;
+  countedQty?: number;
+  difference?: number;
+  serialNumbersCounted?: string[];
+  notes?: string;
+}
+
+export interface StockCountSession {
+  id: string;
+  sessionCode: string;
+  title: string;
+  warehouseId: string;
+  warehouseName: string;
+  zone?: string;
+  countType: 'cycle_count' | 'full_warehouse' | 'category_spot_check';
+  status: 'scheduled' | 'in_progress' | 'submitted' | 'under_review' | 'approved' | 'rejected';
+  assignedStaffId: string;
+  assignedStaffName: string;
+  scheduledDate: string;
+  completedDate?: string;
+  items: StockCountItem[];
+  reviewerNotes?: string;
+  reviewedById?: string;
+  reviewedByName?: string;
+}
+
+export interface WarehouseTask {
+  id: string;
+  taskCode: string;
+  taskType: 'goods_receipt' | 'order_picking' | 'order_packing' | 'transfer_out' | 'transfer_in' | 'stock_count' | 'serial_scan';
+  priority: 'urgent' | 'high' | 'normal' | 'low';
+  title: string;
+  warehouseId: string;
+  warehouseName: string;
+  assignedStaffId: string;
+  assignedStaffName: string;
+  relatedReferenceId?: string;
+  relatedReferenceNumber?: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'discrepancy' | 'cancelled';
+  instructions: string;
+  dueDate: string;
+  completedAt?: string;
+  discrepancyReport?: string;
+}
+
+export interface WarrantyRuleConfig {
+  category: ProductCategory;
+  defaultDurationYears: number;
+  description: string;
 }
 
 export interface DispatchOrder {
@@ -335,13 +653,21 @@ export interface DispatchOrder {
   orderNumber: string;
   customerId: string;
   customerName: string;
+  customerPhone?: string;
   deliveryAddress: string;
+  warehouseId?: string;
+  warehouseName?: string;
   allocatedSerials: string[];
   dispatchDate: string;
   deliveryPersonnel: string;
   vehicleNumber: string;
-  deliveryStatus: 'pending' | 'in_transit' | 'delivered';
+  deliveryStatus: 'pending' | 'ready_for_dispatch' | 'in_transit' | 'delivered';
+  pickedAt?: string;
+  packedAt?: string;
   deliveredAt?: string;
+  proofOfDeliveryUrl?: string;
+  receivedByName?: string;
+  deliveryRemarks?: string;
 }
 
 export type InstallationStatus = 

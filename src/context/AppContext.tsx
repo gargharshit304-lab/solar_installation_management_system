@@ -9,7 +9,10 @@ import {
   TechnicianLeave, SurveyAssignmentAudit, CustomerSite,
   TechnicianAvailabilityStatus, Department, Team, RoleDefinition,
   ApprovalRequest, EmployeeActivityLog, RetellAiAgent, SmartAlert,
-  PermissionAction
+  PermissionAction, Warehouse, StorageLocation, Supplier,
+  GoodsReceiptNote, StockMovementRecord, StockAdjustment,
+  StockReservation, WarehouseTransfer, StockCountSession,
+  WarehouseTask, WarrantyRuleConfig, StockCountItem, ProductCategory
 } from '../types';
 import {
   SYSTEM_USERS, INITIAL_CUSTOMERS, INITIAL_SURVEYS,
@@ -24,7 +27,12 @@ import {
   INITIAL_ROLES_PERMISSIONS, INITIAL_APPROVALS,
   INITIAL_EMPLOYEE_ACTIVITIES, INITIAL_AI_AGENTS,
   INITIAL_SMART_ALERTS, INITIAL_SUBSIDY_APPLICATIONS,
-  INITIAL_DELEGATIONS
+  INITIAL_DELEGATIONS, INITIAL_WAREHOUSES,
+  INITIAL_STORAGE_LOCATIONS, INITIAL_SUPPLIERS,
+  INITIAL_GOODS_RECEIPTS, INITIAL_STOCK_MOVEMENTS,
+  INITIAL_STOCK_ADJUSTMENTS, INITIAL_STOCK_RESERVATIONS,
+  INITIAL_WAREHOUSE_TRANSFERS, INITIAL_STOCK_COUNT_SESSIONS,
+  INITIAL_WAREHOUSE_TASKS, INITIAL_WARRANTY_RULES
 } from '../data/mockData';
 import { 
   AuthSession, 
@@ -129,14 +137,49 @@ interface AppContextType {
   recordPayment: (payment: Omit<PaymentRecord, 'id' | 'paymentNumber' | 'paymentDate' | 'recordedBy'>) => void;
   updateOrderStatus: (orderId: string, status: Order['orderStatus']) => void;
   
+  // Warehouse & Inventory Management
+  warehouses: Warehouse[];
+  storageLocations: StorageLocation[];
+  suppliers: Supplier[];
   inventory: InventoryItem[];
-  addInventoryItem: (item: Omit<InventoryItem, 'id' | 'sku'>) => void;
-  adjustStockQuantity: (productId: string, adjustment: number, notes?: string) => void;
+  addInventoryItem: (item: Omit<InventoryItem, 'id' | 'sku'>) => InventoryItem;
+  updateInventoryItem: (id: string, updates: Partial<InventoryItem>) => void;
+  adjustStockQuantity: (productId: string, adjustment: number, reason?: StockAdjustment['adjustmentReason'], notes?: string, warehouseId?: string) => void;
   
   serialNumbers: SerialNumberRecord[];
+  registerSerialNumber: (serialData: Omit<SerialNumberRecord, 'id'>) => SerialNumberRecord;
+  allocateSerialsToOrder: (orderId: string, productId: string, serials: string[]) => void;
+
+  goodsReceipts: GoodsReceiptNote[];
+  registerGoodsReceipt: (grnData: Omit<GoodsReceiptNote, 'id' | 'grnNumber' | 'totalValue'>) => GoodsReceiptNote;
+
+  stockMovements: StockMovementRecord[];
+  stockAdjustments: StockAdjustment[];
+  stockReservations: StockReservation[];
+  
+  warehouseTransfers: WarehouseTransfer[];
+  createWarehouseTransfer: (transferData: Omit<WarehouseTransfer, 'id' | 'transferNumber' | 'createdAt' | 'status'>) => WarehouseTransfer;
+  approveWarehouseTransfer: (transferId: string) => void;
+  dispatchWarehouseTransfer: (transferId: string) => void;
+  receiveWarehouseTransfer: (transferId: string, receivedNotes?: string) => void;
+
+  stockCountSessions: StockCountSession[];
+  createStockCountSession: (sessionData: Omit<StockCountSession, 'id' | 'sessionCode'>) => StockCountSession;
+  submitStockCount: (sessionId: string, items: StockCountItem[]) => void;
+  approveStockCountDiscrepancy: (sessionId: string, notes?: string) => void;
+
+  warehouseTasks: WarehouseTask[];
+  createWarehouseTask: (taskData: Omit<WarehouseTask, 'id' | 'taskCode'>) => WarehouseTask;
+  updateWarehouseTaskStatus: (taskId: string, status: WarehouseTask['status'], discrepancyReport?: string) => void;
+
+  warrantyRules: WarrantyRuleConfig[];
+  isDemoMode: boolean;
+  setIsDemoMode: (val: boolean) => void;
+  resetDemoInventory: () => void;
+
   dispatches: DispatchOrder[];
   createDispatchOrder: (dispatch: Omit<DispatchOrder, 'id' | 'dispatchNumber' | 'dispatchDate'>) => void;
-  confirmDelivery: (dispatchId: string) => void;
+  confirmDelivery: (dispatchId: string, receivedByName?: string, remarks?: string, proofUrl?: string) => void;
   
   installations: Installation[];
   startInstallation: (installationId: string) => void;
@@ -332,8 +375,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [quotations, setQuotations] = useState<Quotation[]>(INITIAL_QUOTATIONS);
   const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
   const [payments, setPayments] = useState<PaymentRecord[]>(INITIAL_PAYMENTS);
+  // Warehouse & Inventory State
+  const [warehouses, setWarehouses] = useState<Warehouse[]>(INITIAL_WAREHOUSES);
+  const [storageLocations, setStorageLocations] = useState<StorageLocation[]>(INITIAL_STORAGE_LOCATIONS);
+  const [suppliers, setSuppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
   const [inventory, setInventory] = useState<InventoryItem[]>(INITIAL_INVENTORY);
   const [serialNumbers, setSerialNumbers] = useState<SerialNumberRecord[]>(INITIAL_SERIAL_NUMBERS);
+  const [goodsReceipts, setGoodsReceipts] = useState<GoodsReceiptNote[]>(INITIAL_GOODS_RECEIPTS);
+  const [stockMovements, setStockMovements] = useState<StockMovementRecord[]>(INITIAL_STOCK_MOVEMENTS);
+  const [stockAdjustments, setStockAdjustments] = useState<StockAdjustment[]>(INITIAL_STOCK_ADJUSTMENTS);
+  const [stockReservations, setStockReservations] = useState<StockReservation[]>(INITIAL_STOCK_RESERVATIONS);
+  const [warehouseTransfers, setWarehouseTransfers] = useState<WarehouseTransfer[]>(INITIAL_WAREHOUSE_TRANSFERS);
+  const [stockCountSessions, setStockCountSessions] = useState<StockCountSession[]>(INITIAL_STOCK_COUNT_SESSIONS);
+  const [warehouseTasks, setWarehouseTasks] = useState<WarehouseTask[]>(INITIAL_WAREHOUSE_TASKS);
+  const [warrantyRules] = useState<WarrantyRuleConfig[]>(INITIAL_WARRANTY_RULES);
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(true);
   const [dispatches, setDispatches] = useState<DispatchOrder[]>(INITIAL_DISPATCHES);
   const [installations, setInstallations] = useState<Installation[]>(INITIAL_INSTALLATIONS);
   const [delegations, setDelegations] = useState<import('../types').OperationalDelegation[]>(INITIAL_DELEGATIONS);
@@ -1376,24 +1432,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Order status updated to ${status.replace(/_/g, ' ').toUpperCase()}`, 'info');
   };
 
-  // Inventory
-  const addInventoryItem = (itemData: Omit<InventoryItem, 'id' | 'sku'>) => {
+  // ---------------------------------------------------------------------------
+  // Warehouse & Inventory Management Functions
+  // ---------------------------------------------------------------------------
+
+  const addInventoryItem = (itemData: Omit<InventoryItem, 'id' | 'sku'>): InventoryItem => {
     const newId = `prd-${Date.now()}`;
-    const sku = `SKU-${itemData.category.substring(0, 3).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+    const prefix = itemData.category.substring(0, 3).toUpperCase();
+    const sku = `SKU-${prefix}-${Date.now().toString().slice(-4)}`;
     const newItem: InventoryItem = {
       ...itemData,
       id: newId,
-      sku
+      sku,
+      availableQuantity: itemData.availableQuantity || 0,
+      reservedQuantity: itemData.reservedQuantity || 0,
+      inTransitQuantity: itemData.inTransitQuantity || 0,
+      damagedQuantity: itemData.damagedQuantity || 0,
+      preferredWarehouseId: itemData.preferredWarehouseId || 'wh-pune-central',
+      preferredWarehouseName: itemData.preferredWarehouseName || 'Pune Central Distribution Hub'
     };
+
     setInventory(prev => [newItem, ...prev]);
-    showToast(`Product ${itemData.name} added to warehouse inventory`, 'success');
+
+    // Record initial opening stock movement if quantity > 0
+    if (newItem.availableQuantity > 0) {
+      const movement: StockMovementRecord = {
+        id: `mov-${Date.now()}`,
+        movementNumber: `MOV-2026-${String(stockMovements.length + 101).padStart(3, '0')}`,
+        timestamp: new Date().toISOString(),
+        productId: newItem.id,
+        sku: newItem.sku,
+        productName: newItem.name,
+        category: newItem.category,
+        movementType: 'opening_stock',
+        destinationWarehouse: newItem.preferredWarehouseName,
+        destinationLocation: newItem.locationBin,
+        quantity: newItem.availableQuantity,
+        unitCost: newItem.unitCost,
+        totalValue: newItem.availableQuantity * newItem.unitCost,
+        referenceType: 'OPENING',
+        referenceNumber: 'INITIAL-CATALOG',
+        executedById: currentUser.id,
+        executedByName: currentUser.name,
+        remarks: 'New hardware SKU catalogued with opening balance'
+      };
+      setStockMovements(prev => [movement, ...prev]);
+    }
+
+    showToast(`Product ${itemData.name} (${sku}) catalogued successfully`, 'success');
+    return newItem;
   };
 
-  const adjustStockQuantity = (productId: string, adjustment: number, notes?: string) => {
+  const updateInventoryItem = (id: string, updates: Partial<InventoryItem>) => {
+    setInventory(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+    showToast('Product specifications updated', 'info');
+  };
+
+  const adjustStockQuantity = (
+    productId: string, 
+    adjustment: number, 
+    reason: StockAdjustment['adjustmentReason'] = 'audit_reconciliation', 
+    notes?: string, 
+    warehouseId?: string
+  ) => {
+    const targetProduct = inventory.find(i => i.id === productId);
+    if (!targetProduct) return;
+
+    const previousQty = targetProduct.availableQuantity;
+    const newQty = Math.max(0, previousQty + adjustment);
+    const stockStatus = newQty === 0 ? 'out_of_stock' : (newQty <= targetProduct.minimumThreshold ? 'low_stock' : 'in_stock');
+
+    // Update inventory quantity
     setInventory(prev => prev.map(item => {
       if (item.id === productId) {
-        const newQty = Math.max(0, item.availableQuantity + adjustment);
-        const stockStatus = newQty === 0 ? 'out_of_stock' : (newQty <= item.minimumThreshold ? 'low_stock' : 'in_stock');
         return {
           ...item,
           availableQuantity: newQty,
@@ -1402,10 +1513,446 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return item;
     }));
-    showToast(`Stock updated by ${adjustment > 0 ? '+' : ''}${adjustment} units${notes ? ` (${notes})` : ''}`, 'info');
+
+    // Record formal StockAdjustment request/record
+    const newAdj: StockAdjustment = {
+      id: `adj-${Date.now()}`,
+      adjustmentCode: `ADJ-2026-${String(stockAdjustments.length + 1).padStart(3, '0')}`,
+      productId,
+      sku: targetProduct.sku,
+      productName: targetProduct.name,
+      warehouseId: warehouseId || targetProduct.preferredWarehouseId || 'wh-pune-central',
+      warehouseName: targetProduct.preferredWarehouseName || 'Pune Central Distribution Hub',
+      locationBin: targetProduct.locationBin,
+      previousQuantity: previousQty,
+      newQuantity: newQty,
+      quantityDelta: adjustment,
+      adjustmentReason: reason,
+      supportingNotes: notes || 'Manual warehouse ledger adjustment',
+      requestedById: currentUser.id,
+      requestedByName: currentUser.name,
+      status: 'approved',
+      approvedById: currentUser.role === 'owner_admin' ? currentUser.id : undefined,
+      approvedByName: currentUser.role === 'owner_admin' ? currentUser.name : undefined,
+      createdAt: new Date().toISOString()
+    };
+    setStockAdjustments(prev => [newAdj, ...prev]);
+
+    // Record immutable StockMovementRecord
+    const movement: StockMovementRecord = {
+      id: `mov-${Date.now()}`,
+      movementNumber: `MOV-2026-${String(stockMovements.length + 101).padStart(3, '0')}`,
+      timestamp: new Date().toISOString(),
+      productId: targetProduct.id,
+      sku: targetProduct.sku,
+      productName: targetProduct.name,
+      category: targetProduct.category,
+      movementType: adjustment < 0 && reason === 'damaged_goods' ? 'damage' : 'stock_adjustment',
+      sourceWarehouse: adjustment < 0 ? (targetProduct.preferredWarehouseName || 'Pune Central Distribution Hub') : undefined,
+      destinationWarehouse: adjustment > 0 ? (targetProduct.preferredWarehouseName || 'Pune Central Distribution Hub') : undefined,
+      sourceLocation: targetProduct.locationBin,
+      destinationLocation: targetProduct.locationBin,
+      quantity: adjustment,
+      unitCost: targetProduct.unitCost,
+      totalValue: adjustment * targetProduct.unitCost,
+      referenceType: 'ADJUSTMENT',
+      referenceNumber: newAdj.adjustmentCode,
+      executedById: currentUser.id,
+      executedByName: currentUser.name,
+      approvedById: currentUser.id,
+      approvedByName: currentUser.name,
+      remarks: notes || `Stock adjusted (${reason})`
+    };
+    setStockMovements(prev => [movement, ...prev]);
+
+    showToast(`Stock updated by ${adjustment > 0 ? '+' : ''}${adjustment} units for ${targetProduct.name}`, 'info');
   };
 
-  // Dispatch & Warranty calculation on delivery
+  const registerGoodsReceipt = (grnData: Omit<GoodsReceiptNote, 'id' | 'grnNumber' | 'totalValue'>): GoodsReceiptNote => {
+    const newId = `grn-${Date.now()}`;
+    const grnNumber = `GRN-2026-${String(goodsReceipts.length + 44).padStart(3, '0')}`;
+    const totalValue = grnData.items.reduce((sum, item) => sum + (item.acceptedQty * item.unitCost), 0);
+
+    const newGRN: GoodsReceiptNote = {
+      ...grnData,
+      id: newId,
+      grnNumber,
+      totalValue,
+      confirmedAt: new Date().toISOString()
+    };
+
+    setGoodsReceipts(prev => [newGRN, ...prev]);
+
+    // For each item in GRN: update inventory available stock & add movement
+    newGRN.items.forEach(item => {
+      setInventory(prev => prev.map(invItem => {
+        if (invItem.id === item.productId || invItem.sku === item.sku) {
+          const newAvailable = invItem.availableQuantity + item.acceptedQty;
+          const newDamaged = (invItem.damagedQuantity || 0) + item.rejectedQty;
+          return {
+            ...invItem,
+            availableQuantity: newAvailable,
+            damagedQuantity: newDamaged,
+            stockStatus: newAvailable > invItem.minimumThreshold ? 'in_stock' : (newAvailable === 0 ? 'out_of_stock' : 'low_stock')
+          };
+        }
+        return invItem;
+      }));
+
+      // Create stock movement for accepted goods
+      if (item.acceptedQty > 0) {
+        const movement: StockMovementRecord = {
+          id: `mov-${Date.now()}-${item.productId}`,
+          movementNumber: `MOV-2026-${String(stockMovements.length + 101).padStart(3, '0')}`,
+          timestamp: new Date().toISOString(),
+          productId: item.productId,
+          sku: item.sku,
+          productName: item.productName,
+          category: item.category,
+          movementType: 'goods_receipt',
+          destinationWarehouse: newGRN.warehouseName,
+          quantity: item.acceptedQty,
+          unitCost: item.unitCost,
+          totalValue: item.acceptedQty * item.unitCost,
+          referenceType: 'GRN',
+          referenceNumber: grnNumber,
+          serialNumbers: item.serialNumbers,
+          executedById: currentUser.id,
+          executedByName: currentUser.name,
+          remarks: `Received via ${grnData.deliveryChallanNo} from ${grnData.supplierName}`
+        };
+        setStockMovements(prev => [movement, ...prev]);
+      }
+
+      // If serialized, auto-register serial numbers
+      if (item.serialNumbers && item.serialNumbers.length > 0) {
+        const newSerials: SerialNumberRecord[] = item.serialNumbers.map((sn, idx) => ({
+          id: `ser-${Date.now()}-${idx}`,
+          serialNumber: sn,
+          productId: item.productId,
+          productName: item.productName,
+          category: item.category,
+          warehouseId: newGRN.warehouseId,
+          warehouseName: newGRN.warehouseName,
+          purchaseDate: newGRN.receivingDate,
+          supplier: newGRN.supplierName,
+          supplierId: newGRN.supplierId,
+          receivingReference: grnNumber,
+          currentStatus: 'in_stock'
+        }));
+        setSerialNumbers(prev => [...newSerials, ...prev]);
+      }
+    });
+
+    showToast(`Goods Receipt ${grnNumber} confirmed! Stock balances credited.`, 'success');
+    return newGRN;
+  };
+
+  const registerSerialNumber = (serialData: Omit<SerialNumberRecord, 'id'>): SerialNumberRecord => {
+    // Check if duplicate
+    const exists = serialNumbers.some(s => s.serialNumber.toLowerCase() === serialData.serialNumber.toLowerCase());
+    if (exists) {
+      showToast(`Validation Error: Serial number ${serialData.serialNumber} is already registered in the vault!`, 'error');
+      throw new Error(`Duplicate serial number ${serialData.serialNumber}`);
+    }
+
+    const newRecord: SerialNumberRecord = {
+      ...serialData,
+      id: `ser-${Date.now()}`
+    };
+
+    setSerialNumbers(prev => [newRecord, ...prev]);
+    showToast(`Serial number ${newRecord.serialNumber} registered into ${newRecord.warehouseName || 'Warehouse'}`, 'success');
+    return newRecord;
+  };
+
+  const allocateSerialsToOrder = (orderId: string, productId: string, serials: string[]) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    setSerialNumbers(prev => prev.map(s => {
+      if (serials.includes(s.serialNumber)) {
+        return {
+          ...s,
+          currentStatus: 'allocated',
+          customerId: order.customerId,
+          assignedCustomer: order.customerName,
+          relatedOrderId: order.id,
+          orderNumber: order.orderNumber
+        };
+      }
+      return s;
+    }));
+
+    // Update or create reservation
+    const targetProduct = inventory.find(i => i.id === productId);
+    if (targetProduct) {
+      const newRes: StockReservation = {
+        id: `res-${Date.now()}`,
+        reservationCode: `RES-2026-${String(stockReservations.length + 83).padStart(3, '0')}`,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        customerId: order.customerId,
+        customerName: order.customerName,
+        productId,
+        sku: targetProduct.sku,
+        productName: targetProduct.name,
+        quantityReserved: serials.length,
+        allocatedSerials: serials,
+        warehouseId: 'wh-pune-central',
+        warehouseName: 'Pune Central Distribution Hub',
+        status: 'fully_allocated',
+        createdAt: new Date().toISOString()
+      };
+      setStockReservations(prev => [newRes, ...prev]);
+    }
+
+    showToast(`Allocated ${serials.length} serialized units to Order ${order.orderNumber}`, 'success');
+  };
+
+  const createWarehouseTransfer = (
+    transferData: Omit<WarehouseTransfer, 'id' | 'transferNumber' | 'createdAt' | 'status'>
+  ): WarehouseTransfer => {
+    const newId = `trf-${Date.now()}`;
+    const transferNumber = `TRF-2026-${String(warehouseTransfers.length + 16).padStart(3, '0')}`;
+    const newTransfer: WarehouseTransfer = {
+      ...transferData,
+      id: newId,
+      transferNumber,
+      status: 'in_transit',
+      createdAt: new Date().toISOString()
+    };
+
+    setWarehouseTransfers(prev => [newTransfer, ...prev]);
+
+    // Deduct available stock from source warehouse and add to inTransit
+    transferData.items.forEach(item => {
+      setInventory(prev => prev.map(invItem => {
+        if (invItem.id === item.productId || invItem.sku === item.sku) {
+          const newAvail = Math.max(0, invItem.availableQuantity - item.transferredQty);
+          const newInTransit = (invItem.inTransitQuantity || 0) + item.transferredQty;
+          return {
+            ...invItem,
+            availableQuantity: newAvail,
+            inTransitQuantity: newInTransit
+          };
+        }
+        return invItem;
+      }));
+
+      // Record transfer_out movement
+      const movement: StockMovementRecord = {
+        id: `mov-${Date.now()}-${item.productId}`,
+        movementNumber: `MOV-2026-${String(stockMovements.length + 101).padStart(3, '0')}`,
+        timestamp: new Date().toISOString(),
+        productId: item.productId,
+        sku: item.sku,
+        productName: item.productName,
+        category: item.category,
+        movementType: 'transfer_out',
+        sourceWarehouse: transferData.sourceWarehouseName,
+        destinationWarehouse: transferData.destinationWarehouseName,
+        sourceLocation: transferData.sourceLocation,
+        destinationLocation: transferData.destinationLocation,
+        quantity: -item.transferredQty,
+        referenceType: 'TRANSFER',
+        referenceNumber: transferNumber,
+        serialNumbers: item.serialNumbers,
+        executedById: currentUser.id,
+        executedByName: currentUser.name,
+        remarks: `Dispatched to ${transferData.destinationWarehouseName}`
+      };
+      setStockMovements(prev => [movement, ...prev]);
+    });
+
+    showToast(`Transfer ${transferNumber} in transit to ${transferData.destinationWarehouseName}`, 'info');
+    return newTransfer;
+  };
+
+  const approveWarehouseTransfer = (transferId: string) => {
+    setWarehouseTransfers(prev => prev.map(t => t.id === transferId ? {
+      ...t,
+      status: 'approved',
+      approvedById: currentUser.id,
+      approvedByName: currentUser.name
+    } : t));
+    showToast('Warehouse transfer approved', 'success');
+  };
+
+  const dispatchWarehouseTransfer = (transferId: string) => {
+    setWarehouseTransfers(prev => prev.map(t => t.id === transferId ? {
+      ...t,
+      status: 'in_transit'
+    } : t));
+    showToast('Transfer vehicle dispatched', 'info');
+  };
+
+  const receiveWarehouseTransfer = (transferId: string, receivedNotes?: string) => {
+    const transfer = warehouseTransfers.find(t => t.id === transferId);
+    if (!transfer) return;
+
+    setWarehouseTransfers(prev => prev.map(t => t.id === transferId ? {
+      ...t,
+      status: 'completed',
+      receivedAt: new Date().toISOString(),
+      notes: receivedNotes ? `${t.notes ? t.notes + ' | ' : ''}${receivedNotes}` : t.notes
+    } : t));
+
+    // Release inTransit and add available quantity to destination warehouse
+    transfer.items.forEach(item => {
+      setInventory(prev => prev.map(invItem => {
+        if (invItem.id === item.productId || invItem.sku === item.sku) {
+          const newInTransit = Math.max(0, (invItem.inTransitQuantity || 0) - item.transferredQty);
+          const newAvail = invItem.availableQuantity + item.transferredQty;
+          return {
+            ...invItem,
+            availableQuantity: newAvail,
+            inTransitQuantity: newInTransit
+          };
+        }
+        return invItem;
+      }));
+
+      // Record transfer_in movement
+      const movement: StockMovementRecord = {
+        id: `mov-${Date.now()}-${item.productId}`,
+        movementNumber: `MOV-2026-${String(stockMovements.length + 101).padStart(3, '0')}`,
+        timestamp: new Date().toISOString(),
+        productId: item.productId,
+        sku: item.sku,
+        productName: item.productName,
+        category: item.category,
+        movementType: 'transfer_in',
+        sourceWarehouse: transfer.sourceWarehouseName,
+        destinationWarehouse: transfer.destinationWarehouseName,
+        sourceLocation: transfer.sourceLocation,
+        destinationLocation: transfer.destinationLocation,
+        quantity: item.transferredQty,
+        referenceType: 'TRANSFER',
+        referenceNumber: transfer.transferNumber,
+        serialNumbers: item.serialNumbers,
+        executedById: currentUser.id,
+        executedByName: currentUser.name,
+        remarks: `Received at ${transfer.destinationWarehouseName}`
+      };
+      setStockMovements(prev => [movement, ...prev]);
+
+      // Update serial numbers warehouse location
+      if (item.serialNumbers) {
+        setSerialNumbers(prev => prev.map(s => {
+          if (item.serialNumbers?.includes(s.serialNumber)) {
+            return {
+              ...s,
+              warehouseId: transfer.destinationWarehouseId,
+              warehouseName: transfer.destinationWarehouseName,
+              locationBin: transfer.destinationLocation
+            };
+          }
+          return s;
+        }));
+      }
+    });
+
+    showToast(`Transfer ${transfer.transferNumber} received and reconciled at ${transfer.destinationWarehouseName}`, 'success');
+  };
+
+  const createStockCountSession = (sessionData: Omit<StockCountSession, 'id' | 'sessionCode'>): StockCountSession => {
+    const newSession: StockCountSession = {
+      ...sessionData,
+      id: `cnt-${Date.now()}`,
+      sessionCode: `CNT-2026-${String(stockCountSessions.length + 2).padStart(2, '0')}`
+    };
+    setStockCountSessions(prev => [newSession, ...prev]);
+    showToast(`Physical Stock Count Session ${newSession.sessionCode} initiated`, 'info');
+    return newSession;
+  };
+
+  const submitStockCount = (sessionId: string, items: StockCountItem[]) => {
+    setStockCountSessions(prev => prev.map(s => {
+      if (s.id === sessionId) {
+        return {
+          ...s,
+          status: 'submitted',
+          items,
+          completedDate: new Date().toISOString().split('T')[0]
+        };
+      }
+      return s;
+    }));
+    showToast('Stock count verified and submitted for management review', 'success');
+  };
+
+  const approveStockCountDiscrepancy = (sessionId: string, notes?: string) => {
+    const session = stockCountSessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    // Apply adjustments for any items with difference
+    session.items.forEach(item => {
+      if (item.difference && item.difference !== 0) {
+        adjustStockQuantity(
+          item.productId, 
+          item.difference, 
+          'counting_discrepancy', 
+          `Physical count audit ${session.sessionCode}: ${item.notes || notes || 'Verified discrepancy reconciled'}`,
+          session.warehouseId
+        );
+      }
+    });
+
+    setStockCountSessions(prev => prev.map(s => s.id === sessionId ? {
+      ...s,
+      status: 'approved',
+      reviewerNotes: notes,
+      reviewedById: currentUser.id,
+      reviewedByName: currentUser.name
+    } : s));
+
+    showToast(`Stock count audit ${session.sessionCode} approved and adjustments committed`, 'success');
+  };
+
+  const createWarehouseTask = (taskData: Omit<WarehouseTask, 'id' | 'taskCode'>): WarehouseTask => {
+    const newTask: WarehouseTask = {
+      ...taskData,
+      id: `tsk-${Date.now()}`,
+      taskCode: `TSK-WH-2026-${String(warehouseTasks.length + 91).padStart(3, '0')}`
+    };
+    setWarehouseTasks(prev => [newTask, ...prev]);
+    showToast(`Warehouse task ${newTask.taskCode} assigned to ${taskData.assignedStaffName}`, 'info');
+    return newTask;
+  };
+
+  const updateWarehouseTaskStatus = (taskId: string, status: WarehouseTask['status'], discrepancyReport?: string) => {
+    setWarehouseTasks(prev => prev.map(t => {
+      if (t.id === taskId) {
+        return {
+          ...t,
+          status,
+          discrepancyReport,
+          completedAt: status === 'completed' ? new Date().toISOString() : t.completedAt
+        };
+      }
+      return t;
+    }));
+    showToast(`Warehouse task updated to ${status.toUpperCase()}`, 'info');
+  };
+
+  const resetDemoInventory = () => {
+    setWarehouses(INITIAL_WAREHOUSES);
+    setStorageLocations(INITIAL_STORAGE_LOCATIONS);
+    setSuppliers(INITIAL_SUPPLIERS);
+    setInventory(INITIAL_INVENTORY);
+    setSerialNumbers(INITIAL_SERIAL_NUMBERS);
+    setGoodsReceipts(INITIAL_GOODS_RECEIPTS);
+    setStockMovements(INITIAL_STOCK_MOVEMENTS);
+    setStockAdjustments(INITIAL_STOCK_ADJUSTMENTS);
+    setStockReservations(INITIAL_STOCK_RESERVATIONS);
+    setWarehouseTransfers(INITIAL_WAREHOUSE_TRANSFERS);
+    setStockCountSessions(INITIAL_STOCK_COUNT_SESSIONS);
+    setWarehouseTasks(INITIAL_WAREHOUSE_TASKS);
+    showToast('Demo Inventory Data has been reset to baseline defaults.', 'success');
+  };
+
+  // Dispatch & Warranty calculation on confirmed delivery
   const createDispatchOrder = (dispatchData: Omit<DispatchOrder, 'id' | 'dispatchNumber' | 'dispatchDate'>) => {
     const newId = `dsp-${Date.now()}`;
     const dspNum = `DSP-2026-${String(dispatches.length + 30).padStart(3, '0')}`;
@@ -1424,10 +1971,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatchId: newId
     } : o));
 
+    // Update allocated serials to dispatched
+    if (dispatchData.allocatedSerials && dispatchData.allocatedSerials.length > 0) {
+      setSerialNumbers(prev => prev.map(s => {
+        if (dispatchData.allocatedSerials.includes(s.serialNumber)) {
+          return {
+            ...s,
+            currentStatus: 'dispatched',
+            dispatchId: newId,
+            dispatchNumber: dspNum
+          };
+        }
+        return s;
+      }));
+    }
+
     showToast(`Dispatch ${dspNum} created and assigned to ${dispatchData.deliveryPersonnel}`, 'success');
   };
 
-  const confirmDelivery = (dispatchId: string) => {
+  const confirmDelivery = (dispatchId: string, receivedByName?: string, remarks?: string, proofUrl?: string) => {
     const todayStr = new Date().toISOString().split('T')[0];
     const dispatch = dispatches.find(d => d.id === dispatchId);
     
@@ -1436,59 +1998,98 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setDispatches(prev => prev.map(d => d.id === dispatchId ? {
       ...d,
       deliveryStatus: 'delivered',
-      deliveredAt: new Date().toISOString()
+      deliveredAt: new Date().toISOString(),
+      receivedByName: receivedByName || d.customerName,
+      deliveryRemarks: remarks,
+      proofOfDeliveryUrl: proofUrl
     } : d));
 
-    // Prompt requirement: "After successful delivery, trigger the warranty start-date calculation for the applicable equipment."
-    // Inverter 2y, Battery 2y, Solar panels 20y from delivery date!
     const order = orders.find(o => o.id === dispatch.orderId);
     if (order) {
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, orderStatus: 'installation_scheduled' } : o));
 
-      // Calculate end dates:
-      const twoYearsLater = new Date();
-      twoYearsLater.setFullYear(twoYearsLater.getFullYear() + 2);
-      const twoYearsStr = twoYearsLater.toISOString().split('T')[0];
-
-      const twentyYearsLater = new Date();
-      twentyYearsLater.setFullYear(twentyYearsLater.getFullYear() + 20);
-      const twentyYearsStr = twentyYearsLater.toISOString().split('T')[0];
-
-      // Update serial numbers
-      setSerialNumbers(prev => prev.map(s => {
-        if (dispatch.allocatedSerials.includes(s.serialNumber)) {
-          return {
-            ...s,
-            currentStatus: 'dispatched',
-            deliveryDate: todayStr,
-            warrantyStartDate: todayStr,
-            warrantyEndDate: twoYearsStr
-          };
-        }
-        return s;
-      }));
-
-      // Generate active warranty record
-      const newWarRecord: WarrantyRecord = {
-        id: `war-${Date.now()}`,
-        serialNumber: dispatch.allocatedSerials[0] || `SN-${order.orderNumber}`,
-        productName: `${order.capacityKw}kW Solar Installation Inverter`,
-        category: 'Inverters',
-        customerId: order.customerId,
-        customerName: order.customerName,
-        customerPhone: order.customerPhone,
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        deliveryDate: todayStr,
-        warrantyStartDate: todayStr,
-        warrantyEndDate: twoYearsStr,
-        durationYears: 2,
-        status: 'active'
+      // Warranty calculation based on configurable warrantyRules
+      // Inverters: 2 years, Batteries: 2 years, Solar panels: 20 years
+      const getWarrantyYears = (category: string) => {
+        const found = warrantyRules.find(r => r.category.toLowerCase() === category.toLowerCase());
+        return found ? found.defaultDurationYears : 2;
       };
 
-      setWarranties(prev => [newWarRecord, ...prev]);
+      // For every allocated serial number, activate warranty from confirmed delivery date
+      const newWarrantyRecords: WarrantyRecord[] = [];
 
-      // Also create installation record if not present
+      dispatch.allocatedSerials.forEach((snCode, index) => {
+        const targetSerial = serialNumbers.find(s => s.serialNumber === snCode);
+        const category = targetSerial ? targetSerial.category : 'Inverters';
+        const durationYears = getWarrantyYears(category);
+
+        const expDate = new Date();
+        expDate.setFullYear(expDate.getFullYear() + durationYears);
+        const expDateStr = expDate.toISOString().split('T')[0];
+
+        const warRecord: WarrantyRecord = {
+          id: `war-${Date.now()}-${index}`,
+          serialNumber: snCode,
+          productName: targetSerial ? targetSerial.productName : `${order.capacityKw}kW Solar Equipment`,
+          category,
+          customerId: order.customerId,
+          customerName: order.customerName,
+          customerPhone: order.customerPhone,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          deliveryDate: todayStr,
+          warrantyStartDate: todayStr,
+          warrantyEndDate: expDateStr,
+          durationYears,
+          status: 'active'
+        };
+
+        newWarrantyRecords.push(warRecord);
+
+        // Update serial number status to 'delivered'
+        setSerialNumbers(prev => prev.map(s => {
+          if (s.serialNumber === snCode) {
+            return {
+              ...s,
+              currentStatus: 'delivered',
+              deliveryDate: todayStr,
+              warrantyStartDate: todayStr,
+              warrantyEndDate: expDateStr,
+              warrantyRecordId: warRecord.id
+            };
+          }
+          return s;
+        }));
+
+        // Record stock movement: delivery
+        const movement: StockMovementRecord = {
+          id: `mov-${Date.now()}-${snCode}`,
+          movementNumber: `MOV-2026-${String(stockMovements.length + 101).padStart(3, '0')}`,
+          timestamp: new Date().toISOString(),
+          productId: targetSerial?.productId || 'prd-inv-5kw',
+          sku: targetSerial?.productName || snCode,
+          productName: targetSerial?.productName || 'Solar Equipment',
+          category: (targetSerial?.category as ProductCategory) || 'Inverters',
+          movementType: 'delivery',
+          sourceWarehouse: dispatch.deliveryPersonnel,
+          quantity: -1,
+          referenceType: 'DELIVERY',
+          referenceNumber: dispatch.dispatchNumber,
+          orderId: order.id,
+          customerName: order.customerName,
+          serialNumbers: [snCode],
+          executedById: currentUser.id,
+          executedByName: currentUser.name,
+          remarks: `Confirmed delivery to customer site (${order.customerName})`
+        };
+        setStockMovements(prev => [movement, ...prev]);
+      });
+
+      if (newWarrantyRecords.length > 0) {
+        setWarranties(prev => [...newWarrantyRecords, ...prev]);
+      }
+
+      // Auto-schedule field installation job
       const newInstId = `inst-${Date.now()}`;
       const newInstCode = `INS-2026-${String(installations.length + 33).padStart(3, '0')}`;
       const newInstallation: Installation = {
@@ -1522,7 +2123,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setInstallations(prev => [newInstallation, ...prev]);
     }
 
-    showToast(`Delivery confirmed! Equipment warranties calculated and activated from ${todayStr}.`, 'success');
+    showToast(`Delivery confirmed! Equipment warranties activated from confirmed delivery date (${todayStr}).`, 'success');
   };
 
   // Installations & RBAC Enforcement
@@ -2265,10 +2866,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       payments,
       recordPayment,
       updateOrderStatus,
+      // Warehouse & Inventory Management
+      warehouses,
+      storageLocations,
+      suppliers,
       inventory,
       addInventoryItem,
+      updateInventoryItem,
       adjustStockQuantity,
       serialNumbers,
+      registerSerialNumber,
+      allocateSerialsToOrder,
+      goodsReceipts,
+      registerGoodsReceipt,
+      stockMovements,
+      stockAdjustments,
+      stockReservations,
+      warehouseTransfers,
+      createWarehouseTransfer,
+      approveWarehouseTransfer,
+      dispatchWarehouseTransfer,
+      receiveWarehouseTransfer,
+      stockCountSessions,
+      createStockCountSession,
+      submitStockCount,
+      approveStockCountDiscrepancy,
+      warehouseTasks,
+      createWarehouseTask,
+      updateWarehouseTaskStatus,
+      warrantyRules,
+      isDemoMode,
+      setIsDemoMode,
+      resetDemoInventory,
       dispatches,
       createDispatchOrder,
       confirmDelivery,

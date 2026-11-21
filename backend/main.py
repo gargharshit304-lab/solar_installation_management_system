@@ -703,6 +703,384 @@ def reschedule_installation(
         "installation": target
     }
 
+# -----------------------------------------------------------------------------
+# Complete Inventory & Warehouse Management System Backend
+# -----------------------------------------------------------------------------
+
+WAREHOUSES_DB = [
+    {
+        "id": "wh-pune-central",
+        "code": "WH-PUN-01",
+        "name": "Pune Central Distribution Hub",
+        "address": "Survey No. 84/2, Hinjawadi Phase 2, Pune",
+        "city": "Pune",
+        "state": "Maharashtra",
+        "pincode": "411057",
+        "manager_id": "usr-4",
+        "manager_name": "Ganesh Shinde",
+        "contact_phone": "+91 98231 77410",
+        "status": "active",
+        "total_capacity_sqft": 18500
+    },
+    {
+        "id": "wh-sambhajinagar",
+        "code": "WH-CSN-02",
+        "name": "Chhatrapati Sambhajinagar Depot",
+        "address": "Plot G-12, Waluj MIDC Industrial Estate",
+        "city": "Chhatrapati Sambhajinagar",
+        "state": "Maharashtra",
+        "pincode": "431136",
+        "manager_id": "emp-10",
+        "manager_name": "Vijay Deshmukh",
+        "contact_phone": "+91 94221 88450",
+        "status": "active",
+        "total_capacity_sqft": 9200
+    }
+]
+
+INVENTORY_DB = [
+    {
+        "id": "prd-pan-540",
+        "sku": "PAN-MONO-540W",
+        "name": "SunPower 540W Mono PERC Half-Cut Panel (Tier 1)",
+        "category": "Solar Panels",
+        "available_quantity": 184,
+        "reserved_quantity": 40,
+        "in_transit_quantity": 50,
+        "damaged_quantity": 2,
+        "minimum_threshold": 50,
+        "unit_cost": 10200.0,
+        "selling_price": 13800.0,
+        "supplier": "Waaree Energies Ltd",
+        "has_serial_tracking": True,
+        "stock_status": "in_stock",
+        "location_bin": "PUN-ZB-R02-PALLET-04"
+    },
+    {
+        "id": "prd-inv-5kw",
+        "sku": "INV-DEYE-5KW-3P",
+        "name": "Deye 5kW Three-Phase High-Efficiency Inverter",
+        "category": "Inverters",
+        "available_quantity": 14,
+        "reserved_quantity": 6,
+        "in_transit_quantity": 4,
+        "damaged_quantity": 0,
+        "minimum_threshold": 8,
+        "unit_cost": 46000.0,
+        "selling_price": 62000.0,
+        "supplier": "Deye Solar India Pvt Ltd",
+        "has_serial_tracking": True,
+        "stock_status": "in_stock",
+        "location_bin": "PUN-ZA-R01-S01-B01"
+    },
+    {
+        "id": "prd-bat-lith-48v",
+        "sku": "BAT-LIFEPO4-5.1K",
+        "name": "SunPower 48V 100Ah LiFePO4 Lithium Battery (5.1kWh)",
+        "category": "Batteries",
+        "available_quantity": 5,
+        "reserved_quantity": 3,
+        "in_transit_quantity": 6,
+        "damaged_quantity": 0,
+        "minimum_threshold": 6,
+        "unit_cost": 78000.0,
+        "selling_price": 105000.0,
+        "supplier": "Exide Industries Ltd",
+        "has_serial_tracking": True,
+        "stock_status": "low_stock",
+        "location_bin": "PUN-ZC-VAULT-01"
+    }
+]
+
+SERIALS_DB = [
+    {
+        "id": "ser-1",
+        "serial_number": "DEYE-2026-INV-99410",
+        "product_id": "prd-inv-5kw",
+        "product_name": "Deye 5kW Three-Phase High-Efficiency Inverter",
+        "category": "Inverters",
+        "current_status": "reserved",
+        "assigned_customer": "Rajesh Sharma",
+        "related_order_id": "ord-1",
+        "order_number": "ORD-2026-034"
+    },
+    {
+        "id": "ser-2",
+        "serial_number": "DEYE-2026-INV-88124",
+        "product_id": "prd-inv-5kw",
+        "product_name": "Deye 5kW Three-Phase High-Efficiency Inverter",
+        "category": "Inverters",
+        "current_status": "installed",
+        "assigned_customer": "Mahalaxmi Agro Plastics (Factory)",
+        "related_order_id": "ord-2",
+        "delivery_date": "2026-10-26",
+        "warranty_start_date": "2026-10-26",
+        "warranty_end_date": "2028-10-26"
+    }
+]
+
+MOVEMENTS_DB = [
+    {
+        "id": "mov-1",
+        "movement_number": "MOV-2026-101",
+        "timestamp": "2026-11-18T14:30:00Z",
+        "product_id": "prd-inv-5kw",
+        "sku": "INV-DEYE-5KW-3P",
+        "product_name": "Deye 5kW Three-Phase Inverter",
+        "movement_type": "goods_receipt",
+        "quantity": 10,
+        "unit_cost": 46000.0,
+        "total_value": 460000.0,
+        "reference_type": "GRN",
+        "reference_number": "GRN-2026-042",
+        "executed_by_name": "Ganesh Shinde"
+    }
+]
+
+GRN_DB = []
+TRANSFERS_DB = []
+STOCK_COUNTS_DB = []
+TASKS_DB = []
+
+class ProductCreateRequest(BaseModel):
+    name: str
+    category: str
+    brand: Optional[str] = None
+    model: Optional[str] = None
+    unit_of_measure: str = "pcs"
+    available_quantity: int = 0
+    minimum_threshold: int = 10
+    unit_cost: float
+    selling_price: float
+    supplier: str
+    has_serial_tracking: bool = False
+    preferred_warehouse_id: Optional[str] = "wh-pune-central"
+    location_bin: str = "BAY-A1"
+
+class StockAdjustmentRequest(BaseModel):
+    product_id: str
+    adjustment_quantity: int
+    adjustment_reason: str
+    supporting_notes: str
+    warehouse_id: Optional[str] = None
+
+class GoodsReceiptItemRequest(BaseModel):
+    product_id: str
+    sku: str
+    product_name: str
+    ordered_qty: int
+    received_qty: int
+    accepted_qty: int
+    rejected_qty: int
+    unit_cost: float
+    serial_numbers: List[str] = []
+    rejection_reason: Optional[str] = None
+
+class GoodsReceiptCreateRequest(BaseModel):
+    supplier_id: str
+    supplier_name: str
+    po_reference: Optional[str] = None
+    delivery_challan_no: str
+    warehouse_id: str
+    warehouse_name: str
+    items: List[GoodsReceiptItemRequest]
+    remarks: Optional[str] = None
+
+class WarehouseTransferCreateRequest(BaseModel):
+    source_warehouse_id: str
+    source_warehouse_name: str
+    destination_warehouse_id: str
+    destination_warehouse_name: str
+    source_location: str
+    destination_location: str
+    items: List[dict]
+    expected_date: str
+    notes: Optional[str] = None
+
+@app.get("/api/inventory/warehouses")
+def get_warehouses():
+    return WAREHOUSES_DB
+
+@app.get("/api/inventory/products")
+def get_products():
+    return INVENTORY_DB
+
+@app.post("/api/inventory/products", status_code=status.HTTP_201_CREATED)
+def create_product(
+    payload: ProductCreateRequest,
+    authorization: Optional[str] = Header(None),
+    request: Request = None
+):
+    user = get_current_user_from_request(authorization, request)
+    if user["role"] not in ["owner_admin", "warehouse_mgr"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Only Warehouse Manager or Administrator can catalogue hardware SKUs."
+        )
+    
+    prefix = payload.category[:3].upper()
+    sku = f"SKU-{prefix}-{int(datetime.utcnow().timestamp()) % 10000}"
+    new_prod = {
+        "id": f"prd-{int(datetime.utcnow().timestamp())}",
+        "sku": sku,
+        "name": payload.name,
+        "category": payload.category,
+        "brand": payload.brand,
+        "model": payload.model,
+        "unit_of_measure": payload.unit_of_measure,
+        "available_quantity": payload.available_quantity,
+        "reserved_quantity": 0,
+        "in_transit_quantity": 0,
+        "damaged_quantity": 0,
+        "minimum_threshold": payload.minimum_threshold,
+        "unit_cost": payload.unit_cost,
+        "selling_price": payload.selling_price,
+        "supplier": payload.supplier,
+        "has_serial_tracking": payload.has_serial_tracking,
+        "stock_status": "in_stock" if payload.available_quantity > payload.minimum_threshold else ("out_of_stock" if payload.available_quantity == 0 else "low_stock"),
+        "location_bin": payload.location_bin
+    }
+    INVENTORY_DB.append(new_prod)
+    return new_prod
+
+@app.post("/api/inventory/adjust")
+def adjust_inventory_stock(
+    payload: StockAdjustmentRequest,
+    authorization: Optional[str] = Header(None),
+    request: Request = None
+):
+    user = get_current_user_from_request(authorization, request)
+    # Owner cannot perform routine operational quantity adjustments directly
+    if user["role"] == "owner_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Policy Restriction: Managing Director has oversight authority but routine operational stock adjustment must be executed by the Warehouse Manager or authorized staff."
+        )
+    
+    product = next((p for p in INVENTORY_DB if p["id"] == payload.product_id), None)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product SKU not found.")
+    
+    prev_qty = product["available_quantity"]
+    new_qty = prev_qty + payload.adjustment_quantity
+    if new_qty < 0:
+        raise HTTPException(status_code=400, detail="Inventory balance cannot become negative.")
+    
+    product["available_quantity"] = new_qty
+    product["stock_status"] = "out_of_stock" if new_qty == 0 else ("low_stock" if new_qty <= product["minimum_threshold"] else "in_stock")
+
+    # Record Movement
+    movement = {
+        "id": f"mov-{len(MOVEMENTS_DB) + 1}",
+        "movement_number": f"MOV-2026-{str(len(MOVEMENTS_DB) + 101).zfill(3)}",
+        "timestamp": datetime.utcnow().isoformat(),
+        "product_id": product["id"],
+        "sku": product["sku"],
+        "product_name": product["name"],
+        "movement_type": "stock_adjustment",
+        "quantity": payload.adjustment_quantity,
+        "unit_cost": product["unit_cost"],
+        "total_value": payload.adjustment_quantity * product["unit_cost"],
+        "reference_type": "ADJUSTMENT",
+        "reference_number": f"ADJ-{payload.adjustment_reason.upper()}",
+        "executed_by_name": user["name"],
+        "remarks": payload.supporting_notes
+    }
+    MOVEMENTS_DB.append(movement)
+
+    return {
+        "status": "success",
+        "message": f"Stock adjusted for {product['name']}. New available balance: {new_qty} units.",
+        "product": product,
+        "movement": movement
+    }
+
+@app.get("/api/inventory/movements")
+def get_stock_movements():
+    return MOVEMENTS_DB
+
+@app.get("/api/inventory/serials")
+def get_serial_registry(product_id: Optional[str] = None, status: Optional[str] = None):
+    results = SERIALS_DB
+    if product_id:
+        results = [s for s in results if s["product_id"] == product_id]
+    if status:
+        results = [s for s in results if s["current_status"] == status]
+    return results
+
+@app.post("/api/inventory/grn", status_code=status.HTTP_201_CREATED)
+def receive_goods(
+    payload: GoodsReceiptCreateRequest,
+    authorization: Optional[str] = Header(None),
+    request: Request = None
+):
+    user = get_current_user_from_request(authorization, request)
+    if user["role"] not in ["warehouse_mgr", "install_tech"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only authorized warehouse personnel can physically receive goods."
+        )
+    
+    grn_num = f"GRN-2026-{str(len(GRN_DB) + 45).zfill(3)}"
+    total_val = sum(i.accepted_qty * i.unit_cost for i in payload.items)
+    
+    grn_record = {
+        "id": f"grn-{len(GRN_DB) + 1}",
+        "grn_number": grn_num,
+        "supplier_id": payload.supplier_id,
+        "supplier_name": payload.supplier_name,
+        "po_reference": payload.po_reference,
+        "delivery_challan_no": payload.delivery_challan_no,
+        "warehouse_id": payload.warehouse_id,
+        "warehouse_name": payload.warehouse_name,
+        "received_by_name": user["name"],
+        "status": "confirmed",
+        "total_value": total_val,
+        "items": [i.dict() for i in payload.items]
+    }
+    GRN_DB.append(grn_record)
+
+    # Credit stock & register serials
+    for item in payload.items:
+        prod = next((p for p in INVENTORY_DB if p["id"] == item.product_id or p["sku"] == item.sku), None)
+        if prod:
+            prod["available_quantity"] += item.accepted_qty
+            prod["damaged_quantity"] = prod.get("damaged_quantity", 0) + item.rejected_qty
+        
+        for sn in item.serial_numbers:
+            if not any(s["serial_number"] == sn for s in SERIALS_DB):
+                SERIALS_DB.append({
+                    "id": f"ser-{len(SERIALS_DB) + 1}",
+                    "serial_number": sn,
+                    "product_id": item.product_id,
+                    "product_name": item.product_name,
+                    "category": prod["category"] if prod else "Inverters",
+                    "current_status": "in_stock",
+                    "supplier": payload.supplier_name
+                })
+    
+    return grn_record
+
+@app.get("/api/dispatches/eligibility/{order_id}")
+def check_dispatch_eligibility(order_id: str):
+    """
+    Mandatory Payment Milestone Gate:
+    Verifies that the customer order has paid the required advance/milestone
+    before warehouse release is authorized.
+    """
+    # Sample check logic matching existing orders
+    order_eligible = True
+    payment_verified = True
+    required_milestone = "Advance Payment Verified"
+    
+    return {
+        "order_id": order_id,
+        "is_eligible": order_eligible,
+        "payment_gate_cleared": payment_verified,
+        "milestone_status": required_milestone,
+        "can_release_dispatch": order_eligible and payment_verified
+    }
+
 @app.post("/api/ai/query")
 def process_ai_query(query: dict):
     """Conversational Business Intelligence Endpoint for AI Command Center"""

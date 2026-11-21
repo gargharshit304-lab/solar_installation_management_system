@@ -250,6 +250,138 @@ CREATE TABLE IF NOT EXISTS suppliers (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS warehouses (
+    id VARCHAR(50) PRIMARY KEY,
+    code VARCHAR(30) UNIQUE NOT NULL,
+    name VARCHAR(150) NOT NULL,
+    address TEXT NOT NULL,
+    city VARCHAR(100) NOT NULL,
+    state VARCHAR(100) NOT NULL,
+    pincode VARCHAR(20) NOT NULL,
+    manager_id UUID REFERENCES employees(id) ON DELETE SET NULL,
+    contact_phone VARCHAR(30),
+    status VARCHAR(30) NOT NULL DEFAULT 'active',
+    total_capacity_sqft INTEGER DEFAULT 10000,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS storage_locations (
+    id VARCHAR(50) PRIMARY KEY,
+    warehouse_id VARCHAR(50) NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+    zone VARCHAR(50) NOT NULL,
+    rack VARCHAR(50) NOT NULL,
+    shelf VARCHAR(50) NOT NULL,
+    bin VARCHAR(50) NOT NULL,
+    full_code VARCHAR(100) UNIQUE NOT NULL,
+    barcode VARCHAR(100),
+    status VARCHAR(30) NOT NULL DEFAULT 'available',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS goods_receipts (
+    id VARCHAR(50) PRIMARY KEY,
+    grn_number VARCHAR(50) UNIQUE NOT NULL,
+    supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL,
+    supplier_name VARCHAR(150) NOT NULL,
+    po_reference VARCHAR(50),
+    delivery_challan_no VARCHAR(100) NOT NULL,
+    receiving_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    warehouse_id VARCHAR(50) NOT NULL REFERENCES warehouses(id),
+    received_by_id UUID REFERENCES employees(id),
+    received_by_name VARCHAR(150) NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'confirmed',
+    total_received_qty INTEGER NOT NULL DEFAULT 0,
+    total_accepted_qty INTEGER NOT NULL DEFAULT 0,
+    total_rejected_qty INTEGER NOT NULL DEFAULT 0,
+    total_value NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    remarks TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS goods_receipt_items (
+    id VARCHAR(50) PRIMARY KEY,
+    grn_id VARCHAR(50) NOT NULL REFERENCES goods_receipts(id) ON DELETE CASCADE,
+    product_id UUID NOT NULL REFERENCES products(id),
+    sku VARCHAR(50) NOT NULL,
+    product_name VARCHAR(200) NOT NULL,
+    ordered_qty INTEGER NOT NULL DEFAULT 0,
+    received_qty INTEGER NOT NULL DEFAULT 0,
+    accepted_qty INTEGER NOT NULL DEFAULT 0,
+    rejected_qty INTEGER NOT NULL DEFAULT 0,
+    unit_cost NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    serial_numbers TEXT[] DEFAULT '{}',
+    rejection_reason TEXT
+);
+
+CREATE TABLE IF NOT EXISTS stock_reservations (
+    id VARCHAR(50) PRIMARY KEY,
+    reservation_code VARCHAR(50) UNIQUE NOT NULL,
+    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    order_number VARCHAR(50) NOT NULL,
+    customer_id UUID NOT NULL REFERENCES customers(id),
+    customer_name VARCHAR(150) NOT NULL,
+    product_id UUID NOT NULL REFERENCES products(id),
+    sku VARCHAR(50) NOT NULL,
+    product_name VARCHAR(200) NOT NULL,
+    quantity_reserved INTEGER NOT NULL DEFAULT 1,
+    allocated_serials TEXT[] DEFAULT '{}',
+    warehouse_id VARCHAR(50) REFERENCES warehouses(id),
+    status VARCHAR(40) NOT NULL DEFAULT 'fully_allocated',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS warehouse_transfers (
+    id VARCHAR(50) PRIMARY KEY,
+    transfer_number VARCHAR(50) UNIQUE NOT NULL,
+    source_warehouse_id VARCHAR(50) NOT NULL REFERENCES warehouses(id),
+    destination_warehouse_id VARCHAR(50) NOT NULL REFERENCES warehouses(id),
+    source_location VARCHAR(100),
+    destination_location VARCHAR(100),
+    status VARCHAR(30) NOT NULL DEFAULT 'in_transit',
+    requested_by_id UUID REFERENCES employees(id),
+    requested_by_name VARCHAR(150) NOT NULL,
+    approved_by_id UUID REFERENCES employees(id),
+    assigned_staff_id UUID REFERENCES employees(id),
+    expected_date DATE,
+    notes TEXT,
+    discrepancy_notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    received_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS stock_count_sessions (
+    id VARCHAR(50) PRIMARY KEY,
+    session_code VARCHAR(50) UNIQUE NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    warehouse_id VARCHAR(50) NOT NULL REFERENCES warehouses(id),
+    zone VARCHAR(50),
+    count_type VARCHAR(40) NOT NULL DEFAULT 'cycle_count',
+    status VARCHAR(30) NOT NULL DEFAULT 'in_progress',
+    assigned_staff_id UUID REFERENCES employees(id),
+    scheduled_date DATE NOT NULL,
+    completed_date DATE,
+    reviewer_notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS warehouse_tasks (
+    id VARCHAR(50) PRIMARY KEY,
+    task_code VARCHAR(50) UNIQUE NOT NULL,
+    task_type VARCHAR(50) NOT NULL,
+    priority VARCHAR(20) NOT NULL DEFAULT 'normal',
+    title VARCHAR(255) NOT NULL,
+    warehouse_id VARCHAR(50) NOT NULL REFERENCES warehouses(id),
+    assigned_staff_id UUID REFERENCES employees(id),
+    related_reference_id VARCHAR(50),
+    related_reference_number VARCHAR(50),
+    status VARCHAR(30) NOT NULL DEFAULT 'pending',
+    instructions TEXT,
+    due_date DATE,
+    completed_at TIMESTAMPTZ,
+    discrepancy_report TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS inventory_stock (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id UUID UNIQUE NOT NULL REFERENCES products(id) ON DELETE CASCADE,

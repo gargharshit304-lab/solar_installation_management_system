@@ -614,6 +614,25 @@ export const Sidebar: React.FC = () => {
     }
   ];
 
+  const warehouseSections: NavSection[] = [
+    {
+      title: 'WAREHOUSE OPERATIONS',
+      items: [
+        { name: 'Inventory & Stock', path: '/inventory', icon: Package, allowedRoles: ['warehouse_mgr'], badge: lowStockCount > 0 ? lowStockCount : undefined },
+        { name: 'Dispatch Orders', path: '/dispatch', icon: Truck, allowedRoles: ['warehouse_mgr'] },
+        { name: 'Warranty Traceability', path: '/warranty', icon: ShieldCheck, allowedRoles: ['warehouse_mgr'] },
+      ]
+    },
+    {
+      title: 'ACCOUNT & AUDIT',
+      items: [
+        { name: 'Smart Alerts', path: '/notifications', icon: Bell, allowedRoles: ['warehouse_mgr'], badge: activeAlertsCount > 0 ? activeAlertsCount : undefined },
+        { name: 'My Profile', path: '/profile', icon: UserCheck, allowedRoles: ['warehouse_mgr'] },
+        { name: 'System Settings', path: '/settings', icon: SettingsIcon, allowedRoles: ['warehouse_mgr'] },
+      ]
+    }
+  ];
+
   const sectionsToRender =
     currentUser.role === 'owner_admin' ? ownerSections :
     currentUser.role === 'sales_exec' ? salesSections :
@@ -622,6 +641,7 @@ export const Sidebar: React.FC = () => {
     currentUser.role === 'accountant' ? accountantSections :
     currentUser.role === 'support_exec' ? supportSections :
     currentUser.role === 'install_tech' ? installationSections :
+    currentUser.role === 'warehouse_mgr' ? warehouseSections :
     standardSections;
 
   const renderContent = () => (
