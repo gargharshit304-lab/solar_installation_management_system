@@ -43,6 +43,7 @@ import {
   verifySessionToken 
 } from '../utils/authSession';
 import { verifyCapability } from '../utils/rbac';
+import { authApi } from '../services/api';
 
 export interface Toast {
   id: string;
@@ -299,7 +300,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return;
         }
 
-        // Validate token integrity and expiration
+        // 1. Attempt Backend Session Validation
+        try {
+          const serverCheck = await authApi.getSession(stored.token);
+          if (serverCheck.success && serverCheck.data?.authenticated && serverCheck.data.user) {
+            if (isMounted) {
+              setCurrentUser(serverCheck.data.user);
+              setSession(stored);
+              setAuthStatus('AUTHENTICATED');
+            }
+            return;
+          }
+        } catch (serverErr: any) {
+          // If server explicitly denied with 401/403, revoke session
+          if (serverErr.statusCode === 401 || serverErr.statusCode === 403) {
+            clearStoredSession();
+            if (isMounted) {
+              setAuthStatus('UNAUTHENTICATED');
+              setSession(null);
+            }
+            return;
+          }
+          // Network error: continue to offline validation
+        }
+
+        // 2. Validate token integrity and expiration locally
         const verification = verifySessionToken(stored.token);
         if (!verification.valid) {
           // If expired, attempt transparent rotation using refresh token
@@ -456,8 +481,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const login = async (email: string, password: string, rememberMe = false): Promise<UserProfile | null> => {
+    try {
+      // 1. Attempt Real Backend Authentication
+      const response = await authApi.login(email, password, rememberMe);
+      if (response.success && response.data) {
+        const { user, accessToken, refreshToken, expiresAt } = response.data;
+        const newSession: AuthSession = {
+          token: accessToken,
+          refreshToken,
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+          issuedAt: Date.now(),
+          expiresAt,
+          rememberMe
+        };
+        persistSession(newSession);
+        setCurrentUser(user);
+        setSession(newSession);
+        setAuthStatus('AUTHENTICATED');
+        return user;
+      }
+    } catch (apiErr: any) {
+      if (apiErr.statusCode === 401 || apiErr.statusCode === 403) {
+        showToast(apiErr.message || 'Invalid credentials', 'error');
+        return null;
+      }
+      console.warn('Backend server offline, falling back to local session authentication:', apiErr.message);
+    }
+
+    // 2. Offline / Local fallback
     const DEMO_PASSWORD = 'solaros2026';
     if (password !== DEMO_PASSWORD) {
+      showToast('Invalid credentials. Password: solaros2026', 'error');
       return null;
     }
     const user = SYSTEM_USERS.find(u => u.email.toLowerCase() === email.toLowerCase());
@@ -472,7 +528,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return null;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      if (session?.refreshToken) {
+        await authApi.logout(session.refreshToken);
+      }
+    } catch (e) {
+      // ignore network errors on logout
+    }
     clearStoredSession();
     setCurrentUser(SYSTEM_USERS[0]);
     setSession(null);

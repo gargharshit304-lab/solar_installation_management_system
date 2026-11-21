@@ -1,0 +1,184 @@
+// SolarOS Enterprise Backend - Prisma Schema
+// Single Source of Truth for Database Models
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ----------------------------------------------------------------------------
+// 1. Roles & RBAC Capabilities
+// ----------------------------------------------------------------------------
+
+model Role {
+  id          String    @id @db.VarChar(50) // e.g. 'owner_admin', 'sales_exec'
+  name        String    @db.VarChar(100)
+  description String?   @db.Text
+  permissions Json      @default("[]") // Array of capability permissions
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  profiles    Profile[]
+  employees   Employee[]
+
+  @@map("roles")
+}
+
+// ----------------------------------------------------------------------------
+// 2. User Profiles & Authentication
+// ----------------------------------------------------------------------------
+
+model Profile {
+  id             String    @id @default(uuid()) @db.Uuid
+  authUserId     String?   @unique @map("auth_user_id") @db.Uuid
+  fullName       String    @map("full_name") @db.VarChar(150)
+  email          String    @unique @db.VarChar(255)
+  phone          String?   @db.VarChar(30)
+  passwordHash   String    @map("password_hash") @db.VarChar(255)
+  roleId         String    @map("role_id") @db.VarChar(50)
+  roleTitle      String?   @map("role_title") @db.VarChar(100)
+  department     String?   @db.VarChar(100)
+  avatarUrl      String?   @map("avatar_url") @db.Text
+  isActive       Boolean   @default(true) @map("is_active")
+  emailVerified  Boolean   @default(false) @map("email_verified")
+  lastLoginAt    DateTime? @map("last_login_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  role           Role      @relation(fields: [roleId], references: [id])
+  employee       Employee?
+  sessions       Session[]
+  passwordResets PasswordResetToken[]
+  auditLogs      AuditLog[]
+
+  @@index([email])
+  @@index([roleId])
+  @@map("profiles")
+}
+
+// ----------------------------------------------------------------------------
+// 3. Employees & Workforce
+// ----------------------------------------------------------------------------
+
+model Employee {
+  id                  String    @id @default(uuid()) @db.Uuid
+  profileId           String?   @unique @map("profile_id") @db.Uuid
+  employeeCode        String    @unique @map("employee_code") @db.VarChar(30)
+  firstName           String    @map("first_name") @db.VarChar(100)
+  lastName            String    @map("last_name") @db.VarChar(100)
+  email               String    @db.VarChar(255)
+  phone               String    @db.VarChar(30)
+  department          String    @db.VarChar(50)
+  designation         String    @db.VarChar(100)
+  roleId              String    @map("role_id") @db.VarChar(50)
+  hourlyRate          Decimal?  @default(0.00) @map("hourly_rate") @db.Decimal(10, 2)
+  isAvailable         Boolean   @default(true) @map("is_available")
+  currentAssignedJobs Int       @default(0) @map("current_assigned_jobs")
+  hireDate            DateTime  @default(now()) @map("hire_date") @db.Date
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  profile             Profile?  @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  role                Role      @relation(fields: [roleId], references: [id])
+  delegations         OperationalDelegation[]
+
+  @@index([employeeCode])
+  @@index([department])
+  @@map("employees")
+}
+
+// ----------------------------------------------------------------------------
+// 4. Operational Delegations & Exception Governance
+// ----------------------------------------------------------------------------
+
+model OperationalDelegation {
+  id                String    @id @default(uuid()) @db.Uuid
+  delegationCode    String    @unique @map("delegation_code") @db.VarChar(30)
+  employeeId        String    @map("employee_id") @db.Uuid
+  employeeName      String    @map("employee_name") @db.VarChar(150)
+  grantedPermission String    @map("granted_permission") @db.VarChar(100)
+  departmentScope   String    @map("department_scope") @db.VarChar(50)
+  resourceId        String?   @map("resource_id") @db.VarChar(50)
+  authorizedBy      String    @map("authorized_by") @db.VarChar(150)
+  justification     String    @db.Text
+  effectiveFrom     DateTime  @default(now()) @map("effective_from") @db.Date
+  effectiveTo       DateTime  @map("effective_to") @db.Date
+  active            Boolean   @default(true)
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  employee          Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, active])
+  @@index([grantedPermission])
+  @@map("operational_delegations")
+}
+
+// ----------------------------------------------------------------------------
+// 5. Sessions & Refresh Token Lifecycle
+// ----------------------------------------------------------------------------
+
+model Session {
+  id           String    @id @default(uuid()) @db.Uuid
+  profileId    String    @map("profile_id") @db.Uuid
+  refreshToken String    @unique @map("refresh_token") @db.VarChar(255)
+  userAgent    String?   @map("user_agent") @db.Text
+  ipAddress    String?   @map("ip_address") @db.VarChar(45)
+  isRevoked    Boolean   @default(false) @map("is_revoked")
+  expiresAt    DateTime  @map("expires_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  profile      Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, isRevoked])
+  @@index([refreshToken])
+  @@map("sessions")
+}
+
+// ----------------------------------------------------------------------------
+// 6. Password Reset & Verification Tokens
+// ----------------------------------------------------------------------------
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  profileId String    @map("profile_id") @db.Uuid
+  token     String    @unique @db.VarChar(255)
+  expiresAt DateTime  @map("expires_at")
+  used      Boolean   @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  profile   Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([token, used])
+  @@map("password_reset_tokens")
+}
+
+// ----------------------------------------------------------------------------
+// 7. Audit Logging
+// ----------------------------------------------------------------------------
+
+model AuditLog {
+  id             String    @id @default(uuid()) @db.Uuid
+  actorId        String?   @map("actor_id") @db.Uuid
+  actorName      String    @map("actor_name") @db.VarChar(150)
+  actorRole      String    @map("actor_role") @db.VarChar(50)
+  permissionUsed String?   @map("permission_used") @db.VarChar(100)
+  action         String    @db.VarChar(100) // e.g. 'AUTH_LOGIN', 'SURVEY_ASSIGN', 'DELEGATION_CREATE'
+  entity         String    @db.VarChar(50)  // e.g. 'Session', 'Survey', 'Installation'
+  entityId       String?   @map("entity_id") @db.VarChar(50)
+  previousState  Json?     @map("previous_state")
+  newState       Json?     @map("new_state")
+  reason         String?   @db.Text
+  ipAddress      String?   @map("ip_address") @db.VarChar(45)
+  timestamp      DateTime  @default(now())
+
+  profile        Profile?  @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([entity, entityId])
+  @@index([action])
+  @@index([timestamp])
+  @@map("audit_logs")
+}

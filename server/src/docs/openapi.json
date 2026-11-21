@@ -1,0 +1,179 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SolarOS Enterprise API — SunPower Solutions",
+    "version": "1.0.0",
+    "description": "Production REST API powering SolarOS enterprise rooftop solar installation workflows and RBAC governance."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000/api/v1",
+      "description": "Local Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "CookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "solaros_session_token"
+      }
+    },
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": { "type": "object" },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" },
+              "details": { "type": "object" }
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "requestId": { "type": "string" },
+              "timestamp": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string", "minLength": 6 },
+          "rememberMe": { "type": "boolean", "default": false }
+        }
+      },
+      "UserProfile": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "email": { "type": "string" },
+          "role": { "type": "string" },
+          "roleTitle": { "type": "string" },
+          "department": { "type": "string" },
+          "avatar": { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "System Health Status",
+        "responses": {
+          "200": { "description": "System is healthy" }
+        }
+      }
+    },
+    "/health/db": {
+      "get": {
+        "summary": "Database Connectivity Health",
+        "responses": {
+          "200": { "description": "Database connected" },
+          "503": { "description": "Database disconnected" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Authenticate user credentials and obtain session token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login successful" },
+          "401": { "description": "Invalid credentials" },
+          "403": { "description": "Account deactivated" }
+        }
+      }
+    },
+    "/auth/session": {
+      "get": {
+        "summary": "Retrieve active session and user profile",
+        "security": [{ "BearerAuth": [] }, { "CookieAuth": [] }],
+        "responses": {
+          "200": { "description": "Session active" },
+          "401": { "description": "Unauthenticated" }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "summary": "Rotate access token using refresh token",
+        "responses": {
+          "200": { "description": "Token rotated successfully" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Revoke active session and clear session cookies",
+        "responses": {
+          "200": { "description": "Logged out" }
+        }
+      }
+    },
+    "/users": {
+      "get": {
+        "summary": "List all active company workforce profiles",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Users list" }
+        }
+      }
+    },
+    "/rbac/roles": {
+      "get": {
+        "summary": "Retrieve 7-role definitions and authoritative capabilities",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Roles and capabilities" }
+        }
+      }
+    },
+    "/rbac/delegations": {
+      "get": {
+        "summary": "List operational delegations",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Delegations list" }
+        }
+      },
+      "post": {
+        "summary": "Authorize a new operational delegation (Owner/Admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "201": { "description": "Delegation authorized" }
+        }
+      }
+    },
+    "/audit-logs": {
+      "get": {
+        "summary": "Retrieve immutable enterprise audit logs (Owner/Admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Audit trail entries" }
+        }
+      }
+    }
+  }
+}
