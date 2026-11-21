@@ -51,12 +51,43 @@ export interface Customer {
 }
 
 export type SurveyStatus = 
+  | 'unassigned'
   | 'scheduled'
   | 'assigned'
   | 'in_progress'
   | 'submitted'
   | 'approved'
-  | 'rejected';
+  | 'rejected'
+  | 'rescheduled'
+  | 'cancelled';
+
+export type TechnicianAvailabilityStatus = 'available' | 'assigned' | 'on_site' | 'unavailable' | 'on_leave';
+
+export interface SurveyAssignmentAudit {
+  id: string;
+  surveyId: string;
+  surveyNumber: string;
+  technicianId: string;
+  technicianName: string;
+  assignedAt: string;
+  assignedBy: string;
+  action: 'assigned' | 'reassigned' | 'rescheduled';
+  reason?: string;
+  previousTechnicianName?: string;
+  scheduledDate: string;
+  timeSlot?: string;
+}
+
+export interface TechnicianLeave {
+  id: string;
+  technicianId: string;
+  technicianName: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  leaveType: 'sick' | 'casual' | 'vacation';
+  status: 'approved' | 'pending';
+  reason: string;
+}
 
 export interface SiteSurvey {
   id: string;
@@ -66,6 +97,9 @@ export interface SiteSurvey {
   customerPhone: string;
   customerAddress: string;
   scheduledDate: string;
+  timeSlot?: string; // e.g. "10:00 AM - 12:00 PM"
+  estimatedDurationMinutes?: number;
+  instructions?: string;
   technicianId?: string;
   technicianName?: string;
   status: SurveyStatus;
@@ -84,8 +118,11 @@ export interface SiteSurvey {
   transformerDistanceM?: number;
   technicianObservations?: string;
   photos?: string[];
+  documents?: string[];
+  engineeringApproverName?: string;
   rejectionReason?: string;
   approvedAt?: string;
+  assignmentHistory?: SurveyAssignmentAudit[];
 }
 
 export interface SolarPackage {

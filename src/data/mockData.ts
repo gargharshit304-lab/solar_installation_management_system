@@ -4,7 +4,8 @@ import {
   SerialNumberRecord, DispatchOrder, Installation,
   WarrantyRecord, ServiceComplaint, ProjectProfitability,
   Employee, NotificationItem, FollowUpItem,
-  CustomerEnquiry, CommunicationHistoryItem, SalesActivityItem
+  CustomerEnquiry, CommunicationHistoryItem, SalesActivityItem,
+  TechnicianLeave, SurveyAssignmentAudit
 } from '../types';
 
 export const SYSTEM_USERS: UserProfile[] = [
@@ -205,6 +206,9 @@ export const INITIAL_SURVEYS: SiteSurvey[] = [
     customerPhone: '+91 98201 44512',
     customerAddress: 'Bunglow 14, Baner Hill View Society, Pune',
     scheduledDate: '2026-11-08T10:30:00',
+    timeSlot: '10:00 AM - 12:00 PM',
+    estimatedDurationMinutes: 90,
+    instructions: 'Ring bell at main gate. RCC flat terrace access via internal staircase.',
     technicianId: 'emp-3',
     technicianName: 'Suresh More',
     status: 'approved',
@@ -223,6 +227,7 @@ export const INITIAL_SURVEYS: SiteSurvey[] = [
       'https://images.unsplash.com/photo-1508873696983-2df5293cb395?w=500&auto=format&fit=crop&q=80',
       'https://images.unsplash.com/photo-1548337138-e87d889cc369?w=500&auto=format&fit=crop&q=80'
     ],
+    engineeringApproverName: 'Vikramaditya Rao (Lead Engineer)',
     approvedAt: '2026-11-09'
   },
   {
@@ -233,6 +238,9 @@ export const INITIAL_SURVEYS: SiteSurvey[] = [
     customerPhone: '+91 98220 19340',
     customerAddress: 'Deshmukh Healthcare Centre, MG Road, Nashik',
     scheduledDate: '2026-11-10T14:00:00',
+    timeSlot: '02:00 PM - 04:00 PM',
+    estimatedDurationMinutes: 120,
+    instructions: 'Commercial hospital rooftop. Contact hospital manager Mr. Kulkarni on arrival.',
     technicianId: 'emp-3',
     technicianName: 'Suresh More',
     status: 'submitted',
@@ -258,11 +266,93 @@ export const INITIAL_SURVEYS: SiteSurvey[] = [
     customerName: 'Anand Joshi',
     customerPhone: '+91 98901 77231',
     customerAddress: 'Row House 9, Kothrud Woods, Pune',
-    scheduledDate: '2026-11-22T11:00:00',
+    scheduledDate: '2026-11-22T10:00:00',
+    timeSlot: '10:00 AM - 12:00 PM',
+    estimatedDurationMinutes: 90,
+    instructions: 'Customer requested laser measuring of sloping tiled section plus flat terrace.',
     technicianId: 'emp-3',
     technicianName: 'Suresh More',
     status: 'assigned',
     technicianObservations: 'Survey scheduled for upcoming morning. Customer has confirmed site access.'
+  },
+  {
+    id: 'surv-4',
+    surveyNumber: 'SRV-2026-044',
+    customerId: 'cust-5',
+    customerName: 'Venkatesh Iyer',
+    customerPhone: '+91 98190 22345',
+    customerAddress: 'Flat 402, Ganga Carnation, Koregaon Park, Pune',
+    scheduledDate: '2026-11-22T14:30:00',
+    timeSlot: '02:30 PM - 04:30 PM',
+    estimatedDurationMinutes: 90,
+    instructions: 'Top floor penthouse terrace. Society NOC obtained. Awaiting technician assignment.',
+    status: 'unassigned',
+    technicianObservations: 'Inbound enquiry from Website. High interest in 3kW on-grid with net metering.'
+  },
+  {
+    id: 'surv-5',
+    surveyNumber: 'SRV-2026-045',
+    customerId: 'cust-6',
+    customerName: 'Mahendra Patil (Precision Gears)',
+    customerPhone: '+91 94220 88712',
+    customerAddress: 'Plot 48, MIDC Bhosari Industrial Area, Pune',
+    scheduledDate: '2026-11-23T10:00:00',
+    timeSlot: '10:00 AM - 12:00 PM',
+    estimatedDurationMinutes: 120,
+    instructions: 'Industrial metal shed roof. Safety harness mandatory. Measure tin corrugation pitch.',
+    status: 'unassigned',
+    technicianObservations: '15kW commercial solar project enquiry. Require senior technician with industrial roof experience.'
+  },
+  {
+    id: 'surv-6',
+    surveyNumber: 'SRV-2026-046',
+    customerId: 'cust-7',
+    customerName: 'Rahul Kulkarni',
+    customerPhone: '+91 98810 55432',
+    customerAddress: 'B-12, Kumar Springwoods, Hadapsar, Pune',
+    scheduledDate: '2026-11-21T11:00:00',
+    timeSlot: '10:00 AM - 12:00 PM',
+    estimatedDurationMinutes: 90,
+    instructions: 'Technician currently on site conducting drone shadow mapping and consumer board check.',
+    technicianId: 'emp-17',
+    technicianName: 'Rahul Singh',
+    status: 'in_progress',
+    technicianObservations: 'Surveyor on site. Laser distance measuring in progress.'
+  },
+  {
+    id: 'surv-7',
+    surveyNumber: 'SRV-2026-047',
+    customerId: 'cust-8',
+    customerName: 'Sanjay Deshpande',
+    customerPhone: '+91 98224 11980',
+    customerAddress: 'Plot 19, Mayur Colony, Kothrud, Pune',
+    scheduledDate: '2026-11-21T14:30:00',
+    timeSlot: '02:30 PM - 04:30 PM',
+    estimatedDurationMinutes: 90,
+    instructions: 'Verify height of neighboring 4-story building on western side for evening shading.',
+    technicianId: 'emp-16',
+    technicianName: 'Amit Verma',
+    status: 'scheduled',
+    technicianObservations: 'Scheduled for today afternoon. Customer confirmed presence.'
+  },
+  {
+    id: 'surv-8',
+    surveyNumber: 'SRV-2026-048',
+    customerId: 'cust-9',
+    customerName: 'Kothrud Industrial Tools',
+    customerPhone: '+91 98225 66710',
+    customerAddress: 'Sector C, Kothrud Industrial Estate, Pune',
+    scheduledDate: '2026-11-15T11:00:00',
+    timeSlot: '10:00 AM - 12:00 PM',
+    estimatedDurationMinutes: 120,
+    technicianId: 'emp-18',
+    technicianName: 'Vikram Patel',
+    status: 'rejected',
+    roofDimensions: { lengthM: 20.0, widthM: 10.0 },
+    totalRoofAreaSqm: 200.0,
+    shadowFreeAreaSqm: 72.0,
+    rejectionReason: 'Structural roof slab crack & chimney shadow obstruction > 45%. Require elevated GI purlin frame and structural re-test.',
+    technicianObservations: 'Chimney stack casts persistent shadow across center of roof. East wall has structural water seepage.'
   }
 ];
 
@@ -1020,7 +1110,74 @@ export const INITIAL_EMPLOYEES: Employee[] = [
   { id: 'emp-12', employeeCode: 'EMP-012', fullName: 'Tukaram Jadhav', email: 'tukaram.j@sunpowersolutions.in', phone: '+91 98221 00923', department: 'Warehouse', designation: 'Dispatch & Fleet Driver', role: 'warehouse_mgr', hourlyRate: 210, skills: ['Material Handling', 'Heavy Transport Safety'], isAvailable: false, activeJobs: 1, rating: 4.8 },
   { id: 'emp-13', employeeCode: 'EMP-013', fullName: 'Nilesh Ghodke', email: 'nilesh.g@sunpowersolutions.in', phone: '+91 98221 00924', department: 'Operations', designation: 'Electrician', role: 'install_tech', hourlyRate: 250, skills: ['LT Panel Termination', 'Surge Arrestor Wiring'], isAvailable: true, activeJobs: 0, rating: 4.6 },
   { id: 'emp-14', employeeCode: 'EMP-014', fullName: 'Manoj Chavan', email: 'manoj.c@sunpowersolutions.in', phone: '+91 98221 00925', department: 'Operations', designation: 'Apprentice Technician', role: 'install_tech', hourlyRate: 180, skills: ['Solar Cleaning', 'Cable Tie & Dressing'], isAvailable: true, activeJobs: 0, rating: 4.4 },
-  { id: 'emp-15', employeeCode: 'EMP-015', fullName: 'Kavita Shinde', email: 'kavita.s@sunpowersolutions.in', phone: '+91 98221 00926', department: 'Sales', designation: 'CRM & Lead Coordinator', role: 'sales_exec', hourlyRate: 260, skills: ['Inbound Lead Routing', 'WhatsApp Automation'], isAvailable: true, activeJobs: 0, rating: 4.7 }
+  { id: 'emp-15', employeeCode: 'EMP-015', fullName: 'Kavita Shinde', email: 'kavita.s@sunpowersolutions.in', phone: '+91 98221 00926', department: 'Sales', designation: 'CRM & Lead Coordinator', role: 'sales_exec', hourlyRate: 260, skills: ['Inbound Lead Routing', 'WhatsApp Automation'], isAvailable: true, activeJobs: 0, rating: 4.7 },
+  { id: 'emp-16', employeeCode: 'EMP-016', fullName: 'Amit Verma', email: 'amit.v@sunpowersolutions.in', phone: '+91 98221 00930', department: 'Field Engineering', designation: 'Senior Field Surveyor', role: 'survey_tech', hourlyRate: 310, skills: ['Shadow Analysis', '3D Azimuth Mapping', 'Single & Three Phase HT/LT'], isAvailable: true, activeJobs: 2, rating: 4.7 },
+  { id: 'emp-17', employeeCode: 'EMP-017', fullName: 'Rahul Singh', email: 'rahul.s@sunpowersolutions.in', phone: '+91 98221 00931', department: 'Field Engineering', designation: 'Terrace Azimuth Engineer', role: 'survey_tech', hourlyRate: 330, skills: ['Drone Photogrammetry', 'RCC Load Calculations', 'DISCOM Feeder Inspection'], isAvailable: true, activeJobs: 1, rating: 4.9 },
+  { id: 'emp-18', employeeCode: 'EMP-018', fullName: 'Vikram Patel', email: 'vikram.p@sunpowersolutions.in', phone: '+91 98221 00932', department: 'Field Engineering', designation: 'Drone & Roof CAD Specialist', role: 'survey_tech', hourlyRate: 290, skills: ['AutoCAD Layouts', 'Helioscope Projections', 'Obstacle Shading Curves'], isAvailable: true, activeJobs: 0, rating: 4.8 }
+];
+
+export const INITIAL_TECHNICIAN_LEAVES: TechnicianLeave[] = [
+  {
+    id: 'lev-1',
+    technicianId: 'emp-11',
+    technicianName: 'Deepak Salunke',
+    startDate: '2026-11-21',
+    endDate: '2026-11-22',
+    leaveType: 'casual',
+    status: 'approved',
+    reason: 'Family event and personal leave approved by Operations Head.'
+  }
+];
+
+export const INITIAL_SURVEY_ASSIGNMENTS: SurveyAssignmentAudit[] = [
+  {
+    id: 'asg-1',
+    surveyId: 'surv-1',
+    surveyNumber: 'SRV-2026-041',
+    technicianId: 'emp-3',
+    technicianName: 'Suresh More',
+    assignedAt: '2026-11-06T11:00:00',
+    assignedBy: 'Pooja Kulkarni',
+    action: 'assigned',
+    scheduledDate: '2026-11-08T10:30:00',
+    timeSlot: '10:00 AM - 12:00 PM'
+  },
+  {
+    id: 'asg-2',
+    surveyId: 'surv-2',
+    surveyNumber: 'SRV-2026-042',
+    technicianId: 'emp-3',
+    technicianName: 'Suresh More',
+    assignedAt: '2026-11-08T15:30:00',
+    assignedBy: 'Pooja Kulkarni',
+    action: 'assigned',
+    scheduledDate: '2026-11-10T14:00:00',
+    timeSlot: '02:00 PM - 04:00 PM'
+  },
+  {
+    id: 'asg-3',
+    surveyId: 'surv-3',
+    surveyNumber: 'SRV-2026-043',
+    technicianId: 'emp-3',
+    technicianName: 'Suresh More',
+    assignedAt: '2026-11-20T16:00:00',
+    assignedBy: 'Pooja Kulkarni',
+    action: 'assigned',
+    scheduledDate: '2026-11-22T10:00:00',
+    timeSlot: '10:00 AM - 12:00 PM'
+  },
+  {
+    id: 'asg-4',
+    surveyId: 'surv-7',
+    surveyNumber: 'SRV-2026-047',
+    technicianId: 'emp-16',
+    technicianName: 'Amit Verma',
+    assignedAt: '2026-11-20T17:30:00',
+    assignedBy: 'Pooja Kulkarni',
+    action: 'assigned',
+    scheduledDate: '2026-11-21T14:30:00',
+    timeSlot: '02:30 PM - 04:30 PM'
+  }
 ];
 
 export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
