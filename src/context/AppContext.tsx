@@ -4,7 +4,8 @@ import {
   Quotation, Order, PaymentRecord, InventoryItem,
   SerialNumberRecord, DispatchOrder, Installation,
   WarrantyRecord, ServiceComplaint, ProjectProfitability,
-  Employee, NotificationItem, AiMessage
+  Employee, NotificationItem, AiMessage, FollowUpItem,
+  CustomerEnquiry, CommunicationHistoryItem, SalesActivityItem
 } from '../types';
 import {
   SYSTEM_USERS, INITIAL_CUSTOMERS, INITIAL_SURVEYS,
@@ -12,7 +13,8 @@ import {
   INITIAL_PAYMENTS, INITIAL_INVENTORY, INITIAL_SERIAL_NUMBERS,
   INITIAL_DISPATCHES, INITIAL_INSTALLATIONS, INITIAL_WARRANTIES,
   INITIAL_COMPLAINTS, INITIAL_PROFITABILITY, INITIAL_EMPLOYEES,
-  INITIAL_NOTIFICATIONS
+  INITIAL_NOTIFICATIONS, INITIAL_FOLLOW_UPS, INITIAL_ENQUIRIES,
+  INITIAL_COMMUNICATION_HISTORY, INITIAL_SALES_ACTIVITIES
 } from '../data/mockData';
 
 export interface Toast {
@@ -82,6 +84,23 @@ interface AppContextType {
   notifications: NotificationItem[];
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
+
+  // Sales Workspace Entities
+  followUps: FollowUpItem[];
+  scheduleFollowUp: (item: Omit<FollowUpItem, 'id' | 'status'>) => void;
+  completeFollowUp: (id: string, notes?: string) => void;
+  rescheduleFollowUp: (id: string, newDate: string, reason?: string) => void;
+  
+  enquiries: CustomerEnquiry[];
+  createEnquiry: (enquiry: Omit<CustomerEnquiry, 'id' | 'enquiryNumber' | 'receivedDate'>) => CustomerEnquiry;
+  
+  communicationHistory: CommunicationHistoryItem[];
+  addCommunicationRecord: (record: Omit<CommunicationHistoryItem, 'id' | 'timestamp'>) => void;
+  
+  salesActivities: SalesActivityItem[];
+  addSalesActivity: (activity: Omit<SalesActivityItem, 'id' | 'timestamp'>) => void;
+
+  requestSiteSurvey: (customerId: string, scheduledDate: string, notes?: string) => SiteSurvey;
   
   // AI Assistant
   aiMessages: AiMessage[];
@@ -117,6 +136,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [profitability, setProfitability] = useState<ProjectProfitability[]>(INITIAL_PROFITABILITY);
   const [employees] = useState<Employee[]>(INITIAL_EMPLOYEES);
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+
+  // Sales Workspace State
+  const [followUps, setFollowUps] = useState<FollowUpItem[]>(INITIAL_FOLLOW_UPS);
+  const [enquiries, setEnquiries] = useState<CustomerEnquiry[]>(INITIAL_ENQUIRIES);
+  const [communicationHistory, setCommunicationHistory] = useState<CommunicationHistoryItem[]>(INITIAL_COMMUNICATION_HISTORY);
+  const [salesActivities, setSalesActivities] = useState<SalesActivityItem[]>(INITIAL_SALES_ACTIVITIES);
   
   // AI Command Center state
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([
@@ -525,6 +550,162 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('All notifications marked as read', 'info');
   };
 
+  // Sales Workspace Operations
+  const scheduleFollowUp = (item: Omit<FollowUpItem, 'id' | 'status'>) => {
+    const newId = `flw-${Date.now()}`;
+    const newFollowUp: FollowUpItem = {
+      ...item,
+      id: newId,
+      status: 'pending'
+    };
+    setFollowUps(prev => [newFollowUp, ...prev]);
+    addCommunicationRecord({
+      customerId: item.customerId,
+      authorName: currentUser.name,
+      type: 'note',
+      summary: `Follow-up Scheduled: ${item.followUpReason}`,
+      details: `Scheduled for ${new Date(item.scheduledDate).toLocaleString()} with priority ${item.priority.toUpperCase()}`
+    });
+    showToast(`Follow-up scheduled with ${item.customerName}`, 'success');
+  };
+
+  const completeFollowUp = (id: string, notes?: string) => {
+    const nowStr = new Date().toISOString();
+    setFollowUps(prev => prev.map(f => {
+      if (f.id === id) {
+        addCommunicationRecord({
+          customerId: f.customerId,
+          authorName: currentUser.name,
+          type: 'call',
+          summary: `Completed Follow-up: ${f.followUpReason}`,
+          details: notes || 'Follow-up interaction completed successfully.'
+        });
+        addSalesActivity({
+          type: 'followup_completed',
+          customerName: f.customerName,
+          customerId: f.customerId,
+          description: `Completed follow-up for ${f.customerName}: ${notes || f.followUpReason}`,
+          salesperson: currentUser.name,
+          relatedLink: `/customers`
+        });
+        return {
+          ...f,
+          status: 'completed',
+          completedAt: nowStr,
+          completionNotes: notes
+        };
+      }
+      return f;
+    }));
+    showToast('Follow-up marked as completed and logged to communication history', 'success');
+  };
+
+  const rescheduleFollowUp = (id: string, newDate: string, reason?: string) => {
+    setFollowUps(prev => prev.map(f => {
+      if (f.id === id) {
+        addCommunicationRecord({
+          customerId: f.customerId,
+          authorName: currentUser.name,
+          type: 'note',
+          summary: `Follow-up Rescheduled to ${new Date(newDate).toLocaleString()}`,
+          details: reason || 'Customer requested postponement.'
+        });
+        return {
+          ...f,
+          scheduledDate: newDate,
+          status: 'rescheduled',
+          followUpReason: reason ? `${f.followUpReason} (${reason})` : f.followUpReason
+        };
+      }
+      return f;
+    }));
+    showToast(`Follow-up rescheduled to ${new Date(newDate).toLocaleDateString()}`, 'info');
+  };
+
+  const createEnquiry = (enquiryData: Omit<CustomerEnquiry, 'id' | 'enquiryNumber' | 'receivedDate'>): CustomerEnquiry => {
+    const newId = `enq-${Date.now()}`;
+    const enqNum = `ENQ-2026-${String(enquiries.length + 87).padStart(3, '0')}`;
+    const newEnquiry: CustomerEnquiry = {
+      ...enquiryData,
+      id: newId,
+      enquiryNumber: enqNum,
+      receivedDate: new Date().toISOString().split('T')[0]
+    };
+    setEnquiries(prev => [newEnquiry, ...prev]);
+    
+    addSalesActivity({
+      type: 'enquiry_received',
+      customerName: enquiryData.customerName,
+      customerId: enquiryData.customerId,
+      description: `New ${enquiryData.interestedCapacityKw} kW enquiry registered from ${enquiryData.source.replace('_', ' ')}`,
+      salesperson: currentUser.name,
+      relatedLink: `/enquiries`
+    });
+
+    showToast(`Enquiry ${enqNum} recorded for ${enquiryData.customerName}`, 'success');
+    return newEnquiry;
+  };
+
+  const addCommunicationRecord = (record: Omit<CommunicationHistoryItem, 'id' | 'timestamp'>) => {
+    const newId = `comm-${Date.now()}`;
+    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+    const newRecord: CommunicationHistoryItem = {
+      ...record,
+      id: newId,
+      timestamp: nowStr
+    };
+    setCommunicationHistory(prev => [newRecord, ...prev]);
+  };
+
+  const addSalesActivity = (activity: Omit<SalesActivityItem, 'id' | 'timestamp'>) => {
+    const newId = `act-${Date.now()}`;
+    const newAct: SalesActivityItem = {
+      ...activity,
+      id: newId,
+      timestamp: 'Just now'
+    };
+    setSalesActivities(prev => [newAct, ...prev]);
+  };
+
+  const requestSiteSurvey = (customerId: string, scheduledDate: string, notes?: string): SiteSurvey => {
+    const customer = customers.find(c => c.id === customerId);
+    const newSurveyId = `surv-${Date.now()}`;
+    const surveyNum = `SRV-2026-${String(surveys.length + 44).padStart(3, '0')}`;
+    const newSurvey: SiteSurvey = {
+      id: newSurveyId,
+      surveyNumber: surveyNum,
+      customerId: customerId,
+      customerName: customer ? customer.fullName : 'Customer',
+      customerPhone: customer ? customer.phone : '',
+      customerAddress: customer ? `${customer.address}, ${customer.city}` : '',
+      scheduledDate,
+      status: 'scheduled',
+      technicianObservations: notes
+    };
+    setSurveys(prev => [newSurvey, ...prev]);
+    updateCustomerLeadStatus(customerId, 'survey_scheduled');
+    
+    addCommunicationRecord({
+      customerId,
+      authorName: currentUser.name,
+      type: 'survey_requested',
+      summary: `Site Survey ${surveyNum} Requested`,
+      details: notes || 'Technician allocation requested for terrace shadow & azimuth assessment.'
+    });
+
+    addSalesActivity({
+      type: 'survey_scheduled',
+      customerName: customer ? customer.fullName : 'Customer',
+      customerId,
+      description: `Site survey ${surveyNum} requested for ${new Date(scheduledDate).toLocaleDateString()}`,
+      salesperson: currentUser.name,
+      relatedLink: '/surveys'
+    });
+
+    showToast(`Site survey ${surveyNum} scheduled for ${customer?.fullName}`, 'success');
+    return newSurvey;
+  };
+
   // AI Assistant Engine
   const sendAiQuery = (queryText: string) => {
     if (!queryText.trim()) return;
@@ -628,6 +809,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       notifications,
       markNotificationAsRead,
       markAllNotificationsAsRead,
+      // Sales Workspace
+      followUps,
+      scheduleFollowUp,
+      completeFollowUp,
+      rescheduleFollowUp,
+      enquiries,
+      createEnquiry,
+      communicationHistory,
+      addCommunicationRecord,
+      salesActivities,
+      addSalesActivity,
+      requestSiteSurvey,
       aiMessages,
       isAiGenerating,
       sendAiQuery

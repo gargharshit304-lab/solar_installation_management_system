@@ -366,3 +366,72 @@ export interface AiMessage {
   executedTools?: string[];
   suggestedActions?: { label: string; action: string }[];
 }
+
+export type FollowUpStatus = 'pending' | 'completed' | 'overdue' | 'rescheduled';
+export type FollowUpPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface FollowUpItem {
+  id: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerCity: string;
+  lastInteractionDate: string;
+  lastInteractionNotes?: string;
+  scheduledDate: string; // ISO string or YYYY-MM-DD HH:mm
+  followUpReason: string;
+  priority: FollowUpPriority;
+  status: FollowUpStatus;
+  assignedSalesperson: string;
+  completedAt?: string;
+  completionNotes?: string;
+}
+
+export interface CustomerEnquiry {
+  id: string;
+  enquiryNumber: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerCity: string;
+  interestedCapacityKw: number;
+  preferredSystemType: SystemType;
+  source: 'website' | 'phone_call' | 'whatsapp' | 'manual' | 'referral';
+  receivedDate: string;
+  leadStatus: LeadStatus;
+  nextFollowUpDate?: string;
+  assignedSalesperson: string;
+  notes?: string;
+}
+
+export interface CommunicationHistoryItem {
+  id: string;
+  customerId: string;
+  authorName: string;
+  type: 'call' | 'whatsapp' | 'meeting' | 'note' | 'email' | 'survey_requested' | 'quotation_sent';
+  summary: string;
+  details?: string;
+  timestamp: string;
+}
+
+export type SalesActivityType = 
+  | 'enquiry_received'
+  | 'customer_contacted'
+  | 'followup_completed'
+  | 'survey_scheduled'
+  | 'survey_approved'
+  | 'quotation_generated'
+  | 'quotation_sent'
+  | 'quotation_accepted'
+  | 'order_converted';
+
+export interface SalesActivityItem {
+  id: string;
+  type: SalesActivityType;
+  customerName: string;
+  customerId: string;
+  description: string;
+  timestamp: string;
+  salesperson: string;
+  relatedLink?: string;
+}

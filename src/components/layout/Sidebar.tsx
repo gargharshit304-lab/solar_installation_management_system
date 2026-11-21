@@ -4,7 +4,8 @@ import {
   LayoutDashboard, Users, Compass, FileText, ShoppingCart,
   Package, Truck, Wrench, UserCheck, ShieldCheck,
   HeadphonesIcon, IndianRupee, BarChart3, Bot,
-  Cpu, Settings as SettingsIcon, ChevronRight, ChevronDown
+  Cpu, Settings as SettingsIcon, ChevronRight, ChevronDown,
+  UserPlus, CalendarClock, Bell
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { UserRole } from '../../types';
@@ -32,7 +33,11 @@ export const Sidebar: React.FC = () => {
     inventory,
     complaints,
     surveys,
-    orders
+    orders,
+    followUps,
+    enquiries,
+    quotations,
+    notifications
   } = useApp();
 
   // Collapsible section state
@@ -49,8 +54,92 @@ export const Sidebar: React.FC = () => {
   const openComplaintsCount = complaints.filter(c => c.status === 'open' || c.status === 'in_progress').length;
   const pendingSurveysCount = surveys.filter(s => s.status === 'submitted' || s.status === 'assigned').length;
   const pendingOrdersCount = orders.filter(o => o.orderStatus === 'confirmed' || o.orderStatus === 'processing').length;
+  const overdueFollowUpsCount = followUps.filter(f => f.status === 'overdue' || (f.status === 'pending' && f.scheduledDate.startsWith(new Date().toISOString().split('T')[0]))).length;
+  const newEnquiriesCount = enquiries.filter(e => e.leadStatus === 'new').length;
+  const pendingQuotesCount = quotations.filter(q => q.status === 'sent' || q.status === 'draft').length;
+  const unreadNotifsCount = notifications.filter(n => !n.read).length;
 
-  const sections: NavSection[] = [
+  // Dedicated Sales Executive Navigation Structure (Section 2)
+  const salesSections: NavSection[] = [
+    {
+      title: 'SALES WORKSPACE',
+      items: [
+        { 
+          name: 'Sales Overview', 
+          path: '/', 
+          icon: LayoutDashboard, 
+          allowedRoles: ['sales_exec'] 
+        },
+        { 
+          name: 'Customer Enquiries', 
+          path: '/enquiries', 
+          icon: UserPlus, 
+          allowedRoles: ['sales_exec'],
+          badge: newEnquiriesCount > 0 ? newEnquiriesCount : undefined
+        },
+        { 
+          name: 'My Customers', 
+          path: '/customers', 
+          icon: Users, 
+          allowedRoles: ['sales_exec'] 
+        },
+        { 
+          name: 'Follow-ups', 
+          path: '/follow-ups', 
+          icon: CalendarClock, 
+          allowedRoles: ['sales_exec'],
+          badge: overdueFollowUpsCount > 0 ? overdueFollowUpsCount : undefined
+        },
+        { 
+          name: 'Site Surveys', 
+          path: '/surveys', 
+          icon: Compass, 
+          allowedRoles: ['sales_exec'],
+          badge: pendingSurveysCount > 0 ? pendingSurveysCount : undefined
+        },
+        { 
+          name: 'Quotations', 
+          path: '/quotations', 
+          icon: FileText, 
+          allowedRoles: ['sales_exec'],
+          badge: pendingQuotesCount > 0 ? pendingQuotesCount : undefined
+        },
+        { 
+          name: 'Orders', 
+          path: '/orders', 
+          icon: ShoppingCart, 
+          allowedRoles: ['sales_exec'] 
+        },
+      ]
+    },
+    {
+      title: 'OTHER',
+      items: [
+        { 
+          name: 'Notifications', 
+          path: '/notifications', 
+          icon: Bell, 
+          allowedRoles: ['sales_exec'],
+          badge: unreadNotifsCount > 0 ? unreadNotifsCount : undefined
+        },
+        { 
+          name: 'My Profile', 
+          path: '/profile', 
+          icon: UserCheck, 
+          allowedRoles: ['sales_exec'] 
+        },
+        { 
+          name: 'Settings', 
+          path: '/settings', 
+          icon: SettingsIcon, 
+          allowedRoles: ['sales_exec'] 
+        },
+      ]
+    }
+  ];
+
+  // Default Full Operational Sections (Preserved for Owner/Admin & Operations)
+  const standardSections: NavSection[] = [
     {
       title: 'Main',
       items: [
@@ -58,32 +147,32 @@ export const Sidebar: React.FC = () => {
           name: 'Overview', 
           path: '/', 
           icon: LayoutDashboard, 
-          allowedRoles: ['owner_admin', 'sales_exec', 'survey_tech', 'warehouse_mgr', 'install_tech', 'support_exec', 'accountant'] 
+          allowedRoles: ['owner_admin', 'survey_tech', 'warehouse_mgr', 'install_tech', 'support_exec', 'accountant'] 
         },
         { 
           name: 'Customers & CRM', 
           path: '/customers', 
           icon: Users, 
-          allowedRoles: ['owner_admin', 'sales_exec', 'support_exec'] 
+          allowedRoles: ['owner_admin', 'support_exec'] 
         },
         { 
           name: 'Site Surveys', 
           path: '/surveys', 
           icon: Compass, 
-          allowedRoles: ['owner_admin', 'sales_exec', 'survey_tech'],
+          allowedRoles: ['owner_admin', 'survey_tech'],
           badge: pendingSurveysCount > 0 ? pendingSurveysCount : undefined
         },
         { 
           name: 'Quotations', 
           path: '/quotations', 
           icon: FileText, 
-          allowedRoles: ['owner_admin', 'sales_exec'] 
+          allowedRoles: ['owner_admin'] 
         },
         { 
           name: 'Orders & Payments', 
           path: '/orders', 
           icon: ShoppingCart, 
-          allowedRoles: ['owner_admin', 'sales_exec', 'accountant'],
+          allowedRoles: ['owner_admin', 'accountant'],
           badge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined
         },
       ]
@@ -149,7 +238,7 @@ export const Sidebar: React.FC = () => {
           name: 'Reports & Analytics', 
           path: '/reports', 
           icon: BarChart3, 
-          allowedRoles: ['owner_admin', 'accountant', 'sales_exec'] 
+          allowedRoles: ['owner_admin', 'accountant'] 
         },
       ]
     },
@@ -160,7 +249,7 @@ export const Sidebar: React.FC = () => {
           name: 'AI Command Center', 
           path: '/ai', 
           icon: Bot, 
-          allowedRoles: ['owner_admin', 'sales_exec', 'warehouse_mgr', 'accountant'] 
+          allowedRoles: ['owner_admin', 'warehouse_mgr', 'accountant'] 
         },
         { 
           name: 'Agent Activity', 
@@ -183,6 +272,8 @@ export const Sidebar: React.FC = () => {
     }
   ];
 
+  const sectionsToRender = currentUser.role === 'sales_exec' ? salesSections : standardSections;
+
   const renderContent = () => (
     <div className="flex flex-col h-full bg-white border-r border-warmGrey/80 select-none">
       {/* Company Branding Card in Sidebar */}
@@ -200,7 +291,7 @@ export const Sidebar: React.FC = () => {
 
       {/* Navigation Sections */}
       <div className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
-        {sections.map(section => {
+        {sectionsToRender.map(section => {
           // Filter items based on current active user role
           const visibleItems = section.items.filter(item => 
             item.allowedRoles.includes(currentUser.role)

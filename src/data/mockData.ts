@@ -3,7 +3,8 @@ import {
   Quotation, Order, PaymentRecord, InventoryItem,
   SerialNumberRecord, DispatchOrder, Installation,
   WarrantyRecord, ServiceComplaint, ProjectProfitability,
-  Employee, NotificationItem
+  Employee, NotificationItem, FollowUpItem,
+  CustomerEnquiry, CommunicationHistoryItem, SalesActivityItem
 } from '../types';
 
 export const SYSTEM_USERS: UserProfile[] = [
@@ -1058,5 +1059,303 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     type: 'info',
     read: true,
     link: '/surveys'
+  }
+];
+
+export const INITIAL_FOLLOW_UPS: FollowUpItem[] = [
+  {
+    id: 'flw-1',
+    customerId: 'cust-4',
+    customerName: 'Anand Joshi',
+    customerPhone: '+91 98901 77231',
+    customerCity: 'Pune',
+    lastInteractionDate: '2026-11-18',
+    lastInteractionNotes: 'Customer enquired about net-metering subsidy timelines.',
+    scheduledDate: '2026-11-20T11:00:00', // Yesterday (Overdue)
+    followUpReason: 'Confirm site access window for tomorrow survey and verify meter room access.',
+    priority: 'high',
+    status: 'overdue',
+    assignedSalesperson: 'Pooja Kulkarni'
+  },
+  {
+    id: 'flw-2',
+    customerId: 'cust-2',
+    customerName: 'Dr. Sunita Deshmukh',
+    customerPhone: '+91 98220 19340',
+    customerCity: 'Nashik',
+    lastInteractionDate: '2026-11-17',
+    lastInteractionNotes: 'Sent quotation QTN-2026-089 (Off-Grid 5kW with 10.2kWh storage).',
+    scheduledDate: '2026-11-19T14:30:00', // Overdue
+    followUpReason: 'Review commercial quotation terms & discuss hospital clinic backup hours.',
+    priority: 'urgent',
+    status: 'overdue',
+    assignedSalesperson: 'Pooja Kulkarni'
+  },
+  {
+    id: 'flw-3',
+    customerId: 'cust-5',
+    customerName: 'Venkatesh Iyer',
+    customerPhone: '+91 98190 22345',
+    customerCity: 'Pune',
+    lastInteractionDate: '2026-11-19',
+    lastInteractionNotes: 'Customer asked for revised quotation comparing 5.1kWh vs 10.2kWh battery.',
+    scheduledDate: '2026-11-21T15:30:00', // Today
+    followUpReason: 'Call to present comparison matrix and negotiate payment advance.',
+    priority: 'high',
+    status: 'pending',
+    assignedSalesperson: 'Pooja Kulkarni'
+  },
+  {
+    id: 'flw-4',
+    customerId: 'cust-6',
+    customerName: 'Kiran Thorat',
+    customerPhone: '+91 97654 32190',
+    customerCity: 'Pune',
+    lastInteractionDate: '2026-11-20',
+    lastInteractionNotes: 'Walk-in enquiry at branch office.',
+    scheduledDate: '2026-11-21T17:00:00', // Today
+    followUpReason: 'First qualification call: verify monthly electricity bill & terrace ownership.',
+    priority: 'medium',
+    status: 'pending',
+    assignedSalesperson: 'Pooja Kulkarni'
+  },
+  {
+    id: 'flw-5',
+    customerId: 'cust-1',
+    customerName: 'Rajesh Sharma',
+    customerPhone: '+91 98201 44512',
+    customerCity: 'Pune',
+    lastInteractionDate: '2026-11-10',
+    lastInteractionNotes: 'Advance payment received; order moved to dispatch.',
+    scheduledDate: '2026-11-24T10:00:00', // Upcoming
+    followUpReason: 'Confirm client availability for installation crew arrival on Nov 23.',
+    priority: 'medium',
+    status: 'pending',
+    assignedSalesperson: 'Pooja Kulkarni'
+  },
+  {
+    id: 'flw-6',
+    customerId: 'cust-3',
+    customerName: 'Mahalaxmi Agro Plastics',
+    customerPhone: '+91 94223 88120',
+    customerCity: 'Aurangabad',
+    lastInteractionDate: '2026-10-24',
+    lastInteractionNotes: 'Contract signed; advance payment RTGS confirmed.',
+    scheduledDate: '2026-10-24T16:00:00',
+    followUpReason: 'PO confirmation & commercial invoice delivery.',
+    priority: 'medium',
+    status: 'completed',
+    assignedSalesperson: 'Pooja Kulkarni',
+    completedAt: '2026-10-24T16:15:00',
+    completionNotes: 'Client provided signed purchase order & advance RTGS UTR number.'
+  }
+];
+
+export const INITIAL_ENQUIRIES: CustomerEnquiry[] = [
+  {
+    id: 'enq-1',
+    enquiryNumber: 'ENQ-2026-081',
+    customerId: 'cust-1',
+    customerName: 'Rajesh Sharma',
+    customerPhone: '+91 98201 44512',
+    customerCity: 'Pune',
+    interestedCapacityKw: 5.0,
+    preferredSystemType: 'on_grid',
+    source: 'website',
+    receivedDate: '2026-11-02',
+    leadStatus: 'survey_completed',
+    nextFollowUpDate: '2026-11-24',
+    assignedSalesperson: 'Pooja Kulkarni',
+    notes: 'High daytime consumption with 3 ACs. Wants Tier-1 bifacial panels.'
+  },
+  {
+    id: 'enq-2',
+    enquiryNumber: 'ENQ-2026-082',
+    customerId: 'cust-2',
+    customerName: 'Dr. Sunita Deshmukh',
+    customerPhone: '+91 98220 19340',
+    customerCity: 'Nashik',
+    interestedCapacityKw: 5.0,
+    preferredSystemType: 'off_grid',
+    source: 'whatsapp',
+    receivedDate: '2026-11-04',
+    leadStatus: 'quotation_sent',
+    nextFollowUpDate: '2026-11-19 (Overdue)',
+    assignedSalesperson: 'Pooja Kulkarni',
+    notes: 'Needs battery backup for medical refrigeration during load shedding.'
+  },
+  {
+    id: 'enq-3',
+    enquiryNumber: 'ENQ-2026-083',
+    customerId: 'cust-3',
+    customerName: 'Mahalaxmi Agro Plastics (Factory)',
+    customerPhone: '+91 94223 88120',
+    customerCity: 'Aurangabad',
+    interestedCapacityKw: 5.0,
+    preferredSystemType: 'on_grid',
+    source: 'referral',
+    receivedDate: '2026-10-18',
+    leadStatus: 'converted',
+    assignedSalesperson: 'Pooja Kulkarni',
+    notes: 'Small factory phase 1 test installation before 50kW expansion.'
+  },
+  {
+    id: 'enq-4',
+    enquiryNumber: 'ENQ-2026-084',
+    customerId: 'cust-4',
+    customerName: 'Anand Joshi',
+    customerPhone: '+91 98901 77231',
+    customerCity: 'Pune',
+    interestedCapacityKw: 3.0,
+    preferredSystemType: 'on_grid',
+    source: 'phone_call',
+    receivedDate: '2026-11-12',
+    leadStatus: 'survey_scheduled',
+    nextFollowUpDate: '2026-11-20 (Overdue)',
+    assignedSalesperson: 'Pooja Kulkarni',
+    notes: 'Looking for net metering subsidy under PM Surya Ghar Muft Bijli Yojana.'
+  },
+  {
+    id: 'enq-5',
+    enquiryNumber: 'ENQ-2026-085',
+    customerId: 'cust-5',
+    customerName: 'Venkatesh Iyer',
+    customerPhone: '+91 98190 22345',
+    customerCity: 'Pune',
+    interestedCapacityKw: 4.0,
+    preferredSystemType: 'hybrid',
+    source: 'website',
+    receivedDate: '2026-10-25',
+    leadStatus: 'negotiation',
+    nextFollowUpDate: 'Today, 15:30',
+    assignedSalesperson: 'Pooja Kulkarni',
+    notes: 'Requested customized hybrid system with 5kWh lithium battery storage.'
+  },
+  {
+    id: 'enq-6',
+    enquiryNumber: 'ENQ-2026-086',
+    customerId: 'cust-6',
+    customerName: 'Kiran Thorat',
+    customerPhone: '+91 97654 32190',
+    customerCity: 'Pune',
+    interestedCapacityKw: 2.0,
+    preferredSystemType: 'on_grid',
+    source: 'manual',
+    receivedDate: '2026-11-20',
+    leadStatus: 'new',
+    nextFollowUpDate: 'Today, 17:00',
+    assignedSalesperson: 'Pooja Kulkarni',
+    notes: 'Walk-in customer at Hadapsar branch. Enquired about 2kW system.'
+  }
+];
+
+export const INITIAL_COMMUNICATION_HISTORY: CommunicationHistoryItem[] = [
+  {
+    id: 'comm-1',
+    customerId: 'cust-1',
+    authorName: 'Pooja Kulkarni',
+    type: 'call',
+    summary: 'Initial Qualification Call',
+    details: 'Customer verified monthly bill of ₹8,200 with 3 ACs. Explained On-Grid 5kW savings & estimated ROI within 3.2 years.',
+    timestamp: '2026-11-03 11:30'
+  },
+  {
+    id: 'comm-2',
+    customerId: 'cust-1',
+    authorName: 'Pooja Kulkarni',
+    type: 'survey_requested',
+    summary: 'Site Survey Requested',
+    details: 'Allocated Field Specialist Suresh More for terrace shadow & azimuth survey.',
+    timestamp: '2026-11-05 14:00'
+  },
+  {
+    id: 'comm-3',
+    customerId: 'cust-1',
+    authorName: 'Pooja Kulkarni',
+    type: 'quotation_sent',
+    summary: 'Commercial Quotation QTN-2026-088 Sent',
+    details: 'Generated formal PDF proposal of ₹3,08,640 and emailed to rajesh.sharma@gmail.com.',
+    timestamp: '2026-11-09 16:45'
+  },
+  {
+    id: 'comm-4',
+    customerId: 'cust-2',
+    authorName: 'Pooja Kulkarni',
+    type: 'whatsapp',
+    summary: 'WhatsApp Requirement Collection',
+    details: 'Dr. Sunita shared single line diagram and electricity sanction letter for hospital clinic.',
+    timestamp: '2026-11-06 10:15'
+  },
+  {
+    id: 'comm-5',
+    customerId: 'cust-5',
+    authorName: 'Pooja Kulkarni',
+    type: 'meeting',
+    summary: 'In-Person Consultation at Viman Nagar',
+    details: 'Presented hybrid inverter specifications and explained difference between Lead Acid vs LiFePO4 battery life.',
+    timestamp: '2026-11-14 16:00'
+  }
+];
+
+export const INITIAL_SALES_ACTIVITIES: SalesActivityItem[] = [
+  {
+    id: 'act-1',
+    type: 'quotation_accepted',
+    customerName: 'Rajesh Sharma',
+    customerId: 'cust-1',
+    description: 'Customer approved Quotation QTN-2026-088 (₹3,08,640). Order ORD-2026-034 created.',
+    timestamp: '1 hour ago',
+    salesperson: 'Pooja Kulkarni',
+    relatedLink: '/orders'
+  },
+  {
+    id: 'act-2',
+    type: 'survey_approved',
+    customerName: 'Rajesh Sharma',
+    customerId: 'cust-1',
+    description: 'Engineering Lead approved Site Survey SRV-2026-041 (94.5 sq.m shadow-free area).',
+    timestamp: 'Yesterday',
+    salesperson: 'Pooja Kulkarni',
+    relatedLink: '/surveys'
+  },
+  {
+    id: 'act-3',
+    type: 'quotation_sent',
+    customerName: 'Dr. Sunita Deshmukh',
+    customerId: 'cust-2',
+    description: 'Quotation QTN-2026-089 sent for 5kW Off-Grid Autonomy (₹4,45,890).',
+    timestamp: '2 days ago',
+    salesperson: 'Pooja Kulkarni',
+    relatedLink: '/quotations'
+  },
+  {
+    id: 'act-4',
+    type: 'survey_scheduled',
+    customerName: 'Anand Joshi',
+    customerId: 'cust-4',
+    description: 'Site survey scheduled for Nov 22, 11:00 AM. Technician Suresh More assigned.',
+    timestamp: '3 days ago',
+    salesperson: 'Pooja Kulkarni',
+    relatedLink: '/surveys'
+  },
+  {
+    id: 'act-5',
+    type: 'enquiry_received',
+    customerName: 'Kiran Thorat',
+    customerId: 'cust-6',
+    description: 'New walk-in enquiry registered for 2kW residential system in Hadapsar.',
+    timestamp: '4 days ago',
+    salesperson: 'Pooja Kulkarni',
+    relatedLink: '/customers'
+  },
+  {
+    id: 'act-6',
+    type: 'order_converted',
+    customerName: 'Mahalaxmi Agro Plastics (Factory)',
+    customerId: 'cust-3',
+    description: 'Successfully converted industrial client contract ORD-2026-035 (₹3,00,950).',
+    timestamp: 'Oct 24',
+    salesperson: 'Pooja Kulkarni',
+    relatedLink: '/orders'
   }
 ];
