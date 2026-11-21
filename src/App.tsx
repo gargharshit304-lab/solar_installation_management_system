@@ -2,7 +2,9 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { AppLayout } from './components/layout/AppLayout';
+import { ProtectedRoute } from './components/common/ProtectedRoute';
 
+import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { CustomersPage } from './pages/CustomersPage';
 import { SiteSurveysPage } from './pages/SiteSurveysPage';
@@ -25,26 +27,32 @@ export function App() {
     <AppProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<AppLayout />}>
-            <Route index element={<DashboardPage />} />
-            <Route path="overview" element={<DashboardPage />} />
-            <Route path="customers" element={<CustomersPage />} />
-            <Route path="surveys" element={<SiteSurveysPage />} />
-            <Route path="quotations" element={<QuotationsPage />} />
-            <Route path="orders" element={<OrdersPaymentsPage />} />
-            <Route path="inventory" element={<InventoryPage />} />
-            <Route path="dispatch" element={<DispatchPage />} />
-            <Route path="installations" element={<InstallationsPage />} />
-            <Route path="workforce" element={<WorkforcePage />} />
-            <Route path="warranty" element={<WarrantyPage />} />
-            <Route path="service" element={<ServiceComplaintsPage />} />
-            <Route path="finance" element={<FinancePage />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="ai" element={<AiCommandCenterPage />} />
-            <Route path="agent-activity" element={<AgentActivityPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/login" element={<LoginPage />} />
+          
+          <Route element={<ProtectedRoute />}>
+            <Route path="/" element={<AppLayout />}>
+              <Route index element={<DashboardPage />} />
+              <Route path="overview" element={<DashboardPage />} />
+              <Route path="customers" element={<CustomersPage />} />
+              <Route path="surveys" element={<SiteSurveysPage />} />
+              <Route path="quotations" element={<QuotationsPage />} />
+              <Route path="orders" element={<OrdersPaymentsPage />} />
+              <Route path="inventory" element={<InventoryPage />} />
+              <Route path="dispatch" element={<DispatchPage />} />
+              <Route path="installations" element={<InstallationsPage />} />
+              <Route path="workforce" element={<WorkforcePage />} />
+              <Route path="warranty" element={<WarrantyPage />} />
+              <Route path="service" element={<ServiceComplaintsPage />} />
+              <Route path="finance" element={<FinancePage />} />
+              <Route path="reports" element={<ReportsPage />} />
+              <Route path="ai" element={<AiCommandCenterPage />} />
+              <Route path="agent-activity" element={<AgentActivityPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
           </Route>
+          
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </BrowserRouter>
     </AppProvider>
