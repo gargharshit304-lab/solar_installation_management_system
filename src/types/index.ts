@@ -467,6 +467,7 @@ export interface NotificationItem {
   type: 'info' | 'warning' | 'success' | 'alert';
   read: boolean;
   link?: string;
+  targetRoles?: UserRole[];
 }
 
 export interface AiMessage {

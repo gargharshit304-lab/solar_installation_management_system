@@ -265,7 +265,17 @@ export const Navbar: React.FC = () => {
                         onClick={() => {
                           switchRole(u.role);
                           setIsProfileMenuOpen(false);
-                          navigate('/', { replace: true });
+                          const roleRoutes: Record<UserRole, string> = {
+                            owner_admin: '/',
+                            sales_exec: '/',
+                            survey_tech: '/field',
+                            engineering_lead: '/engineering',
+                            warehouse_mgr: '/inventory',
+                            install_tech: '/',
+                            support_exec: '/',
+                            accountant: '/',
+                          };
+                          navigate(roleRoutes[u.role] || '/');
                         }}
                         className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg transition-colors ${
                           currentUser.role === u.role

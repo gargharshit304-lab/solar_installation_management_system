@@ -53,27 +53,27 @@ export const Modal: React.FC<ModalProps> = ({
         onClick={onClose}
       />
 
-      <div className="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
+      <div className="flex min-h-full items-center justify-center text-center sm:p-4">
         <div 
-          className={`relative transform overflow-hidden rounded-2xl bg-white text-left shadow-dropdown transition-all w-full ${maxWidthClass} my-8 border border-warmGrey animate-in zoom-in-95 duration-200`}
+          className={`relative transform overflow-hidden rounded-none bg-white text-left shadow-dropdown transition-all w-full ${maxWidthClass} h-[100dvh] border-0 sm:h-auto sm:max-h-[92vh] sm:my-8 sm:rounded-2xl sm:border sm:border-warmGrey animate-in zoom-in-95 duration-200`}
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4.5 border-b border-warmGrey/60 bg-sand-50/50">
-            <div>
-              <h3 className="text-lg font-bold text-charcoal">{title}</h3>
-              {subtitle && <p className="text-xs text-mutedGrey mt-0.5">{subtitle}</p>}
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-warmGrey/60 bg-sand-50/95 px-4 py-3 backdrop-blur-sm sm:px-6 sm:py-4">
+            <div className="min-w-0 pr-3">
+              <h3 className="truncate text-base font-bold text-charcoal sm:text-lg">{title}</h3>
+              {subtitle && <p className="mt-0.5 truncate text-[11px] text-mutedGrey sm:text-xs">{subtitle}</p>}
             </div>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-mutedGrey hover:text-charcoal hover:bg-warmGrey/30 transition-colors"
+              className="shrink-0 p-2 rounded-lg text-mutedGrey hover:text-charcoal hover:bg-warmGrey/30 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Body */}
-          <div className="p-6 max-h-[calc(85vh-120px)] overflow-y-auto">
+          <div className="h-[calc(100dvh-61px)] overflow-y-auto overscroll-contain p-4 sm:h-auto sm:max-h-[calc(92vh-73px)] sm:p-6">
             {children}
           </div>
         </div>

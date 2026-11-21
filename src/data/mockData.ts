@@ -1616,7 +1616,8 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     timeAgo: '12 mins ago',
     type: 'warning',
     read: false,
-    link: '/inventory'
+    link: '/inventory',
+    targetRoles: ['owner_admin', 'warehouse_mgr', 'accountant']
   },
   {
     id: 'notif-2',
@@ -1625,7 +1626,8 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     timeAgo: '1 hour ago',
     type: 'success',
     read: false,
-    link: '/orders'
+    link: '/orders',
+    targetRoles: ['owner_admin', 'sales_exec', 'accountant']
   },
   {
     id: 'notif-3',
@@ -1634,7 +1636,8 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     timeAgo: '3 hours ago',
     type: 'alert',
     read: true,
-    link: '/service'
+    link: '/service',
+    targetRoles: ['owner_admin', 'support_exec', 'install_tech']
   },
   {
     id: 'notif-4',
@@ -1643,7 +1646,8 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     timeAgo: 'Yesterday',
     type: 'info',
     read: true,
-    link: '/surveys'
+    link: '/surveys',
+    targetRoles: ['owner_admin', 'sales_exec', 'survey_tech']
   }
 ];
 
