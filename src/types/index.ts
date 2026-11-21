@@ -1,0 +1,368 @@
+export type UserRole = 
+  | 'owner_admin'
+  | 'sales_exec'
+  | 'survey_tech'
+  | 'warehouse_mgr'
+  | 'install_tech'
+  | 'support_exec'
+  | 'accountant';
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  roleTitle: string;
+  avatar: string;
+  department: string;
+}
+
+export type LeadStatus = 
+  | 'new'
+  | 'contacted'
+  | 'survey_scheduled'
+  | 'survey_completed'
+  | 'quotation_sent'
+  | 'negotiation'
+  | 'converted'
+  | 'lost';
+
+export type SystemType = 'on_grid' | 'off_grid' | 'hybrid';
+
+export interface Customer {
+  id: string;
+  customerCode: string;
+  fullName: string;
+  phone: string;
+  email: string;
+  address: string;
+  city: string;
+  state: string;
+  monthlyElectricityBill: number;
+  interestedCapacityKw: number;
+  preferredSystemType: SystemType;
+  roofSpaceSqft: number;
+  roofType: string;
+  enquirySource: 'website' | 'phone_call' | 'whatsapp' | 'manual' | 'referral';
+  assignedSalesperson: string;
+  leadStatus: LeadStatus;
+  registrationDate: string;
+  notes?: string;
+}
+
+export type SurveyStatus = 
+  | 'scheduled'
+  | 'assigned'
+  | 'in_progress'
+  | 'submitted'
+  | 'approved'
+  | 'rejected';
+
+export interface SiteSurvey {
+  id: string;
+  surveyNumber: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  scheduledDate: string;
+  technicianId?: string;
+  technicianName?: string;
+  status: SurveyStatus;
+  roofDimensions?: {
+    lengthM: number;
+    widthM: number;
+  };
+  totalRoofAreaSqm?: number;
+  shadowFreeAreaSqm?: number;
+  roofDirection?: string;
+  roofTiltDegrees?: number;
+  cableDistanceMeters?: number;
+  sanctionedLoadKw?: number;
+  meterNumber?: string;
+  phaseType?: 'single_phase' | 'three_phase';
+  transformerDistanceM?: number;
+  technicianObservations?: string;
+  photos?: string[];
+  rejectionReason?: string;
+  approvedAt?: string;
+}
+
+export interface SolarPackage {
+  id: string;
+  code: string;
+  name: string;
+  type: 'on_grid' | 'off_grid' | 'panel_set';
+  capacityKw: number;
+  description: string;
+  basePrice: number;
+  components: {
+    productId: string;
+    productName: string;
+    quantity: number;
+    unit: string;
+  }[];
+}
+
+export interface Quotation {
+  id: string;
+  quotationNumber: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  surveyId?: string;
+  packageId: string;
+  packageName: string;
+  packageType: 'on_grid' | 'off_grid' | 'panel_set';
+  capacityKw: number;
+  hardwareSubtotal: number;
+  installationCharges: number;
+  applicableTaxes: number;
+  taxPercent: number;
+  discount: number;
+  subsidyAmount: number;
+  totalAmount: number;
+  paymentTerms: string;
+  status: 'draft' | 'sent' | 'approved' | 'rejected' | 'expired';
+  createdDate: string;
+  validUntil: string;
+  preparedBy: string;
+}
+
+export type OrderStatus = 
+  | 'pending'
+  | 'confirmed'
+  | 'processing'
+  | 'ready_for_dispatch'
+  | 'dispatched'
+  | 'installation_scheduled'
+  | 'completed'
+  | 'cancelled';
+
+export interface Order {
+  id: string;
+  orderNumber: string;
+  quotationId: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerCity: string;
+  capacityKw: number;
+  totalOrderValue: number;
+  advanceAmountPaid: number;
+  outstandingBalance: number;
+  orderStatus: OrderStatus;
+  paymentStatus: 'unpaid' | 'partially_paid' | 'fully_paid';
+  orderDate: string;
+  dispatchId?: string;
+  installationId?: string;
+}
+
+export interface PaymentRecord {
+  id: string;
+  paymentNumber: string;
+  orderId: string;
+  orderNumber: string;
+  customerId: string;
+  customerName: string;
+  amount: number;
+  paymentMethod: 'bank_transfer' | 'upi' | 'cheque' | 'cash';
+  transactionRef: string;
+  paymentStage: 'advance' | 'dispatch_milestone' | 'final_commissioning';
+  paymentDate: string;
+  recordedBy: string;
+}
+
+export type ProductCategory = 
+  | 'Solar Panels'
+  | 'Inverters'
+  | 'Batteries'
+  | 'Charge Controllers'
+  | 'Connectors'
+  | 'Wires'
+  | 'Wiring Boxes'
+  | 'Metal Stands'
+  | 'Safety Equipment';
+
+export interface InventoryItem {
+  id: string;
+  sku: string;
+  name: string;
+  category: ProductCategory;
+  availableQuantity: number;
+  reservedQuantity: number;
+  minimumThreshold: number;
+  unitCost: number;
+  sellingPrice: number;
+  supplier: string;
+  hasSerialTracking: boolean;
+  stockStatus: 'in_stock' | 'low_stock' | 'out_of_stock';
+  locationBin: string;
+}
+
+export interface SerialNumberRecord {
+  id: string;
+  serialNumber: string;
+  productId: string;
+  productName: string;
+  category: string;
+  purchaseDate: string;
+  supplier: string;
+  currentStatus: 'in_warehouse' | 'reserved' | 'dispatched' | 'installed' | 'defective';
+  assignedCustomer?: string;
+  relatedOrderId?: string;
+  deliveryDate?: string;
+  warrantyStartDate?: string;
+  warrantyEndDate?: string;
+}
+
+export interface DispatchOrder {
+  id: string;
+  dispatchNumber: string;
+  orderId: string;
+  orderNumber: string;
+  customerId: string;
+  customerName: string;
+  deliveryAddress: string;
+  allocatedSerials: string[];
+  dispatchDate: string;
+  deliveryPersonnel: string;
+  vehicleNumber: string;
+  deliveryStatus: 'pending' | 'in_transit' | 'delivered';
+  deliveredAt?: string;
+}
+
+export type InstallationStatus = 
+  | 'scheduled'
+  | 'assigned'
+  | 'in_progress'
+  | 'completed'
+  | 'delayed'
+  | 'cancelled';
+
+export interface Installation {
+  id: string;
+  installationCode: string;
+  orderId: string;
+  orderNumber: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  capacityKw: number;
+  systemType: 'on_grid' | 'off_grid';
+  scheduledDate: string;
+  scheduledEndDate: string;
+  actualStartTime?: string;
+  actualFinishTime?: string;
+  assignedTechnicianIds: string[];
+  technicianNames: string[];
+  status: InstallationStatus;
+  checklist: {
+    structureMounting: boolean;
+    panelsMounted: boolean;
+    earthingPitConnected: boolean;
+    lightningArresterInstalled: boolean;
+    inverterWired: boolean;
+    dcWiringTested: boolean;
+    acDbBoxConnected: boolean;
+    biDirectionalMeterSync: boolean;
+  };
+  photos: string[];
+  customerSignature?: string;
+  customerSignName?: string;
+  technicianRemarks?: string;
+}
+
+export interface WarrantyRecord {
+  id: string;
+  serialNumber: string;
+  productName: string;
+  category: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  orderId: string;
+  orderNumber: string;
+  deliveryDate: string;
+  warrantyStartDate: string;
+  warrantyEndDate: string;
+  durationYears: number;
+  status: 'active' | 'expiring_soon' | 'expired';
+}
+
+export type ComplaintPriority = 'low' | 'medium' | 'high' | 'critical';
+export type TicketStatus = 'open' | 'assigned' | 'in_progress' | 'waiting_for_parts' | 'resolved' | 'closed';
+
+export interface ServiceComplaint {
+  id: string;
+  complaintId: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  equipmentSerialNumber: string;
+  productName: string;
+  faultDescription: string;
+  faultCode: string;
+  priority: ComplaintPriority;
+  assignedTechnicianName?: string;
+  complaintDate: string;
+  isUnderWarranty: boolean;
+  estimatedRepairCost?: number;
+  estimatedLabourCost?: number;
+  status: TicketStatus;
+  resolutionNotes?: string;
+}
+
+export interface ProjectProfitability {
+  id: string;
+  projectCode: string;
+  orderNumber: string;
+  customerName: string;
+  capacityKw: number;
+  systemType: string;
+  revenue: number;
+  equipmentCosts: number;
+  labourCosts: number;
+  otherExpenses: number;
+  profit: number;
+  profitMarginPercent: number;
+  paymentStatus: 'fully_paid' | 'partially_paid' | 'unpaid';
+  completionDate: string;
+}
+
+export interface Employee {
+  id: string;
+  employeeCode: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  department: string;
+  designation: string;
+  role: UserRole;
+  hourlyRate: number;
+  skills: string[];
+  isAvailable: boolean;
+  activeJobs: number;
+  rating: number;
+}
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  timeAgo: string;
+  type: 'info' | 'warning' | 'success' | 'alert';
+  read: boolean;
+  link?: string;
+}
+
+export interface AiMessage {
+  id: string;
+  sender: 'user' | 'assistant' | 'system';
+  text: string;
+  timestamp: string;
+  executedTools?: string[];
+  suggestedActions?: { label: string; action: string }[];
+}
