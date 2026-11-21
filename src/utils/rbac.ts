@@ -96,7 +96,9 @@ export const ROLE_CAPABILITIES: Record<UserRole, CapabilityPermission[]> = {
     'dispatch.view_all',
     'dispatch.prepare',
     'dispatch.release',
-    'delivery.confirm'
+    'delivery.confirm',
+    // Read-only equipment warranty traceability
+    'warranty.view_all'
   ],
 
   // 6. Chief Financial Accountant (Operational Bookkeeping & Compliance)
@@ -195,3 +197,274 @@ export function verifyCapability(
 
   return { allowed: true };
 }
+
+/**
+ * Authoritative Route Permission Configuration for SolarOS
+ * Acts as the single source of truth for both Route Guards and Sidebar Navigation.
+ */
+export interface RoutePermission {
+  path: string;
+  allowedRoles: UserRole[];
+  requiredCapability?: CapabilityPermission;
+  readOnlyRoles?: UserRole[];
+  description: string;
+}
+
+export const ALL_ROLES: UserRole[] = [
+  'owner_admin',
+  'sales_exec',
+  'survey_tech',
+  'engineering_lead',
+  'warehouse_mgr',
+  'install_tech',
+  'support_exec',
+  'accountant'
+];
+
+export const ROUTE_PERMISSIONS: Record<string, RoutePermission> = {
+  '/': {
+    path: '/',
+    allowedRoles: ALL_ROLES,
+    description: 'Role-specific default dashboard router'
+  },
+  '/overview': {
+    path: '/overview',
+    allowedRoles: ALL_ROLES,
+    description: 'Company overview or role dashboard'
+  },
+  '/sales-overview': {
+    path: '/sales-overview',
+    allowedRoles: ['owner_admin', 'sales_exec'],
+    description: 'Sales performance dashboard'
+  },
+  '/enquiries': {
+    path: '/enquiries',
+    allowedRoles: ['owner_admin', 'sales_exec'],
+    requiredCapability: 'enquiries.view_all',
+    description: 'Customer enquiries and lead capture'
+  },
+  '/customers': {
+    path: '/customers',
+    allowedRoles: ['owner_admin', 'sales_exec', 'support_exec'],
+    description: 'Customer directory and CRM'
+  },
+  '/follow-ups': {
+    path: '/follow-ups',
+    allowedRoles: ['owner_admin', 'sales_exec'],
+    description: 'Sales follow-ups and schedule'
+  },
+  '/surveys': {
+    path: '/surveys',
+    allowedRoles: ['owner_admin', 'sales_exec'],
+    requiredCapability: 'surveys.schedule',
+    description: 'Site survey dispatch and schedule'
+  },
+  '/quotations': {
+    path: '/quotations',
+    allowedRoles: ['owner_admin', 'sales_exec'],
+    description: 'Solar system quotations and estimates'
+  },
+  '/orders': {
+    path: '/orders',
+    allowedRoles: ['owner_admin', 'sales_exec', 'accountant'],
+    requiredCapability: 'orders.view_all',
+    description: 'Customer orders and payments'
+  },
+  '/subsidies': {
+    path: '/subsidies',
+    allowedRoles: ['owner_admin', 'sales_exec', 'accountant'],
+    requiredCapability: 'subsidies.view',
+    description: 'PM Surya Ghar national portal tracking'
+  },
+  '/field': {
+    path: '/field',
+    allowedRoles: ['owner_admin', 'survey_tech'],
+    requiredCapability: 'surveys.view_assigned',
+    description: 'Field survey specialist workspace'
+  },
+  '/field/dashboard': {
+    path: '/field/dashboard',
+    allowedRoles: ['owner_admin', 'survey_tech'],
+    requiredCapability: 'surveys.view_assigned',
+    description: 'Field survey specialist dashboard'
+  },
+  '/field/assignments': {
+    path: '/field/assignments',
+    allowedRoles: ['owner_admin', 'survey_tech'],
+    requiredCapability: 'surveys.view_assigned',
+    description: 'Assigned field inspections'
+  },
+  '/field/available-surveys': {
+    path: '/field/available-surveys',
+    allowedRoles: ['owner_admin', 'survey_tech'],
+    requiredCapability: 'surveys.view_available',
+    description: 'Available unassigned surveys to claim'
+  },
+  '/field/schedule': {
+    path: '/field/schedule',
+    allowedRoles: ['owner_admin', 'survey_tech'],
+    description: 'Technician visit schedule'
+  },
+  '/field/reports': {
+    path: '/field/reports',
+    allowedRoles: ['owner_admin', 'survey_tech'],
+    description: 'Survey inspection reports'
+  },
+  '/field/team': {
+    path: '/field/team',
+    allowedRoles: ['owner_admin', 'survey_tech'],
+    description: 'Survey specialist team directory'
+  },
+  '/engineering': {
+    path: '/engineering',
+    allowedRoles: ['owner_admin', 'engineering_lead'],
+    requiredCapability: 'surveys.view_all',
+    description: 'Engineering feasibility review'
+  },
+  '/engineering/dashboard': {
+    path: '/engineering/dashboard',
+    allowedRoles: ['owner_admin', 'engineering_lead'],
+    requiredCapability: 'surveys.view_all',
+    description: 'Engineering lead dashboard'
+  },
+  '/engineering/review': {
+    path: '/engineering/review',
+    allowedRoles: ['owner_admin', 'engineering_lead'],
+    requiredCapability: 'surveys.review',
+    description: 'Technical feasibility review queue'
+  },
+  '/engineering/approved': {
+    path: '/engineering/approved',
+    allowedRoles: ['owner_admin', 'engineering_lead'],
+    description: 'Approved feasibility plans'
+  },
+  '/inventory': {
+    path: '/inventory',
+    allowedRoles: ['owner_admin', 'warehouse_mgr'],
+    requiredCapability: 'inventory.view_all',
+    description: 'Warehouse inventory and stock movements'
+  },
+  '/dispatch': {
+    path: '/dispatch',
+    allowedRoles: ['owner_admin', 'warehouse_mgr'],
+    requiredCapability: 'dispatch.view_all',
+    description: 'Order dispatch packing and delivery'
+  },
+  '/installations': {
+    path: '/installations',
+    allowedRoles: ['owner_admin', 'install_tech'],
+    description: 'Installation operations and site execution'
+  },
+  '/workforce': {
+    path: '/workforce',
+    allowedRoles: ['owner_admin'],
+    requiredCapability: 'employees.view_all',
+    description: 'Company workforce directory'
+  },
+  '/activity-center': {
+    path: '/activity-center',
+    allowedRoles: ['owner_admin'],
+    requiredCapability: 'audit.view_all',
+    description: 'Employee activity and audit stream'
+  },
+  '/departments': {
+    path: '/departments',
+    allowedRoles: ['owner_admin'],
+    requiredCapability: 'departments.manage',
+    description: 'Departments and team structure'
+  },
+  '/roles-permissions': {
+    path: '/roles-permissions',
+    allowedRoles: ['owner_admin'],
+    requiredCapability: 'roles_permissions.manage',
+    description: 'Access control and role management'
+  },
+  '/approvals': {
+    path: '/approvals',
+    allowedRoles: ['owner_admin'],
+    requiredCapability: 'approvals.view_all',
+    description: 'Executive approval requests'
+  },
+  '/ai-agents': {
+    path: '/ai-agents',
+    allowedRoles: ['owner_admin'],
+    description: 'AI voice agent orchestration'
+  },
+  '/warranty': {
+    path: '/warranty',
+    allowedRoles: ['owner_admin', 'support_exec', 'warehouse_mgr'],
+    requiredCapability: 'warranty.view_all',
+    readOnlyRoles: ['warehouse_mgr'],
+    description: 'Warranty traceability and hardware coverage lookup'
+  },
+  '/service': {
+    path: '/service',
+    allowedRoles: ['owner_admin', 'support_exec', 'install_tech'],
+    description: 'Customer service complaints and repairs'
+  },
+  '/finance': {
+    path: '/finance',
+    allowedRoles: ['owner_admin', 'accountant'],
+    requiredCapability: 'finance.view_all',
+    description: 'Financial ledger, P&L, and accounts'
+  },
+  '/reports': {
+    path: '/reports',
+    allowedRoles: ['owner_admin', 'accountant'],
+    description: 'Business analytics and executive reporting'
+  },
+  '/ai': {
+    path: '/ai',
+    allowedRoles: ['owner_admin'],
+    description: 'AI Command Center'
+  },
+  '/agent-activity': {
+    path: '/agent-activity',
+    allowedRoles: ['owner_admin'],
+    description: 'Autonomous agent runtime monitoring'
+  },
+  '/notifications': {
+    path: '/notifications',
+    allowedRoles: ALL_ROLES,
+    description: 'User notification center'
+  },
+  '/profile': {
+    path: '/profile',
+    allowedRoles: ALL_ROLES,
+    description: 'Employee profile details'
+  },
+  '/settings': {
+    path: '/settings',
+    allowedRoles: ALL_ROLES,
+    description: 'Application and account preferences'
+  }
+};
+
+/**
+ * Checks whether a given route path is accessible for a user's role
+ */
+export function isRouteAllowedForRole(path: string, role: UserRole): boolean {
+  const normalizedPath = path === '/' ? '/' : path.replace(/\/$/, '');
+  const permission = ROUTE_PERMISSIONS[normalizedPath];
+  if (!permission) {
+    // Check for parent route match (e.g. /field/*)
+    const parentKey = Object.keys(ROUTE_PERMISSIONS).find(
+      key => key !== '/' && normalizedPath.startsWith(key)
+    );
+    if (parentKey) {
+      return ROUTE_PERMISSIONS[parentKey].allowedRoles.includes(role);
+    }
+    return true; // Default allow for unconfigured utility routes
+  }
+  return permission.allowedRoles.includes(role);
+}
+
+/**
+ * Checks whether a role has read-only access to a specific route
+ */
+export function isRouteReadOnlyForRole(path: string, role: UserRole): boolean {
+  const normalizedPath = path === '/' ? '/' : path.replace(/\/$/, '');
+  const permission = ROUTE_PERMISSIONS[normalizedPath];
+  return permission?.readOnlyRoles?.includes(role) || false;
+}
+

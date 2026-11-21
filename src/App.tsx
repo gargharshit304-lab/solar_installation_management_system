@@ -4,6 +4,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { AccessDeniedPage } from './components/common/AccessDeniedPage';
+import { isRouteAllowedForRole } from './utils/rbac';
 
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -72,12 +73,23 @@ function HomeRouter() {
   return <DashboardPage />;
 }
 
-function RoleGuard({ allowedRoles, children }: { allowedRoles: string[]; children: React.ReactNode }) {
+function RoleGuard({ 
+  routePath, 
+  allowedRoles, 
+  children 
+}: { 
+  routePath?: string; 
+  allowedRoles?: string[]; 
+  children: React.ReactNode 
+}) {
   const { currentUser, isInitializing } = useApp();
   if (isInitializing) {
     return null;
   }
-  if (!allowedRoles.includes(currentUser.role)) {
+  if (routePath && !isRouteAllowedForRole(routePath, currentUser.role)) {
+    return <AccessDeniedPage />;
+  }
+  if (allowedRoles && !allowedRoles.includes(currentUser.role)) {
     return <AccessDeniedPage />;
   }
   return <>{children}</>;
@@ -98,173 +110,173 @@ export function App() {
               
               {/* Sales Workspace Routes */}
               <Route path="enquiries" element={
-                <RoleGuard allowedRoles={['owner_admin', 'sales_exec']}>
+                <RoleGuard routePath="/enquiries" allowedRoles={['owner_admin', 'sales_exec']}>
                   <CustomerEnquiriesPage />
                 </RoleGuard>
               } />
               <Route path="customers" element={
-                <RoleGuard allowedRoles={['owner_admin', 'sales_exec', 'support_exec']}>
+                <RoleGuard routePath="/customers" allowedRoles={['owner_admin', 'sales_exec', 'support_exec']}>
                   <CustomersPage />
                 </RoleGuard>
               } />
               <Route path="follow-ups" element={
-                <RoleGuard allowedRoles={['owner_admin', 'sales_exec']}>
+                <RoleGuard routePath="/follow-ups" allowedRoles={['owner_admin', 'sales_exec']}>
                   <FollowUpsPage />
                 </RoleGuard>
               } />
               <Route path="surveys" element={
-                <RoleGuard allowedRoles={['owner_admin', 'sales_exec']}>
+                <RoleGuard routePath="/surveys" allowedRoles={['owner_admin', 'sales_exec']}>
                   <SiteSurveysPage />
                 </RoleGuard>
               } />
               <Route path="quotations" element={
-                <RoleGuard allowedRoles={['owner_admin', 'sales_exec']}>
+                <RoleGuard routePath="/quotations" allowedRoles={['owner_admin', 'sales_exec']}>
                   <QuotationsPage />
                 </RoleGuard>
               } />
               <Route path="orders" element={
-                <RoleGuard allowedRoles={['owner_admin', 'sales_exec', 'accountant']}>
+                <RoleGuard routePath="/orders" allowedRoles={['owner_admin', 'sales_exec', 'accountant']}>
                   <OrdersPaymentsPage />
                 </RoleGuard>
               } />
               <Route path="subsidies" element={
-                <RoleGuard allowedRoles={['owner_admin', 'sales_exec', 'accountant']}>
+                <RoleGuard routePath="/subsidies" allowedRoles={['owner_admin', 'sales_exec', 'accountant']}>
                   <SubsidyTrackingPage />
                 </RoleGuard>
               } />
 
               {/* Field Survey Specialist Routes */}
               <Route path="field" element={
-                <RoleGuard allowedRoles={['owner_admin', 'survey_tech']}>
+                <RoleGuard routePath="/field" allowedRoles={['owner_admin', 'survey_tech']}>
                   <FieldDashboardPage />
                 </RoleGuard>
               } />
               <Route path="field/dashboard" element={
-                <RoleGuard allowedRoles={['owner_admin', 'survey_tech']}>
+                <RoleGuard routePath="/field/dashboard" allowedRoles={['owner_admin', 'survey_tech']}>
                   <FieldDashboardPage />
                 </RoleGuard>
               } />
               <Route path="field/assignments" element={
-                <RoleGuard allowedRoles={['owner_admin', 'survey_tech']}>
+                <RoleGuard routePath="/field/assignments" allowedRoles={['owner_admin', 'survey_tech']}>
                   <MyAssignmentsPage />
                 </RoleGuard>
               } />
               <Route path="field/available-surveys" element={
-                <RoleGuard allowedRoles={['owner_admin', 'survey_tech']}>
+                <RoleGuard routePath="/field/available-surveys" allowedRoles={['owner_admin', 'survey_tech']}>
                   <AvailableSurveysPage />
                 </RoleGuard>
               } />
               <Route path="field/schedule" element={
-                <RoleGuard allowedRoles={['owner_admin', 'survey_tech']}>
+                <RoleGuard routePath="/field/schedule" allowedRoles={['owner_admin', 'survey_tech']}>
                   <MySchedulePage />
                 </RoleGuard>
               } />
               <Route path="field/reports" element={
-                <RoleGuard allowedRoles={['owner_admin', 'survey_tech']}>
+                <RoleGuard routePath="/field/reports" allowedRoles={['owner_admin', 'survey_tech']}>
                   <SurveyReportsPage />
                 </RoleGuard>
               } />
               <Route path="field/team" element={
-                <RoleGuard allowedRoles={['owner_admin', 'survey_tech']}>
+                <RoleGuard routePath="/field/team" allowedRoles={['owner_admin', 'survey_tech']}>
                   <SurveyTeamPage />
                 </RoleGuard>
               } />
 
               {/* Engineering Lead Routes */}
               <Route path="engineering" element={
-                <RoleGuard allowedRoles={['owner_admin', 'engineering_lead']}>
+                <RoleGuard routePath="/engineering" allowedRoles={['owner_admin', 'engineering_lead']}>
                   <EngineeringDashboardPage />
                 </RoleGuard>
               } />
               <Route path="engineering/dashboard" element={
-                <RoleGuard allowedRoles={['owner_admin', 'engineering_lead']}>
+                <RoleGuard routePath="/engineering/dashboard" allowedRoles={['owner_admin', 'engineering_lead']}>
                   <EngineeringDashboardPage />
                 </RoleGuard>
               } />
               <Route path="engineering/review" element={
-                <RoleGuard allowedRoles={['owner_admin', 'engineering_lead']}>
+                <RoleGuard routePath="/engineering/review" allowedRoles={['owner_admin', 'engineering_lead']}>
                   <EngineeringDashboardPage />
                 </RoleGuard>
               } />
               <Route path="engineering/approved" element={
-                <RoleGuard allowedRoles={['owner_admin', 'engineering_lead']}>
+                <RoleGuard routePath="/engineering/approved" allowedRoles={['owner_admin', 'engineering_lead']}>
                   <EngineeringDashboardPage />
                 </RoleGuard>
               } />
               
-              {/* Operations & Business Routes (Restricted for sales_exec) */}
+              {/* Operations & Business Routes */}
               <Route path="inventory" element={
-                <RoleGuard allowedRoles={['owner_admin', 'warehouse_mgr']}>
+                <RoleGuard routePath="/inventory" allowedRoles={['owner_admin', 'warehouse_mgr']}>
                   <InventoryPage />
                 </RoleGuard>
               } />
               <Route path="dispatch" element={
-                <RoleGuard allowedRoles={['owner_admin', 'warehouse_mgr']}>
+                <RoleGuard routePath="/dispatch" allowedRoles={['owner_admin', 'warehouse_mgr']}>
                   <DispatchPage />
                 </RoleGuard>
               } />
               <Route path="installations" element={
-                <RoleGuard allowedRoles={['owner_admin', 'install_tech']}>
+                <RoleGuard routePath="/installations" allowedRoles={['owner_admin', 'install_tech']}>
                   <InstallationsPage />
                 </RoleGuard>
               } />
               <Route path="workforce" element={
-                <RoleGuard allowedRoles={['owner_admin']}>
+                <RoleGuard routePath="/workforce" allowedRoles={['owner_admin']}>
                   <WorkforcePage />
                 </RoleGuard>
               } />
               <Route path="activity-center" element={
-                <RoleGuard allowedRoles={['owner_admin']}>
+                <RoleGuard routePath="/activity-center" allowedRoles={['owner_admin']}>
                   <EmployeeActivityCenterPage />
                 </RoleGuard>
               } />
               <Route path="departments" element={
-                <RoleGuard allowedRoles={['owner_admin']}>
+                <RoleGuard routePath="/departments" allowedRoles={['owner_admin']}>
                   <DepartmentsTeamsPage />
                 </RoleGuard>
               } />
               <Route path="roles-permissions" element={
-                <RoleGuard allowedRoles={['owner_admin']}>
+                <RoleGuard routePath="/roles-permissions" allowedRoles={['owner_admin']}>
                   <RolesPermissionsPage />
                 </RoleGuard>
               } />
               <Route path="approvals" element={
-                <RoleGuard allowedRoles={['owner_admin']}>
+                <RoleGuard routePath="/approvals" allowedRoles={['owner_admin']}>
                   <ApprovalsRequestsPage />
                 </RoleGuard>
               } />
               <Route path="ai-agents" element={
-                <RoleGuard allowedRoles={['owner_admin']}>
+                <RoleGuard routePath="/ai-agents" allowedRoles={['owner_admin']}>
                   <AiAgentManagementPage />
                 </RoleGuard>
               } />
               <Route path="warranty" element={
-                <RoleGuard allowedRoles={['owner_admin', 'support_exec']}>
+                <RoleGuard routePath="/warranty" allowedRoles={['owner_admin', 'support_exec', 'warehouse_mgr']}>
                   <WarrantyPage />
                 </RoleGuard>
               } />
               <Route path="service" element={
-                <RoleGuard allowedRoles={['owner_admin', 'support_exec', 'install_tech']}>
+                <RoleGuard routePath="/service" allowedRoles={['owner_admin', 'support_exec', 'install_tech']}>
                   <ServiceComplaintsPage />
                 </RoleGuard>
               } />
               <Route path="finance" element={
-                <RoleGuard allowedRoles={['owner_admin', 'accountant']}>
+                <RoleGuard routePath="/finance" allowedRoles={['owner_admin', 'accountant']}>
                   <FinancePage />
                 </RoleGuard>
               } />
               <Route path="reports" element={
-                <RoleGuard allowedRoles={['owner_admin', 'accountant']}>
+                <RoleGuard routePath="/reports" allowedRoles={['owner_admin', 'accountant']}>
                   <ReportsPage />
                 </RoleGuard>
               } />
               <Route path="ai" element={
-                <RoleGuard allowedRoles={['owner_admin']}>
+                <RoleGuard routePath="/ai" allowedRoles={['owner_admin']}>
                   <AiCommandCenterPage />
                 </RoleGuard>
               } />
               <Route path="agent-activity" element={
-                <RoleGuard allowedRoles={['owner_admin']}>
+                <RoleGuard routePath="/agent-activity" allowedRoles={['owner_admin']}>
                   <AgentActivityPage />
                 </RoleGuard>
               } />

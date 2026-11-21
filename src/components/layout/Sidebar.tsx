@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { UserRole } from '../../types';
+import { isRouteAllowedForRole } from '../../utils/rbac';
 
 interface NavItem {
   name: string;
@@ -539,7 +540,7 @@ export const Sidebar: React.FC = () => {
           name: 'Installations', 
           path: '/installations', 
           icon: Wrench, 
-          allowedRoles: ['owner_admin', 'install_tech', 'warehouse_mgr'] 
+          allowedRoles: ['owner_admin', 'install_tech'] 
         },
         { 
           name: 'Workforce', 
@@ -591,7 +592,7 @@ export const Sidebar: React.FC = () => {
           name: 'AI Command Center', 
           path: '/ai', 
           icon: Bot, 
-          allowedRoles: ['owner_admin', 'warehouse_mgr', 'accountant'] 
+          allowedRoles: ['owner_admin'] 
         },
         { 
           name: 'Agent Activity', 
@@ -662,9 +663,10 @@ export const Sidebar: React.FC = () => {
       {/* Navigation Sections */}
       <div className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
         {sectionsToRender.map(section => {
-          // Filter items based on current active user role
+          // Strictly filter items using both allowedRoles and authoritative isRouteAllowedForRole
           const visibleItems = section.items.filter(item => 
-            item.allowedRoles.includes(currentUser.role)
+            item.allowedRoles.includes(currentUser.role) && 
+            isRouteAllowedForRole(item.path, currentUser.role)
           );
 
           if (visibleItems.length === 0) return null;

@@ -8,7 +8,7 @@ import { WarrantyRecord } from '../types';
 import { StatusBadge } from '../components/common/StatusBadge';
 
 export const WarrantyPage: React.FC = () => {
-  const { warranties, showToast } = useApp();
+  const { warranties, currentUser, showToast } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -35,6 +35,21 @@ export const WarrantyPage: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* Read-Only Mode Banner for Warehouse & Supply Chain */}
+      {currentUser.role === 'warehouse_mgr' && (
+        <div className="p-3 bg-sand-100 border border-warmGrey rounded-card flex items-center justify-between shadow-xs">
+          <div className="flex items-center space-x-2.5 text-xs text-charcoal">
+            <ShieldCheck className="w-4 h-4 text-navy shrink-0" />
+            <span>
+              <strong>Read-Only Equipment Warranty Traceability:</strong> Hardware serial lookup and dispatch coverage verification active. (Claim adjudication managed by Client Care).
+            </span>
+          </div>
+          <span className="px-2 py-0.5 text-[10px] font-bold text-navy bg-white border border-warmGrey rounded-md shrink-0">
+            Read-Only View
+          </span>
+        </div>
+      )}
 
       {/* Warranty Duration Rules Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
