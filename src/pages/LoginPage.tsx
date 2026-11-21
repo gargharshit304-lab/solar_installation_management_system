@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Sun, Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { UserRole } from '../types';
 import { DotGrid } from '../components/common/DotGrid';
+import { AuthInitializingScreen } from '../components/common/AuthInitializingScreen';
 
 const DEMO_PASSWORD = 'solaros2026';
 
@@ -19,14 +20,27 @@ const ROLE_DASHBOARDS: Record<UserRole, string> = {
 };
 
 export const LoginPage: React.FC = () => {
-  const { usersList, switchRole, showToast, login } = useApp();
+  const { usersList, switchRole, showToast, login, isAuthenticated, isInitializing, currentUser } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
+
+  // If already authenticated, redirect user immediately to their destination or dashboard
+  useEffect(() => {
+    if (!isInitializing && isAuthenticated) {
+      const destination = location.state?.from?.pathname || ROLE_DASHBOARDS[currentUser.role] || '/';
+      navigate(destination, { replace: true });
+    }
+  }, [isInitializing, isAuthenticated, currentUser, location.state, navigate]);
+
+  if (isInitializing) {
+    return <AuthInitializingScreen />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +53,7 @@ export const LoginPage: React.FC = () => {
 
     setIsLoading(true);
     
-    const user = await login(email, password);
+    const user = await login(email, password, rememberMe);
     
     if (!user) {
       setError('Invalid email or password. Demo password: solaros2026');
@@ -48,13 +62,12 @@ export const LoginPage: React.FC = () => {
     }
 
     setTimeout(() => {
-      switchRole(user.role);
       showToast(`Welcome back, ${user.name}!`, 'success');
       
-      const dashboardRoute = ROLE_DASHBOARDS[user.role] || '/';
-      navigate(dashboardRoute, { replace: true });
+      const destination = location.state?.from?.pathname || ROLE_DASHBOARDS[user.role] || '/';
+      navigate(destination, { replace: true });
       setIsLoading(false);
-    }, 500);
+    }, 400);
   };
 
   return (

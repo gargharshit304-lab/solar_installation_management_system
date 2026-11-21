@@ -25,6 +25,14 @@ import {
   INITIAL_EMPLOYEE_ACTIVITIES, INITIAL_AI_AGENTS,
   INITIAL_SMART_ALERTS, INITIAL_SUBSIDY_APPLICATIONS
 } from '../data/mockData';
+import { 
+  AuthSession, 
+  retrieveStoredSession, 
+  persistSession, 
+  clearStoredSession, 
+  generateAuthSession, 
+  verifySessionToken 
+} from '../utils/authSession';
 
 export interface Toast {
   id: string;
@@ -32,12 +40,21 @@ export interface Toast {
   type: 'success' | 'error' | 'warning' | 'info';
 }
 
+export type AuthStatus = 'INITIALIZING' | 'AUTHENTICATED' | 'UNAUTHENTICATED';
+
 interface AppContextType {
-  // Auth & Role
+  // Auth & Session
   currentUser: UserProfile;
+  session: AuthSession | null;
+  role: UserRole;
+  permissions: string[];
+  authStatus: AuthStatus;
+  isInitializing: boolean;
+  isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<UserProfile | null>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<UserProfile | null>;
   logout: () => void;
+  refreshSession: () => Promise<boolean>;
   switchRole: (role: UserRole) => void;
   usersList: UserProfile[];
   
@@ -205,10 +222,90 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Active User Profile (Defaults to Owner Vikramaditya Rao)
+  // Session & Authentication State
   const [currentUser, setCurrentUser] = useState<UserProfile>(SYSTEM_USERS[0]);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [authStatus, setAuthStatus] = useState<AuthStatus>('INITIALIZING');
+
+  const isAuthenticated = authStatus === 'AUTHENTICATED';
+  const isInitializing = authStatus === 'INITIALIZING';
+  const isLoading = isInitializing;
+
+  // Session Restoration Lifecycle
+  useEffect(() => {
+    let isMounted = true;
+
+    const restoreSession = async () => {
+      try {
+        const stored = retrieveStoredSession();
+        if (!stored || !stored.token || !stored.userId) {
+          if (isMounted) {
+            setAuthStatus('UNAUTHENTICATED');
+            setSession(null);
+          }
+          return;
+        }
+
+        // Validate token integrity and expiration
+        const verification = verifySessionToken(stored.token);
+        if (!verification.valid) {
+          // If expired, attempt transparent rotation using refresh token
+          if (verification.reason === 'Token expired' && stored.refreshToken) {
+            const user = SYSTEM_USERS.find(u => u.id === stored.userId);
+            if (user) {
+              const rotatedSession = generateAuthSession(user, stored.rememberMe);
+              persistSession(rotatedSession);
+              if (isMounted) {
+                setCurrentUser(user);
+                setSession(rotatedSession);
+                setAuthStatus('AUTHENTICATED');
+              }
+              return;
+            }
+          }
+
+          // Invalidation: clear stale session data
+          clearStoredSession();
+          if (isMounted) {
+            setAuthStatus('UNAUTHENTICATED');
+            setSession(null);
+          }
+          return;
+        }
+
+        // Token valid: restore trusted user record from SYSTEM_USERS repository
+        const user = SYSTEM_USERS.find(u => u.id === stored.userId);
+        if (!user) {
+          clearStoredSession();
+          if (isMounted) {
+            setAuthStatus('UNAUTHENTICATED');
+            setSession(null);
+          }
+          return;
+        }
+
+        if (isMounted) {
+          setCurrentUser(user);
+          setSession(stored);
+          setAuthStatus('AUTHENTICATED');
+        }
+      } catch (err) {
+        console.error('Session restoration error:', err);
+        clearStoredSession();
+        if (isMounted) {
+          setAuthStatus('UNAUTHENTICATED');
+          setSession(null);
+        }
+      }
+    };
+
+    restoreSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // UI states
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -282,30 +379,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const switchRole = (role: UserRole) => {
     const matched = SYSTEM_USERS.find(u => u.role === role);
     if (matched) {
+      const newSession = generateAuthSession(matched, session?.rememberMe ?? false);
+      persistSession(newSession);
       setCurrentUser(matched);
+      setSession(newSession);
+      setAuthStatus('AUTHENTICATED');
       showToast(`Switched active view to ${matched.roleTitle} (${matched.name})`, 'info');
     }
   };
 
-  const login = async (email: string, password: string): Promise<UserProfile | null> => {
+  const login = async (email: string, password: string, rememberMe = false): Promise<UserProfile | null> => {
     const DEMO_PASSWORD = 'solaros2026';
     if (password !== DEMO_PASSWORD) {
       return null;
     }
     const user = SYSTEM_USERS.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (user) {
+      const newSession = generateAuthSession(user, rememberMe);
+      persistSession(newSession);
       setCurrentUser(user);
-      setIsAuthenticated(true);
+      setSession(newSession);
+      setAuthStatus('AUTHENTICATED');
       return user;
     }
     return null;
   };
 
   const logout = () => {
+    clearStoredSession();
     setCurrentUser(SYSTEM_USERS[0]);
-    setIsAuthenticated(false);
+    setSession(null);
+    setAuthStatus('UNAUTHENTICATED');
     showToast('Logged out successfully', 'info');
   };
+
+  const refreshSession = async (): Promise<boolean> => {
+    const stored = retrieveStoredSession();
+    if (!stored || !stored.refreshToken) return false;
+    const user = SYSTEM_USERS.find(u => u.id === stored.userId);
+    if (!user) {
+      clearStoredSession();
+      setSession(null);
+      setAuthStatus('UNAUTHENTICATED');
+      return false;
+    }
+    const newSession = generateAuthSession(user, stored.rememberMe);
+    persistSession(newSession);
+    setSession(newSession);
+    setCurrentUser(user);
+    setAuthStatus('AUTHENTICATED');
+    return true;
+  };
+
+  // Derive granular permissions from role definition
+  const roleDefinition = rolesPermissions.find(r => r.roleKey === currentUser.role);
+  const permissions = roleDefinition
+    ? Object.entries(roleDefinition.permissions).flatMap(([module, actions]) => actions.map(a => `${module}.${a}`))
+    : ['*'];
 
   // Customers
   const addCustomer = (customerData: Omit<Customer, 'id' | 'customerCode' | 'registrationDate'>): Customer => {
@@ -1978,9 +2108,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider value={{
       currentUser,
+      session,
+      role: currentUser.role,
+      permissions,
+      authStatus,
+      isInitializing,
+      isLoading,
       isAuthenticated,
       login,
       logout,
+      refreshSession,
       switchRole,
       usersList: SYSTEM_USERS,
       isGlobalSearchOpen,

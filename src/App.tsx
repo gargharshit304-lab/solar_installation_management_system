@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
+import { AccessDeniedPage } from './components/common/AccessDeniedPage';
 
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -65,13 +66,19 @@ function HomeRouter() {
   if (currentUser.role === 'install_tech') {
     return <InstallationsPage />;
   }
+  if (currentUser.role === 'warehouse_mgr') {
+    return <InventoryPage />;
+  }
   return <DashboardPage />;
 }
 
 function RoleGuard({ allowedRoles, children }: { allowedRoles: string[]; children: React.ReactNode }) {
-  const { currentUser } = useApp();
+  const { currentUser, isInitializing } = useApp();
+  if (isInitializing) {
+    return null;
+  }
   if (!allowedRoles.includes(currentUser.role)) {
-    return <Navigate to="/" replace />;
+    return <AccessDeniedPage />;
   }
   return <>{children}</>;
 }
