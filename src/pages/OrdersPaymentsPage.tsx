@@ -58,7 +58,7 @@ export const OrdersPaymentsPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -68,19 +68,19 @@ export const OrdersPaymentsPage: React.FC = () => {
             Confirmed project contracts, milestone payment receipts & official customer tax invoices
           </p>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-white border border-warmGrey/60 shadow-card">
           <button
             onClick={() => setActiveTab('orders')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-colors ${
-              activeTab === 'orders' ? 'bg-navy text-white' : 'bg-white text-charcoal border border-warmGrey hover:bg-sand-100'
+            className={`px-3.5 py-2 text-xs font-semibold rounded-lg transition-colors ${
+              activeTab === 'orders' ? 'bg-navy text-white shadow-xs' : 'text-charcoal hover:bg-sand-100'
             }`}
           >
             Project Orders ({orders.length})
           </button>
           <button
             onClick={() => setActiveTab('payments')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-colors ${
-              activeTab === 'payments' ? 'bg-navy text-white' : 'bg-white text-charcoal border border-warmGrey hover:bg-sand-100'
+            className={`px-3.5 py-2 text-xs font-semibold rounded-lg transition-colors ${
+              activeTab === 'payments' ? 'bg-navy text-white shadow-xs' : 'text-charcoal hover:bg-sand-100'
             }`}
           >
             Payment Receipts ({payments.length})
@@ -89,29 +89,36 @@ export const OrdersPaymentsPage: React.FC = () => {
       </div>
 
       {/* Financial Overview Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-card p-4 border border-warmGrey/60 shadow-card">
-          <span className="text-xs text-mutedGrey font-medium">Total Contracted Orders</span>
-          <p className="text-xl font-bold text-charcoal mt-1">₹{totalContractedValue.toLocaleString('en-IN')}</p>
-          <span className="text-[11px] text-mutedGrey mt-1 block">Active across {orders.length} accounts</span>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card">
+          <span className="text-xs text-mutedGrey font-semibold uppercase tracking-wide">Total Contracted Orders</span>
+          <p className="text-2xl font-bold text-charcoal mt-2">₹{totalContractedValue.toLocaleString('en-IN')}</p>
+          <span className="text-[11px] text-mutedGrey mt-2 block">Active across {orders.length} accounts</span>
         </div>
-        <div className="bg-white rounded-card p-4 border border-warmGrey/60 shadow-card">
-          <span className="text-xs text-mutedGrey font-medium">Collected Cash Inflow</span>
-          <p className="text-xl font-bold text-sage mt-1">₹{totalCollections.toLocaleString('en-IN')}</p>
-          <span className="text-[11px] text-sage font-semibold mt-1 block">
+        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card">
+          <span className="text-xs text-mutedGrey font-semibold uppercase tracking-wide">Collected Cash Inflow</span>
+          <p className="text-2xl font-bold text-sage mt-2">₹{totalCollections.toLocaleString('en-IN')}</p>
+          <span className="text-[11px] text-sage font-semibold mt-2 block">
             {((totalCollections / (totalContractedValue || 1)) * 100).toFixed(1)}% Realized
           </span>
         </div>
-        <div className="bg-white rounded-card p-4 border border-warmGrey/60 shadow-card">
-          <span className="text-xs text-mutedGrey font-medium">Outstanding Milestone Balance</span>
-          <p className="text-xl font-bold text-terracotta mt-1">₹{totalReceivables.toLocaleString('en-IN')}</p>
-          <span className="text-[11px] text-mutedGrey mt-1 block">Due upon dispatch & net meter</span>
+        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card">
+          <span className="text-xs text-mutedGrey font-semibold uppercase tracking-wide">Outstanding Milestone Balance</span>
+          <p className="text-2xl font-bold text-terracotta mt-2">₹{totalReceivables.toLocaleString('en-IN')}</p>
+          <span className="text-[11px] text-mutedGrey mt-2 block">Due upon dispatch & net meter</span>
         </div>
       </div>
 
       {/* Tab: Orders View */}
       {activeTab === 'orders' && (
         <div className="bg-white rounded-card border border-warmGrey/60 shadow-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-warmGrey/60 flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-charcoal">Project Orders</h2>
+              <p className="text-[11px] text-mutedGrey mt-0.5">Contract values and milestone balances</p>
+            </div>
+            <span className="text-xs font-semibold text-navy">{orders.length} Active Orders</span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-sand-50 text-mutedGrey font-semibold uppercase tracking-wider border-b border-warmGrey">
@@ -184,6 +191,13 @@ export const OrdersPaymentsPage: React.FC = () => {
       {/* Tab: Payments History View */}
       {activeTab === 'payments' && (
         <div className="bg-white rounded-card border border-warmGrey/60 shadow-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-warmGrey/60 flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-charcoal">Payment Receipts</h2>
+              <p className="text-[11px] text-mutedGrey mt-0.5">Recorded customer payments and verification details</p>
+            </div>
+            <span className="text-xs font-semibold text-navy">{payments.length} Receipts</span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-sand-50 text-mutedGrey font-semibold uppercase tracking-wider border-b border-warmGrey">

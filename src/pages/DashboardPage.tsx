@@ -58,7 +58,7 @@ export const DashboardPage: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       
       {/* Page Title & Status Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -85,7 +85,7 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* 1. KPI Cards Row (6 Cards as specified) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-3 gap-5">
         <KpiCard
           title="Total Customers"
           value={totalCustomers}

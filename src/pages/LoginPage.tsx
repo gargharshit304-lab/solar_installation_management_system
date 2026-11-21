@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Sun, Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { UserRole } from '../types';
+import { DotGrid } from '../components/common/DotGrid';
 
 const DEMO_PASSWORD = 'solaros2026';
 
@@ -56,25 +57,71 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-sand flex items-center justify-center p-4 selection:bg-navy selection:text-white">
-      <div className="w-full max-w-md">
-        {/* Logo & Brand */}
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center space-x-3 mb-6">
-            <div className="w-14 h-14 rounded-2xl bg-amber flex items-center justify-center text-charcoal shadow-lg">
-              <Sun className="w-7 h-7 fill-current" />
+    <main className="relative min-h-screen overflow-hidden bg-sand-100 selection:bg-navy selection:text-white" style={{ fontFamily: 'Cambria, Georgia, serif' }}>
+      <DotGrid
+        baseColor="#D8D0C4"
+        activeColor="#183153"
+        dotSize={1.5}
+        gap={18}
+        proximity={110}
+        glow={0.45}
+      />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-sand-50/90 via-sand-100/45 to-sand/70" />
+
+      <div className="relative z-10 min-h-screen">
+        <nav className="mx-auto flex max-w-[1440px] items-center justify-between px-6 py-5 sm:px-10 lg:px-14">
+          <Link to="/login" className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber text-charcoal shadow-card">
+              <Sun className="h-5 w-5 fill-current" />
             </div>
-            <div className="text-left">
-              <div className="font-bold text-2xl tracking-tight text-charcoal">SolarOS</div>
-              <div className="text-xs font-semibold uppercase tracking-wider text-amber">Enterprise</div>
+            <div>
+              <div className="text-xl font-bold leading-none text-charcoal">SolarOS</div>
+              <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.22em] text-amber">Enterprise</div>
             </div>
           </Link>
-          <h1 className="text-xl font-bold text-charcoal">Sign In to Your Dashboard</h1>
-          <p className="text-sm text-mutedGrey mt-1">SunPower Solutions Operating System</p>
-        </div>
+          <button
+            type="button"
+            onClick={() => document.getElementById('sign-in')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+            className="rounded-xl border border-warmGrey/80 bg-white/80 px-4 py-2 text-xs font-bold text-navy shadow-card backdrop-blur-sm transition-colors hover:bg-white"
+          >
+            Sign In
+          </button>
+        </nav>
 
-        {/* Login Card */}
-        <div className="bg-white rounded-2xl border border-warmGrey shadow-card p-6 sm:p-8">
+        <div className="mx-auto grid min-h-[calc(100vh-81px)] max-w-[1440px] items-center gap-12 px-6 pb-12 pt-8 sm:px-10 lg:grid-cols-[minmax(0,1.15fr)_420px] lg:px-14 lg:pb-16">
+          <section className="max-w-3xl">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-warmGrey/70 bg-white/70 px-3 py-1.5 text-xs font-semibold text-navy shadow-card backdrop-blur-sm">
+              <span className="h-2 w-2 rounded-full bg-sage" />
+              SunPower Solutions Operating System
+            </div>
+            <h1 className="max-w-2xl text-5xl font-bold leading-[1.02] tracking-tight text-charcoal sm:text-6xl lg:text-[72px]">
+              Power every solar project with clarity.
+            </h1>
+            <p className="mt-6 max-w-xl text-lg leading-8 text-mutedGrey-dark">
+              One secure workspace for sales, operations, finance, installations and customer service.
+            </p>
+
+            <div className="mt-8 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
+              {[
+                ['Live operations', 'Plans, surveys and installations'],
+                ['Financial control', 'Orders, payments and profitability'],
+                ['One connected team', 'Role-based enterprise access'],
+              ].map(([title, description]) => (
+                <div key={title} className="rounded-xl border border-warmGrey/70 bg-white/65 p-4 shadow-card backdrop-blur-sm">
+                  <div className="text-sm font-bold text-charcoal">{title}</div>
+                  <div className="mt-1 text-xs leading-5 text-mutedGrey">{description}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <div id="sign-in" className="w-full max-w-md justify-self-end">
+            <div className="mb-5 text-left">
+              <h2 className="text-2xl font-bold text-charcoal">Sign in to SolarOS</h2>
+              <p className="mt-1 text-sm text-mutedGrey">Access your role-based dashboard</p>
+            </div>
+
+            <div className="rounded-2xl border border-warmGrey/80 bg-white/92 p-6 shadow-[0_20px_50px_-20px_rgba(24,49,83,0.22)] backdrop-blur-md sm:p-7">
           {error && (
             <div className="mb-6 p-3.5 bg-terracotta-50 border border-terracotta/30 rounded-xl flex items-start space-x-3 animate-in slide-in-from-top-2">
               <AlertCircle className="w-5 h-5 text-terracotta shrink-0 mt-0.5" />
@@ -201,13 +248,10 @@ export const LoginPage: React.FC = () => {
               ))}
             </div>
           </div>
-        </div>
-
-        {/* Footer */}
-        <div className="text-center mt-6 text-xs text-mutedGrey">
-          <p>SunPower Solutions &copy; 2026 &mdash; Enterprise Solar Installation Management</p>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 };

@@ -1,22 +1,139 @@
 import React, { useState } from 'react';
 import { 
-  BarChart3, Download, Calendar, Filter, FileSpreadsheet, 
-  TrendingUp, Users, Wrench, ShieldCheck, IndianRupee 
+  Download, Calendar, Users, Wrench, Package, ShieldCheck,
+  IndianRupee, ArrowUpRight, CircleCheck
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
+type ReportType = 'sales' | 'installations' | 'inventory' | 'warranty' | 'profitability';
+
+const ReportList: React.FC<{
+  title: string;
+  rows: Array<{ primary: string; secondary: string; value: string }>;
+}> = ({ title, rows }) => (
+  <div className="rounded-xl border border-warmGrey/60 overflow-hidden">
+    <div className="border-b border-warmGrey/60 bg-sand-50/50 px-4 py-3">
+      <h3 className="text-xs font-bold text-charcoal">{title}</h3>
+    </div>
+    <div className="divide-y divide-warmGrey/40">
+      {rows.length > 0 ? rows.map((row, index) => (
+        <div
+          key={`${row.secondary}-${index}`}
+          className="group flex items-center justify-between gap-4 px-4 py-3 transition-all duration-300 hover:bg-sand-50/80"
+        >
+          <div className="min-w-0">
+            <p className="truncate text-xs font-semibold text-charcoal transition-transform duration-300 group-hover:translate-x-1">
+              {row.primary}
+            </p>
+            <p className="mt-0.5 truncate text-[11px] text-mutedGrey">{row.secondary}</p>
+          </div>
+          <span className="shrink-0 text-xs font-bold text-navy">{row.value}</span>
+        </div>
+      )) : (
+        <p className="px-4 py-5 text-xs text-mutedGrey">No records available for this period.</p>
+      )}
+    </div>
+  </div>
+);
+
 export const ReportsPage: React.FC = () => {
-  const { customers, orders, inventory, profitability, complaints, showToast } = useApp();
+  const {
+    customers,
+    orders,
+    payments,
+    inventory,
+    installations,
+    warranties,
+    profitability,
+    complaints,
+    showToast
+  } = useApp();
 
   const [dateRange, setDateRange] = useState('month');
-  const [reportType, setReportType] = useState('sales');
+  const [reportType, setReportType] = useState<ReportType>('sales');
 
   const exportReport = () => {
     showToast(`Exported ${reportType.toUpperCase()} report (${dateRange}) to CSV`, 'success');
   };
 
+  const contractedValue = orders.reduce((sum, order) => sum + order.totalOrderValue, 0);
+  const collectedValue = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const outstandingValue = orders.reduce((sum, order) => sum + order.outstandingBalance, 0);
+  const completedInstallations = installations.filter(item => item.status === 'completed').length;
+  const activeInstallations = installations.filter(item => item.status !== 'completed').length;
+  const lowStockItems = inventory.filter(item => item.stockStatus !== 'in_stock');
+  const inventoryValue = inventory.reduce(
+    (sum, item) => sum + item.availableQuantity * item.unitCost,
+    0
+  );
+  const activeWarranties = warranties.filter(item => item.status === 'active').length;
+  const openTickets = complaints.filter(item => item.status !== 'resolved' && item.status !== 'closed').length;
+  const totalProfit = profitability.reduce((sum, item) => sum + item.profit, 0);
+  const totalRevenue = profitability.reduce((sum, item) => sum + item.revenue, 0);
+  const averageMargin = totalRevenue
+    ? (totalProfit / totalRevenue) * 100
+    : 0;
+
+  const reportOptions: {
+    id: ReportType;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }[] = [
+    { id: 'sales', label: 'Sales', icon: Users },
+    { id: 'installations', label: 'Installation', icon: Wrench },
+    { id: 'inventory', label: 'Inventory', icon: Package },
+    { id: 'warranty', label: 'Warranty', icon: ShieldCheck },
+    { id: 'profitability', label: 'Profitability', icon: IndianRupee },
+  ];
+
+  const salesDetails = [
+    { label: 'Customer Accounts', value: customers.length.toString(), note: 'Registered across the CRM' },
+    { label: 'Approved Contracts', value: orders.length.toString(), note: `${orders.filter(order => order.orderStatus === 'completed').length} completed orders` },
+    { label: 'Contracted Value', value: `₹${contractedValue.toLocaleString('en-IN')}`, note: 'Total confirmed order value' },
+    { label: 'Cash Collected', value: `₹${collectedValue.toLocaleString('en-IN')}`, note: 'Verified customer receipts' },
+  ];
+
+  const installationDetails = [
+    { label: 'Completed Sites', value: completedInstallations.toString(), note: 'Commissioned installations' },
+    { label: 'Active Work Orders', value: activeInstallations.toString(), note: 'Scheduled or in progress' },
+    { label: 'Monthly Target', value: '40 Projects', note: 'Installation capacity target' },
+    { label: 'Checklist Compliance', value: '100%', note: 'DISCOM and commissioning checks' },
+  ];
+
+  const inventoryDetails = [
+    { label: 'Stock Value', value: `₹${inventoryValue.toLocaleString('en-IN')}`, note: 'Current available stock at cost' },
+    { label: 'SKU Locations', value: inventory.length.toString(), note: 'Tracked inventory categories' },
+    { label: 'Low Stock Alerts', value: lowStockItems.length.toString(), note: 'Items at or below threshold' },
+    { label: 'Reserved Units', value: inventory.reduce((sum, item) => sum + item.reservedQuantity, 0).toString(), note: 'Allocated to active projects' },
+  ];
+
+  const warrantyDetails = [
+    { label: 'Active Warranties', value: activeWarranties.toString(), note: 'Registered equipment warranties' },
+    { label: 'Open Service Tickets', value: openTickets.toString(), note: 'Awaiting resolution or close-out' },
+    { label: 'Under Warranty', value: complaints.filter(item => item.isUnderWarranty).length.toString(), note: 'Tickets covered by warranty' },
+    { label: 'Warranty Coverage', value: '100%', note: 'Recorded product coverage data' },
+  ];
+
+  const profitabilityDetails = [
+    { label: 'Realized Revenue', value: `₹${totalRevenue.toLocaleString('en-IN')}`, note: 'Project-wise realized revenue' },
+    { label: 'Gross Project Profit', value: `₹${totalProfit.toLocaleString('en-IN')}`, note: 'Net of project operating costs' },
+    { label: 'Average Margin', value: `${averageMargin.toFixed(2)}%`, note: 'Weighted project margin' },
+    { label: 'Outstanding Receivable', value: `₹${outstandingValue.toLocaleString('en-IN')}`, note: 'Remaining customer milestone balance' },
+  ];
+
+  const reportDetails: Record<ReportType, typeof salesDetails> = {
+    sales: salesDetails,
+    installations: installationDetails,
+    inventory: inventoryDetails,
+    warranty: warrantyDetails,
+    profitability: profitabilityDetails,
+  };
+
+  const activeOption = reportOptions.find(option => option.id === reportType)!;
+  const ActiveIcon = activeOption.icon;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -36,19 +153,25 @@ export const ReportsPage: React.FC = () => {
       </div>
 
       {/* Date Range & Category Filter Shelf */}
-      <div className="bg-white rounded-card p-4 border border-warmGrey/60 shadow-card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex flex-wrap gap-2 text-xs">
-          {['sales', 'installations', 'inventory', 'warranty', 'profitability'].map(type => (
-            <button
-              key={type}
-              onClick={() => setReportType(type)}
-              className={`px-3 py-1.5 rounded-xl font-semibold capitalize transition-colors ${
-                reportType === type ? 'bg-navy text-white shadow-xs' : 'bg-sand-50 text-charcoal hover:bg-sand-100 border border-warmGrey'
-              }`}
-            >
-              {type} Report
-            </button>
-          ))}
+      <div className="bg-white rounded-card p-3 border border-warmGrey/60 shadow-card flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2" role="tablist" aria-label="Report categories">
+          {reportOptions.map(option => {
+            const Icon = option.icon;
+            const isActive = reportType === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setReportType(option.id)}
+                className={`report-category-tab group ${isActive ? 'report-category-tab--active' : ''}`}
+              >
+                <Icon className="report-category-tab__icon h-4 w-4" />
+                <span className="report-category-tab__label">{option.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex items-center space-x-2 text-xs">
@@ -67,62 +190,122 @@ export const ReportsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Report Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        
-        {/* Sales Performance Card */}
-        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-sm text-charcoal flex items-center space-x-2">
-              <Users className="w-4 h-4 text-navy" />
-              <span>Customer Acquisition & Conversion Velocity</span>
-            </h3>
-            <span className="text-xs font-bold text-sage">78.4% Conversion</span>
-          </div>
-
-          <div className="space-y-3 text-xs">
-            <div className="flex justify-between p-2.5 rounded-lg bg-sand-50 border border-warmGrey/60">
-              <span className="text-mutedGrey">Total Inbound Inquiries:</span>
-              <strong className="text-charcoal">{customers.length} Accounts</strong>
+      {/* Active Report Details */}
+      <section
+        key={reportType}
+        className="overflow-hidden rounded-card border border-warmGrey/60 bg-white shadow-card"
+        style={{ animation: 'reportPanelIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both' }}
+        role="tabpanel"
+      >
+        <div className="flex items-center justify-between border-b border-warmGrey/60 bg-sand-50/50 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-navy shadow-card">
+              <ActiveIcon className="h-4 w-4" />
             </div>
-            <div className="flex justify-between p-2.5 rounded-lg bg-sand-50 border border-warmGrey/60">
-              <span className="text-mutedGrey">Approved Contracts:</span>
-              <strong className="text-navy">{orders.length} Executed</strong>
-            </div>
-            <div className="flex justify-between p-2.5 rounded-lg bg-sand-50 border border-warmGrey/60">
-              <span className="text-mutedGrey">Avg Solar Sizing:</span>
-              <strong className="text-charcoal">4.2 kW per site</strong>
+            <div>
+              <h2 className="text-sm font-bold text-charcoal">{activeOption.label} Report</h2>
+              <p className="mt-0.5 text-[11px] text-mutedGrey">
+                {dateRange === 'month' ? 'November 2026 reporting period' : `${dateRange.replace('_', ' ')} reporting period`}
+              </p>
             </div>
           </div>
+          <span className="hidden items-center gap-1 text-[11px] font-semibold text-sage sm:flex">
+            <CircleCheck className="h-3.5 w-3.5" />
+            Data verified
+          </span>
         </div>
 
-        {/* Installation & Operations Yield */}
-        <div className="bg-white rounded-card p-5 border border-warmGrey/60 shadow-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-sm text-charcoal flex items-center space-x-2">
-              <Wrench className="w-4 h-4 text-amber" />
-              <span>Installation Operational Velocity</span>
-            </h3>
-            <span className="text-xs font-bold text-navy">Target: 40/Mo</span>
-          </div>
-
-          <div className="space-y-3 text-xs">
-            <div className="flex justify-between p-2.5 rounded-lg bg-sand-50 border border-warmGrey/60">
-              <span className="text-mutedGrey">Monthly Completed Projects:</span>
-              <strong className="text-sage">38 Completed</strong>
-            </div>
-            <div className="flex justify-between p-2.5 rounded-lg bg-sand-50 border border-warmGrey/60">
-              <span className="text-mutedGrey">Average Installation Time:</span>
-              <strong className="text-charcoal">1.8 Days per 5kW Rooftop</strong>
-            </div>
-            <div className="flex justify-between p-2.5 rounded-lg bg-sand-50 border border-warmGrey/60">
-              <span className="text-mutedGrey">Checklist Compliance:</span>
-              <strong className="text-sage">100% DISCOM Net-Meter Synced</strong>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4">
+          {reportDetails[reportType].map(detail => (
+            <article
+              key={detail.label}
+              className="group rounded-xl border border-warmGrey/60 bg-sand-50/45 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-warmGrey hover:bg-white hover:shadow-card"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-mutedGrey">
+                  {detail.label}
+                </span>
+                <ArrowUpRight className="h-3.5 w-3.5 text-warmGrey-dark transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-navy" />
+              </div>
+              <p className="mt-2 text-xl font-bold text-charcoal">{detail.value}</p>
+              <p className="mt-1 text-[11px] leading-4 text-mutedGrey">{detail.note}</p>
+            </article>
+          ))}
         </div>
 
-      </div>
+        <div className="grid grid-cols-1 gap-4 border-t border-warmGrey/60 p-5 lg:grid-cols-2">
+          {reportType === 'sales' && (
+            <>
+              <ReportList title="Recent Orders" rows={orders.slice(0, 4).map(order => ({
+                primary: order.customerName,
+                secondary: order.orderNumber,
+                value: `₹${order.totalOrderValue.toLocaleString('en-IN')}`,
+              }))} />
+              <ReportList title="Payment Milestones" rows={payments.slice(0, 4).map(payment => ({
+                primary: payment.customerName,
+                secondary: payment.paymentStage.replace('_', ' '),
+                value: `₹${payment.amount.toLocaleString('en-IN')}`,
+              }))} />
+            </>
+          )}
+          {reportType === 'installations' && (
+            <>
+              <ReportList title="Installation Pipeline" rows={installations.slice(0, 4).map(item => ({
+                primary: item.customerName,
+                secondary: item.installationCode,
+                value: item.status.replace('_', ' ').toUpperCase(),
+              }))} />
+              <ReportList title="Open Warranty Tickets" rows={complaints.slice(0, 4).map(item => ({
+                primary: item.customerName,
+                secondary: item.complaintId,
+                value: item.status.replace('_', ' ').toUpperCase(),
+              }))} />
+            </>
+          )}
+          {reportType === 'inventory' && (
+            <>
+              <ReportList title="Low Stock Items" rows={lowStockItems.slice(0, 4).map(item => ({
+                primary: item.name,
+                secondary: item.sku,
+                value: `${item.availableQuantity} units`,
+              }))} />
+              <ReportList title="Top Stock Locations" rows={inventory.slice(0, 4).map(item => ({
+                primary: item.locationBin,
+                secondary: item.category,
+                value: `${item.availableQuantity} available`,
+              }))} />
+            </>
+          )}
+          {reportType === 'warranty' && (
+            <>
+              <ReportList title="Active Warranty Register" rows={warranties.slice(0, 4).map(item => ({
+                primary: item.productName,
+                secondary: item.customerName,
+                value: `Until ${item.warrantyEndDate}`,
+              }))} />
+              <ReportList title="Recent Service Tickets" rows={complaints.slice(0, 4).map(item => ({
+                primary: item.productName,
+                secondary: item.complaintId,
+                value: item.priority.toUpperCase(),
+              }))} />
+            </>
+          )}
+          {reportType === 'profitability' && (
+            <>
+              <ReportList title="Project Profitability" rows={profitability.slice(0, 4).map(item => ({
+                primary: item.customerName,
+                secondary: item.projectCode,
+                value: `₹${item.profit.toLocaleString('en-IN')} / ${item.profitMarginPercent.toFixed(1)}%`,
+              }))} />
+              <ReportList title="Collection Status" rows={orders.slice(0, 4).map(order => ({
+                primary: order.customerName,
+                secondary: order.orderNumber,
+                value: `₹${order.outstandingBalance.toLocaleString('en-IN')} due`,
+              }))} />
+            </>
+          )}
+        </div>
+      </section>
 
     </div>
   );
