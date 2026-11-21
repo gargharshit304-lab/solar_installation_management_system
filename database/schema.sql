@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS roles (
 INSERT INTO roles (id, name, description, permissions) VALUES
 ('owner_admin', 'Owner / Administrator', 'Full system access across all departments, financials, and configurations', '["all"]'::jsonb),
 ('sales_exec', 'Sales Executive', 'Access to customers, enquiries, surveys, quotations, and orders', '["customers.read", "customers.write", "enquiries.all", "surveys.read", "quotations.all", "orders.read"]'::jsonb),
-('survey_tech', 'Survey Technician', 'Access to assigned site surveys, roof measurement data, site photography', '["surveys.assigned", "surveys.submit"]'::jsonb),
+('survey_tech', 'Survey Technician', 'Access to assigned site surveys, roof measurement data, site photography, self-claiming', '["surveys.assigned", "surveys.claim", "surveys.submit"]'::jsonb),
+('engineering_lead', 'Engineering Lead', 'Technical review of survey measurements, shadow analysis, engineering sign-off and approval', '["surveys.all", "surveys.review", "surveys.approve", "surveys.reject"]'::jsonb),
 ('warehouse_mgr', 'Warehouse Manager', 'Access to inventory, products, serial numbers, dispatches, purchase orders', '["inventory.all", "dispatch.all", "products.all"]'::jsonb),
 ('install_tech', 'Installation Technician', 'Access to assigned installations, checklist verification, photos, signatures', '["installations.assigned", "installations.update"]'::jsonb),
 ('support_exec', 'Support Executive', 'Access to customer warranty lookups, service tickets, complaint management', '["warranty.read", "service.all"]'::jsonb),

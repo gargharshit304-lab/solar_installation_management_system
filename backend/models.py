@@ -7,6 +7,7 @@ class UserRole(str, Enum):
     OWNER_ADMIN = "owner_admin"
     SALES_EXEC = "sales_exec"
     SURVEY_TECH = "survey_tech"
+    ENGINEERING_LEAD = "engineering_lead"
     WAREHOUSE_MGR = "warehouse_mgr"
     INSTALL_TECH = "install_tech"
     SUPPORT_EXEC = "support_exec"
@@ -23,12 +24,16 @@ class LeadStatus(str, Enum):
     LOST = "lost"
 
 class SurveyStatus(str, Enum):
+    UNASSIGNED = "unassigned"
     SCHEDULED = "scheduled"
     ASSIGNED = "assigned"
     IN_PROGRESS = "in_progress"
     SUBMITTED = "submitted"
+    CORRECTIONS_REQUIRED = "corrections_required"
     APPROVED = "approved"
     REJECTED = "rejected"
+    RESCHEDULED = "rescheduled"
+    CANCELLED = "cancelled"
 
 class OrderStatus(str, Enum):
     PENDING = "pending"

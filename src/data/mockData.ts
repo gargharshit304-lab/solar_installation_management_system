@@ -71,6 +71,28 @@ export const SYSTEM_USERS: UserProfile[] = [
     roleTitle: 'Chief Financial Accountant',
     avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
     department: 'Finance & Compliance'
+  },
+  {
+    id: 'usr-8',
+    name: 'Mahesh Kadam',
+    email: 'mahesh.k@sunpowersolutions.in',
+    role: 'survey_tech',
+    roleTitle: 'Chief Survey Specialist & Team Lead',
+    avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
+    department: 'Field Engineering',
+    isChiefSurveySpecialist: true,
+    canAssignSurveys: true,
+    canViewTeam: true
+  },
+  {
+    id: 'usr-9',
+    name: 'Sandeep Patil',
+    email: 'sandeep.p@sunpowersolutions.in',
+    role: 'engineering_lead',
+    roleTitle: 'Lead Solar Design & Approvals Engineer',
+    avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&auto=format&fit=crop&q=80',
+    department: 'Engineering & Feasibility',
+    canApproveSurveys: true
   }
 ];
 
@@ -612,7 +634,101 @@ export const INITIAL_SURVEYS: SiteSurvey[] = [
     estimatedDurationMinutes: 120,
     instructions: 'Industrial metal shed roof. Safety harness mandatory. Measure tin corrugation pitch.',
     status: 'unassigned',
+    distanceKm: 8.5,
     technicianObservations: '15kW commercial solar project enquiry. Require senior technician with industrial roof experience.'
+  },
+  {
+    id: 'surv-avail-1',
+    surveyNumber: 'SRV-2026-049',
+    customerId: 'cust-1',
+    customerName: 'Dr. Vivek Ranade',
+    customerPhone: '+91 98230 45678',
+    customerAddress: 'Bunglow 8, Westend Villa Society, Aundh, Pune',
+    scheduledDate: '2026-11-22T15:00:00',
+    timeSlot: '03:00 PM - 05:00 PM',
+    estimatedDurationMinutes: 90,
+    instructions: 'Flat RCC terrace with overhead water tank. Measure available South-facing area.',
+    status: 'unassigned',
+    distanceKm: 3.8,
+    technicianObservations: 'Inbound web enquiry for 5kW On-Grid solar plant. Open for immediate self-assignment.'
+  },
+  {
+    id: 'surv-avail-2',
+    surveyNumber: 'SRV-2026-050',
+    customerId: 'cust-2',
+    customerName: 'Green Leaves Organic Foods',
+    customerPhone: '+91 98902 33411',
+    customerAddress: 'Survey 42/1, Hinjawadi Phase 2, Pune',
+    scheduledDate: '2026-11-23T11:30:00',
+    timeSlot: '11:30 AM - 01:30 PM',
+    estimatedDurationMinutes: 120,
+    instructions: 'Commercial warehouse building with metal trapezoidal sheet roof. Check inverter conduit run.',
+    status: 'unassigned',
+    distanceKm: 6.2,
+    technicianObservations: '10kW commercial rooftop system. Priority lead claimed from website.'
+  },
+  {
+    id: 'surv-today-suresh',
+    surveyNumber: 'SRV-2026-051',
+    customerId: 'cust-4',
+    customerName: 'Nitin Gadgil',
+    customerPhone: '+91 98221 88990',
+    customerAddress: 'Plot 7, Abhimanshree Society, Pashan Road, Pune',
+    scheduledDate: '2026-11-21T10:00:00',
+    timeSlot: '10:00 AM - 12:00 PM',
+    estimatedDurationMinutes: 90,
+    instructions: 'Rooftop inspection for 4kW system. Please check ACDB box location and stairwell parapet.',
+    technicianId: 'emp-3',
+    technicianName: 'Suresh More',
+    status: 'assigned',
+    distanceKm: 4.1,
+    technicianObservations: 'Appointment confirmed by customer over phone. Scheduled for this morning.'
+  },
+  {
+    id: 'surv-prog-suresh',
+    surveyNumber: 'SRV-2026-052',
+    customerId: 'cust-5',
+    customerName: 'Priya Kirloskar',
+    customerPhone: '+91 98112 34455',
+    customerAddress: 'B-601, Marvel Imperial, Senapati Bapat Road, Pune',
+    scheduledDate: '2026-11-21T14:00:00',
+    timeSlot: '02:00 PM - 04:00 PM',
+    estimatedDurationMinutes: 90,
+    instructions: 'Apartment terrace section dedicated to flat. Laser measurements taken. Need shadow mapping.',
+    technicianId: 'emp-3',
+    technicianName: 'Suresh More',
+    status: 'in_progress',
+    isDraft: true,
+    surveyStartedAt: '2026-11-21T14:15:00',
+    roofType: 'RCC Flat Concrete',
+    roofLengthM: 14.0,
+    roofWidthM: 7.5,
+    totalRoofAreaSqm: 105.0,
+    shadowFreeAreaSqm: 78.0,
+    roofDirection: 'South',
+    roofTiltDegrees: 15.0,
+    roofCondition: 'good',
+    distanceKm: 2.9,
+    technicianObservations: 'Draft measurements saved. Need to complete shadow analysis photograph attachments.'
+  },
+  {
+    id: 'surv-corr-suresh',
+    surveyNumber: 'SRV-2026-053',
+    customerId: 'cust-1',
+    customerName: 'Vikrant Sawant',
+    customerPhone: '+91 97665 44332',
+    customerAddress: 'Villa 12, Nyati Chesterfield, Undri, Pune',
+    scheduledDate: '2026-11-19T11:00:00',
+    timeSlot: '11:00 AM - 01:00 PM',
+    estimatedDurationMinutes: 90,
+    instructions: 'Tiled roof survey. Please re-verify slope angle and parapet anchor points.',
+    technicianId: 'emp-3',
+    technicianName: 'Suresh More',
+    status: 'submitted',
+    reviewStatus: 'corrections_required',
+    correctionsRequestedNotes: 'Roof tilt of 28° appears steep for standard L-brackets. Please upload photograph of ridge line and re-confirm cable drop distance.',
+    engineeringApproverName: 'Sandeep Patil (Lead Engineer)',
+    technicianObservations: 'Initial survey submitted. Awaiting technician revision of cable route distance.'
   },
   {
     id: 'surv-6',
@@ -1424,7 +1540,8 @@ export const INITIAL_EMPLOYEES: Employee[] = [
   { id: 'emp-15', employeeCode: 'EMP-015', fullName: 'Kavita Shinde', email: 'kavita.s@sunpowersolutions.in', phone: '+91 98221 00926', department: 'Sales', designation: 'CRM & Lead Coordinator', role: 'sales_exec', hourlyRate: 260, skills: ['Inbound Lead Routing', 'WhatsApp Automation'], isAvailable: true, activeJobs: 0, rating: 4.7 },
   { id: 'emp-16', employeeCode: 'EMP-016', fullName: 'Amit Verma', email: 'amit.v@sunpowersolutions.in', phone: '+91 98221 00930', department: 'Field Engineering', designation: 'Senior Field Surveyor', role: 'survey_tech', hourlyRate: 310, skills: ['Shadow Analysis', '3D Azimuth Mapping', 'Single & Three Phase HT/LT'], isAvailable: true, activeJobs: 2, rating: 4.7 },
   { id: 'emp-17', employeeCode: 'EMP-017', fullName: 'Rahul Singh', email: 'rahul.s@sunpowersolutions.in', phone: '+91 98221 00931', department: 'Field Engineering', designation: 'Terrace Azimuth Engineer', role: 'survey_tech', hourlyRate: 330, skills: ['Drone Photogrammetry', 'RCC Load Calculations', 'DISCOM Feeder Inspection'], isAvailable: true, activeJobs: 1, rating: 4.9 },
-  { id: 'emp-18', employeeCode: 'EMP-018', fullName: 'Vikram Patel', email: 'vikram.p@sunpowersolutions.in', phone: '+91 98221 00932', department: 'Field Engineering', designation: 'Drone & Roof CAD Specialist', role: 'survey_tech', hourlyRate: 290, skills: ['AutoCAD Layouts', 'Helioscope Projections', 'Obstacle Shading Curves'], isAvailable: true, activeJobs: 0, rating: 4.8 }
+  { id: 'emp-18', employeeCode: 'EMP-018', fullName: 'Vikram Patel', email: 'vikram.p@sunpowersolutions.in', phone: '+91 98221 00932', department: 'Field Engineering', designation: 'Drone & Roof CAD Specialist', role: 'survey_tech', hourlyRate: 290, skills: ['AutoCAD Layouts', 'Helioscope Projections', 'Obstacle Shading Curves'], isAvailable: true, activeJobs: 0, rating: 4.8 },
+  { id: 'emp-19', employeeCode: 'EMP-019', fullName: 'Sandeep Patil', email: 'sandeep.p@sunpowersolutions.in', phone: '+91 98221 00933', department: 'Engineering', designation: 'Lead Solar Design & Approvals Engineer', role: 'engineering_lead', hourlyRate: 460, skills: ['Technical Feasibility', 'Shadow Angle Review', 'SLD Verification', 'PVSyst Simulation'], isAvailable: true, activeJobs: 2, rating: 5.0 }
 ];
 
 export const INITIAL_TECHNICIAN_LEAVES: TechnicianLeave[] = [

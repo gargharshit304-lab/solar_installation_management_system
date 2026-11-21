@@ -9,8 +9,9 @@ const DEMO_PASSWORD = 'solaros2026';
 
 const ROLE_DASHBOARDS: Record<UserRole, string> = {
   owner_admin: '/',
-  sales_exec: '/customers',
-  survey_tech: '/surveys',
+  sales_exec: '/sales-overview',
+  survey_tech: '/field',
+  engineering_lead: '/engineering',
   warehouse_mgr: '/inventory',
   install_tech: '/installations',
   support_exec: '/service',

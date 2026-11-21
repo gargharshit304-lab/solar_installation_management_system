@@ -2,6 +2,7 @@ export type UserRole =
   | 'owner_admin'
   | 'sales_exec'
   | 'survey_tech'
+  | 'engineering_lead'
   | 'warehouse_mgr'
   | 'install_tech'
   | 'support_exec'
@@ -15,6 +16,11 @@ export interface UserProfile {
   roleTitle: string;
   avatar: string;
   department: string;
+  isChiefSurveySpecialist?: boolean;
+  canAssignSurveys?: boolean;
+  canViewTeam?: boolean;
+  canApproveSurveys?: boolean;
+  permissions?: string[];
 }
 
 export type LeadStatus = 
@@ -103,6 +109,14 @@ export interface TechnicianLeave {
   reason: string;
 }
 
+export interface SurveyPhotoAttachment {
+  id: string;
+  category: 'Rooftop Overview' | 'Roof Measurements' | 'Shadow Analysis' | 'Electrical Panel' | 'Proposed Inverter Location' | 'Cable Route' | 'Other';
+  url: string;
+  caption?: string;
+  uploadedAt: string;
+}
+
 export interface SiteSurvey {
   id: string;
   surveyNumber: string;
@@ -121,25 +135,67 @@ export interface SiteSurvey {
   technicianId?: string;
   technicianName?: string;
   status: SurveyStatus;
+  distanceKm?: number;
+  
+  // Section A: Rooftop Measurements
+  roofType?: string; // 'RCC Flat Concrete', 'Sloped Metal Tin Shed', 'Sloping Tiled Roof', 'Terrace with Shed'
+  roofLengthM?: number;
+  roofWidthM?: number;
   roofDimensions?: {
     lengthM: number;
     widthM: number;
   };
   totalRoofAreaSqm?: number;
   shadowFreeAreaSqm?: number;
-  roofDirection?: string;
+  roofDirection?: string; // 'South', 'South-East', 'South-West', 'East', 'West', 'North'
   roofTiltDegrees?: number;
+  roofCondition?: 'good' | 'fair' | 'needs_reinforcement';
+  availableInstallationSpace?: string;
+
+  // Section B: Shadow Analysis
+  nearbyObstructions?: string;
+  shadowObservations?: string;
+  estimatedShadingImpactPct?: number;
+
+  // Section C: Electrical Information
+  gridConnectionAvailable?: boolean;
+  existingConnectionPhase?: 'single_phase' | 'three_phase';
+  mainPanelCondition?: 'good' | 'acceptable' | 'upgrade_required';
+  proposedInverterLocation?: string;
   cableDistanceMeters?: number;
   sanctionedLoadKw?: number;
   meterNumber?: string;
   phaseType?: 'single_phase' | 'three_phase';
   transformerDistanceM?: number;
+  earthingRequirement?: string;
+  additionalElectricalObservations?: string;
+
+  // Section D: Site Conditions
+  roofAccessibility?: string;
+  structuralConcerns?: string;
+  installationObstacles?: string;
+  safetyConsiderations?: string;
+  waterLeakageConcerns?: string;
+  additionalSiteObservations?: string;
+
+  // Section E: Technician Notes & Attachments
   technicianObservations?: string;
+  technicianNotes?: string;
   photos?: string[];
   documents?: string[];
+  surveyPhotos?: SurveyPhotoAttachment[];
+
+  // Workflow timestamps & review state
+  surveyStartedAt?: string;
+  submittedAt?: string;
+  reviewStatus?: 'draft' | 'submitted' | 'under_review' | 'corrections_required' | 'approved' | 'rejected';
   engineeringApproverName?: string;
+  engineeringReviewNotes?: string;
+  correctionsRequestedNotes?: string;
   rejectionReason?: string;
   approvedAt?: string;
+  isDraft?: boolean;
+  version?: number;
   assignmentHistory?: SurveyAssignmentAudit[];
 }
 

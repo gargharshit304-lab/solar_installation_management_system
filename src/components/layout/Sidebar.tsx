@@ -5,7 +5,7 @@ import {
   Package, Truck, Wrench, UserCheck, ShieldCheck,
   HeadphonesIcon, IndianRupee, BarChart3, Bot,
   Cpu, Settings as SettingsIcon, ChevronRight, ChevronDown,
-  UserPlus, CalendarClock, Bell
+  UserPlus, CalendarClock, Bell, ClipboardList, CheckCircle2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { UserRole } from '../../types';
@@ -58,6 +58,146 @@ export const Sidebar: React.FC = () => {
   const newEnquiriesCount = enquiries.filter(e => e.leadStatus === 'new').length;
   const pendingQuotesCount = quotations.filter(q => q.status === 'sent' || q.status === 'draft').length;
   const unreadNotifsCount = notifications.filter(n => !n.read).length;
+
+  // Field Survey Specialist metrics
+  const myAssignedSurveys = surveys.filter(s => 
+    (s.technicianName?.includes(currentUser.name.split(' ')[0]) || s.technicianId === currentUser.id) &&
+    (s.status === 'assigned' || s.status === 'scheduled' || s.status === 'in_progress')
+  );
+  const availableSurveysCount = surveys.filter(s => s.status === 'unassigned').length;
+  const myPendingReportsCount = surveys.filter(s => 
+    (s.technicianName?.includes(currentUser.name.split(' ')[0]) || s.technicianId === currentUser.id) &&
+    (s.status === 'in_progress' || s.reviewStatus === 'corrections_required' || s.isDraft)
+  ).length;
+
+  // Engineering Lead metrics
+  const engineeringReviewQueueCount = surveys.filter(s => s.status === 'submitted' || s.reviewStatus === 'submitted').length;
+
+  // Dedicated Field Survey Specialist Navigation Structure
+  const fieldSections: NavSection[] = [
+    {
+      title: 'FIELD OPERATIONS',
+      items: [
+        { 
+          name: 'My Dashboard', 
+          path: '/field', 
+          icon: LayoutDashboard, 
+          allowedRoles: ['survey_tech'] 
+        },
+        { 
+          name: 'My Assignments', 
+          path: '/field/assignments', 
+          icon: ClipboardList, 
+          allowedRoles: ['survey_tech'],
+          badge: myAssignedSurveys.length > 0 ? myAssignedSurveys.length : undefined
+        },
+        { 
+          name: 'Available Surveys', 
+          path: '/field/available-surveys', 
+          icon: Compass, 
+          allowedRoles: ['survey_tech'],
+          badge: availableSurveysCount > 0 ? availableSurveysCount : undefined
+        },
+        { 
+          name: 'My Schedule', 
+          path: '/field/schedule', 
+          icon: CalendarClock, 
+          allowedRoles: ['survey_tech'] 
+        },
+        { 
+          name: 'Survey Reports', 
+          path: '/field/reports', 
+          icon: FileText, 
+          allowedRoles: ['survey_tech'],
+          badge: myPendingReportsCount > 0 ? myPendingReportsCount : undefined
+        },
+        ...(currentUser.canViewTeam || currentUser.isChiefSurveySpecialist || currentUser.role === 'owner_admin' ? [
+          { 
+            name: 'Survey Team', 
+            path: '/field/team', 
+            icon: Users, 
+            allowedRoles: ['survey_tech', 'owner_admin'] as UserRole[]
+          }
+        ] : []),
+      ]
+    },
+    {
+      title: 'OTHER',
+      items: [
+        { 
+          name: 'Notifications', 
+          path: '/notifications', 
+          icon: Bell, 
+          allowedRoles: ['survey_tech'],
+          badge: unreadNotifsCount > 0 ? unreadNotifsCount : undefined
+        },
+        { 
+          name: 'My Profile', 
+          path: '/profile', 
+          icon: UserCheck, 
+          allowedRoles: ['survey_tech'] 
+        },
+        { 
+          name: 'Settings', 
+          path: '/settings', 
+          icon: SettingsIcon, 
+          allowedRoles: ['survey_tech'] 
+        },
+      ]
+    }
+  ];
+
+  // Dedicated Engineering Lead Navigation Structure
+  const engineeringSections: NavSection[] = [
+    {
+      title: 'ENGINEERING WORKSPACE',
+      items: [
+        { 
+          name: 'Engineering Dashboard', 
+          path: '/engineering', 
+          icon: LayoutDashboard, 
+          allowedRoles: ['engineering_lead'] 
+        },
+        { 
+          name: 'Technical Review Queue', 
+          path: '/engineering/review', 
+          icon: ClipboardList, 
+          allowedRoles: ['engineering_lead'],
+          badge: engineeringReviewQueueCount > 0 ? engineeringReviewQueueCount : undefined
+        },
+        { 
+          name: 'Approved Feasibilities', 
+          path: '/engineering/approved', 
+          icon: CheckCircle2, 
+          allowedRoles: ['engineering_lead'] 
+        },
+      ]
+    },
+    {
+      title: 'OTHER',
+      items: [
+        { 
+          name: 'Notifications', 
+          path: '/notifications', 
+          icon: Bell, 
+          allowedRoles: ['engineering_lead'],
+          badge: unreadNotifsCount > 0 ? unreadNotifsCount : undefined
+        },
+        { 
+          name: 'My Profile', 
+          path: '/profile', 
+          icon: UserCheck, 
+          allowedRoles: ['engineering_lead'] 
+        },
+        { 
+          name: 'Settings', 
+          path: '/settings', 
+          icon: SettingsIcon, 
+          allowedRoles: ['engineering_lead'] 
+        },
+      ]
+    }
+  ];
 
   // Dedicated Sales Executive Navigation Structure (Section 2)
   const salesSections: NavSection[] = [
@@ -147,7 +287,7 @@ export const Sidebar: React.FC = () => {
           name: 'Overview', 
           path: '/', 
           icon: LayoutDashboard, 
-          allowedRoles: ['owner_admin', 'survey_tech', 'warehouse_mgr', 'install_tech', 'support_exec', 'accountant'] 
+          allowedRoles: ['owner_admin', 'warehouse_mgr', 'install_tech', 'support_exec', 'accountant'] 
         },
         { 
           name: 'Customers & CRM', 
@@ -159,7 +299,7 @@ export const Sidebar: React.FC = () => {
           name: 'Site Surveys', 
           path: '/surveys', 
           icon: Compass, 
-          allowedRoles: ['owner_admin', 'survey_tech'],
+          allowedRoles: ['owner_admin'],
           badge: pendingSurveysCount > 0 ? pendingSurveysCount : undefined
         },
         { 
@@ -272,7 +412,14 @@ export const Sidebar: React.FC = () => {
     }
   ];
 
-  const sectionsToRender = currentUser.role === 'sales_exec' ? salesSections : standardSections;
+  let sectionsToRender = standardSections;
+  if (currentUser.role === 'sales_exec') {
+    sectionsToRender = salesSections;
+  } else if (currentUser.role === 'survey_tech') {
+    sectionsToRender = fieldSections;
+  } else if (currentUser.role === 'engineering_lead') {
+    sectionsToRender = engineeringSections;
+  }
 
   const renderContent = () => (
     <div className="flex flex-col h-full bg-white border-r border-warmGrey/80 select-none">

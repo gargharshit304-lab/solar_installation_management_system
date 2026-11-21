@@ -28,10 +28,25 @@ import { AiCommandCenterPage } from './pages/AiCommandCenterPage';
 import { AgentActivityPage } from './pages/AgentActivityPage';
 import { SettingsPage } from './pages/SettingsPage';
 
+// Field Survey Specialist & Engineering Lead Pages
+import { FieldDashboardPage } from './pages/field/FieldDashboardPage';
+import { MyAssignmentsPage } from './pages/field/MyAssignmentsPage';
+import { AvailableSurveysPage } from './pages/field/AvailableSurveysPage';
+import { MySchedulePage } from './pages/field/MySchedulePage';
+import { SurveyReportsPage } from './pages/field/SurveyReportsPage';
+import { SurveyTeamPage } from './pages/field/SurveyTeamPage';
+import { EngineeringDashboardPage } from './pages/engineering/EngineeringDashboardPage';
+
 function HomeRouter() {
   const { currentUser } = useApp();
   if (currentUser.role === 'sales_exec') {
     return <SalesDashboardPage />;
+  }
+  if (currentUser.role === 'survey_tech') {
+    return <FieldDashboardPage />;
+  }
+  if (currentUser.role === 'engineering_lead') {
+    return <EngineeringDashboardPage />;
   }
   return <DashboardPage />;
 }
@@ -58,12 +73,95 @@ export function App() {
               <Route path="sales-overview" element={<SalesDashboardPage />} />
               
               {/* Sales Workspace Routes */}
-              <Route path="enquiries" element={<CustomerEnquiriesPage />} />
-              <Route path="customers" element={<CustomersPage />} />
-              <Route path="follow-ups" element={<FollowUpsPage />} />
-              <Route path="surveys" element={<SiteSurveysPage />} />
-              <Route path="quotations" element={<QuotationsPage />} />
-              <Route path="orders" element={<OrdersPaymentsPage />} />
+              <Route path="enquiries" element={
+                <RoleGuard allowedRoles={['owner_admin', 'sales_exec']}>
+                  <CustomerEnquiriesPage />
+                </RoleGuard>
+              } />
+              <Route path="customers" element={
+                <RoleGuard allowedRoles={['owner_admin', 'sales_exec', 'support_exec']}>
+                  <CustomersPage />
+                </RoleGuard>
+              } />
+              <Route path="follow-ups" element={
+                <RoleGuard allowedRoles={['owner_admin', 'sales_exec']}>
+                  <FollowUpsPage />
+                </RoleGuard>
+              } />
+              <Route path="surveys" element={
+                <RoleGuard allowedRoles={['owner_admin', 'sales_exec']}>
+                  <SiteSurveysPage />
+                </RoleGuard>
+              } />
+              <Route path="quotations" element={
+                <RoleGuard allowedRoles={['owner_admin', 'sales_exec']}>
+                  <QuotationsPage />
+                </RoleGuard>
+              } />
+              <Route path="orders" element={
+                <RoleGuard allowedRoles={['owner_admin', 'sales_exec', 'accountant']}>
+                  <OrdersPaymentsPage />
+                </RoleGuard>
+              } />
+
+              {/* Field Survey Specialist Routes */}
+              <Route path="field" element={
+                <RoleGuard allowedRoles={['owner_admin', 'survey_tech']}>
+                  <FieldDashboardPage />
+                </RoleGuard>
+              } />
+              <Route path="field/dashboard" element={
+                <RoleGuard allowedRoles={['owner_admin', 'survey_tech']}>
+                  <FieldDashboardPage />
+                </RoleGuard>
+              } />
+              <Route path="field/assignments" element={
+                <RoleGuard allowedRoles={['owner_admin', 'survey_tech']}>
+                  <MyAssignmentsPage />
+                </RoleGuard>
+              } />
+              <Route path="field/available-surveys" element={
+                <RoleGuard allowedRoles={['owner_admin', 'survey_tech']}>
+                  <AvailableSurveysPage />
+                </RoleGuard>
+              } />
+              <Route path="field/schedule" element={
+                <RoleGuard allowedRoles={['owner_admin', 'survey_tech']}>
+                  <MySchedulePage />
+                </RoleGuard>
+              } />
+              <Route path="field/reports" element={
+                <RoleGuard allowedRoles={['owner_admin', 'survey_tech']}>
+                  <SurveyReportsPage />
+                </RoleGuard>
+              } />
+              <Route path="field/team" element={
+                <RoleGuard allowedRoles={['owner_admin', 'survey_tech']}>
+                  <SurveyTeamPage />
+                </RoleGuard>
+              } />
+
+              {/* Engineering Lead Routes */}
+              <Route path="engineering" element={
+                <RoleGuard allowedRoles={['owner_admin', 'engineering_lead']}>
+                  <EngineeringDashboardPage />
+                </RoleGuard>
+              } />
+              <Route path="engineering/dashboard" element={
+                <RoleGuard allowedRoles={['owner_admin', 'engineering_lead']}>
+                  <EngineeringDashboardPage />
+                </RoleGuard>
+              } />
+              <Route path="engineering/review" element={
+                <RoleGuard allowedRoles={['owner_admin', 'engineering_lead']}>
+                  <EngineeringDashboardPage />
+                </RoleGuard>
+              } />
+              <Route path="engineering/approved" element={
+                <RoleGuard allowedRoles={['owner_admin', 'engineering_lead']}>
+                  <EngineeringDashboardPage />
+                </RoleGuard>
+              } />
               
               {/* Operations & Business Routes (Restricted for sales_exec) */}
               <Route path="inventory" element={

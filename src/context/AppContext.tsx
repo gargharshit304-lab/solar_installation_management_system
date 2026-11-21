@@ -6,7 +6,8 @@ import {
   WarrantyRecord, ServiceComplaint, ProjectProfitability,
   Employee, NotificationItem, AiMessage, FollowUpItem,
   CustomerEnquiry, CommunicationHistoryItem, SalesActivityItem,
-  TechnicianLeave, SurveyAssignmentAudit, CustomerSite
+  TechnicianLeave, SurveyAssignmentAudit, CustomerSite,
+  TechnicianAvailabilityStatus
 } from '../types';
 import {
   SYSTEM_USERS, INITIAL_CUSTOMERS, INITIAL_SURVEYS,
@@ -82,6 +83,17 @@ interface AppContextType {
   cancelSurvey: (surveyId: string, reason?: string) => void;
   submitSurveyForm: (surveyId: string, details: Partial<SiteSurvey>) => void;
   updateSurveyStatus: (surveyId: string, status: SiteSurvey['status'], rejectionReason?: string) => void;
+  
+  // Field Survey Specialist & Engineering Lead Workflows
+  claimSurvey: (surveyId: string) => { success: boolean; message: string };
+  startSurvey: (surveyId: string) => boolean;
+  saveSurveyDraft: (surveyId: string, details: Partial<SiteSurvey>) => void;
+  submitSurveyReport: (surveyId: string, details: Partial<SiteSurvey>) => { success: boolean; message: string };
+  approveSurveyReport: (surveyId: string, notes: string) => void;
+  requestSurveyCorrections: (surveyId: string, comments: string) => void;
+  rejectSurveyReport: (surveyId: string, reason: string) => void;
+  updateTechnicianAvailability: (technicianId: string, status: TechnicianAvailabilityStatus) => void;
+  addTechnicianLeave: (leave: Omit<TechnicianLeave, 'id'>) => void;
   
   packages: SolarPackage[];
   quotations: Quotation[];
@@ -171,7 +183,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [warranties, setWarranties] = useState<WarrantyRecord[]>(INITIAL_WARRANTIES);
   const [complaints, setComplaints] = useState<ServiceComplaint[]>(INITIAL_COMPLAINTS);
   const [profitability, setProfitability] = useState<ProjectProfitability[]>(INITIAL_PROFITABILITY);
-  const [employees] = useState<Employee[]>(INITIAL_EMPLOYEES);
+  const [employees, setEmployees] = useState<Employee[]>(INITIAL_EMPLOYEES);
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
 
   // Sales Workspace State
@@ -778,6 +790,304 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Survey status updated to ${status.toUpperCase()}`, status === 'approved' ? 'success' : 'warning');
   };
 
+  const claimSurvey = (surveyId: string): { success: boolean; message: string } => {
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) {
+      return { success: false, message: 'Survey not found.' };
+    }
+    if (survey.status !== 'unassigned') {
+      return { success: false, message: 'This survey has already been claimed or assigned.' };
+    }
+
+    // Check technician leave on survey date
+    const surveyDateStr = survey.scheduledDate.split('T')[0];
+    const isOnLeave = technicianLeaves.some(l => 
+      (l.technicianName.toLowerCase().includes(currentUser.name.split(' ')[0].toLowerCase()) || l.technicianId === currentUser.id) &&
+      l.status === 'approved' &&
+      surveyDateStr >= l.startDate && surveyDateStr <= l.endDate
+    );
+    if (isOnLeave) {
+      return { success: false, message: `Schedule conflict: You have approved leave on ${surveyDateStr}.` };
+    }
+
+    // Check appointment overlap (same date + same time slot)
+    const hasOverlap = surveys.some(s => 
+      s.id !== surveyId &&
+      (s.technicianName?.toLowerCase().includes(currentUser.name.split(' ')[0].toLowerCase()) || s.technicianId === currentUser.id) &&
+      (s.status === 'assigned' || s.status === 'scheduled' || s.status === 'in_progress') &&
+      s.scheduledDate.startsWith(surveyDateStr) &&
+      s.timeSlot === survey.timeSlot
+    );
+    if (hasOverlap) {
+      return { success: false, message: `Schedule conflict: You already have an assigned visit on ${surveyDateStr} during ${survey.timeSlot}.` };
+    }
+
+    // Atomic assignment
+    setSurveys(prev => prev.map(s => {
+      if (s.id === surveyId) {
+        return {
+          ...s,
+          technicianId: currentUser.id,
+          technicianName: currentUser.name,
+          status: 'assigned'
+        };
+      }
+      return s;
+    }));
+
+    // Audit record
+    const auditRecord: SurveyAssignmentAudit = {
+      id: `asg-${Date.now()}`,
+      surveyId,
+      surveyNumber: survey.surveyNumber,
+      technicianId: currentUser.id,
+      technicianName: currentUser.name,
+      assignedAt: new Date().toISOString(),
+      assignedBy: `${currentUser.name} (Self-claimed)`,
+      action: 'assigned',
+      scheduledDate: survey.scheduledDate,
+      timeSlot: survey.timeSlot || '10:00 AM - 12:00 PM'
+    };
+    setSurveyAssignments(prev => [auditRecord, ...prev]);
+
+    // Notification to Sales Executive & System
+    setNotifications(prev => [{
+      id: `notif-${Date.now()}`,
+      title: `Survey Claimed: ${survey.surveyNumber}`,
+      message: `${currentUser.name} self-claimed survey for ${survey.customerName} on ${new Date(survey.scheduledDate).toLocaleDateString()} (${survey.timeSlot}).`,
+      timeAgo: 'Just now',
+      type: 'info',
+      read: false,
+      link: '/surveys'
+    }, ...prev]);
+
+    addSalesActivity({
+      type: 'survey_scheduled',
+      customerName: survey.customerName,
+      customerId: survey.customerId,
+      description: `Specialist ${currentUser.name} claimed survey ${survey.surveyNumber}`,
+      salesperson: currentUser.name,
+      relatedLink: '/surveys'
+    });
+
+    showToast(`Survey ${survey.surveyNumber} successfully claimed! Added to My Assignments.`, 'success');
+    return { success: true, message: 'Survey successfully claimed!' };
+  };
+
+  const startSurvey = (surveyId: string): boolean => {
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) return false;
+    if (survey.status === 'approved' || survey.status === 'cancelled') {
+      showToast('Cannot start a completed or cancelled survey.', 'error');
+      return false;
+    }
+
+    setSurveys(prev => prev.map(s => {
+      if (s.id === surveyId) {
+        return {
+          ...s,
+          status: 'in_progress',
+          surveyStartedAt: s.surveyStartedAt || new Date().toISOString()
+        };
+      }
+      return s;
+    }));
+
+    showToast(`Site survey ${survey.surveyNumber} started! Form enabled.`, 'success');
+    return true;
+  };
+
+  const saveSurveyDraft = (surveyId: string, details: Partial<SiteSurvey>) => {
+    setSurveys(prev => prev.map(s => {
+      if (s.id === surveyId) {
+        return {
+          ...s,
+          ...details,
+          status: 'in_progress',
+          isDraft: true
+        };
+      }
+      return s;
+    }));
+    showToast('Survey progress saved as draft.', 'info');
+  };
+
+  const submitSurveyReport = (surveyId: string, details: Partial<SiteSurvey>): { success: boolean; message: string } => {
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) return { success: false, message: 'Survey not found' };
+
+    const targetNum = survey.surveyNumber;
+    const nowIso = new Date().toISOString();
+
+    setSurveys(prev => prev.map(s => {
+      if (s.id === surveyId) {
+        return {
+          ...s,
+          ...details,
+          status: 'submitted',
+          reviewStatus: 'submitted',
+          submittedAt: nowIso,
+          isDraft: false,
+          version: (s.version || 1) + 1
+        };
+      }
+      return s;
+    }));
+
+    // Notification to Engineering Lead & Sales Executive
+    setNotifications(prev => [
+      {
+        id: `notif-${Date.now()}-eng`,
+        title: `Survey Report Ready for Review: ${targetNum}`,
+        message: `${currentUser.name} submitted technical inspection report for ${survey.customerName}. Feasibility review required.`,
+        timeAgo: 'Just now',
+        type: 'info',
+        read: false,
+        link: '/engineering/review'
+      },
+      {
+        id: `notif-${Date.now()}-sales`,
+        title: `Site Survey Completed: ${targetNum}`,
+        message: `Field specialist ${currentUser.name} completed site inspection for ${survey.customerName}. Sent to Engineering Lead for approval.`,
+        timeAgo: 'Just now',
+        type: 'success',
+        read: false,
+        link: '/surveys'
+      },
+      ...prev
+    ]);
+
+    addSalesActivity({
+      type: 'survey_scheduled',
+      customerName: survey.customerName,
+      customerId: survey.customerId,
+      description: `Field Survey Report ${targetNum} submitted by ${currentUser.name}`,
+      salesperson: currentUser.name,
+      relatedLink: '/surveys'
+    });
+
+    showToast(`Survey report ${targetNum} submitted for Engineering Approval!`, 'success');
+    return { success: true, message: 'Report submitted successfully' };
+  };
+
+  const approveSurveyReport = (surveyId: string, notes: string) => {
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) return;
+
+    const todayDate = new Date().toISOString().split('T')[0];
+
+    setSurveys(prev => prev.map(s => {
+      if (s.id === surveyId) {
+        return {
+          ...s,
+          status: 'approved',
+          reviewStatus: 'approved',
+          approvedAt: todayDate,
+          engineeringApproverName: currentUser.name,
+          engineeringReviewNotes: notes
+        };
+      }
+      return s;
+    }));
+
+    // Notify Sales Executive that quotation can now be generated
+    setNotifications(prev => [{
+      id: `notif-${Date.now()}`,
+      title: `Survey Approved by Engineering: ${survey.surveyNumber}`,
+      message: `${currentUser.name} (Engineering Lead) approved ${survey.customerName}'s survey. Quotation can now be finalized!`,
+      timeAgo: 'Just now',
+      type: 'success',
+      read: false,
+      link: '/quotations'
+    }, ...prev]);
+
+    addSalesActivity({
+      type: 'survey_approved',
+      customerName: survey.customerName,
+      customerId: survey.customerId,
+      description: `Engineering Lead approved survey ${survey.surveyNumber}. Shadow-free area: ${survey.shadowFreeAreaSqm || 'N/A'} sq.m.`,
+      salesperson: currentUser.name,
+      relatedLink: '/quotations'
+    });
+
+    showToast(`Survey ${survey.surveyNumber} approved by Engineering! Ready for quotation.`, 'success');
+  };
+
+  const requestSurveyCorrections = (surveyId: string, comments: string) => {
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) return;
+
+    setSurveys(prev => prev.map(s => {
+      if (s.id === surveyId) {
+        return {
+          ...s,
+          status: 'submitted',
+          reviewStatus: 'corrections_required',
+          correctionsRequestedNotes: comments
+        };
+      }
+      return s;
+    }));
+
+    setNotifications(prev => [{
+      id: `notif-${Date.now()}`,
+      title: `Corrections Requested: ${survey.surveyNumber}`,
+      message: `Engineering Lead ${currentUser.name} requested report revisions: "${comments}"`,
+      timeAgo: 'Just now',
+      type: 'warning',
+      read: false,
+      link: '/field/reports'
+    }, ...prev]);
+
+    showToast(`Corrections requested for ${survey.surveyNumber}. Technician notified.`, 'warning');
+  };
+
+  const rejectSurveyReport = (surveyId: string, reason: string) => {
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) return;
+
+    setSurveys(prev => prev.map(s => {
+      if (s.id === surveyId) {
+        return {
+          ...s,
+          status: 'rejected',
+          reviewStatus: 'rejected',
+          rejectionReason: reason
+        };
+      }
+      return s;
+    }));
+
+    setNotifications(prev => [{
+      id: `notif-${Date.now()}`,
+      title: `Survey Report Rejected: ${survey.surveyNumber}`,
+      message: `Site survey rejected by Engineering Lead. Reason: ${reason}`,
+      timeAgo: 'Just now',
+      type: 'alert',
+      read: false,
+      link: '/surveys'
+    }, ...prev]);
+
+    showToast(`Survey ${survey.surveyNumber} marked as rejected.`, 'error');
+  };
+
+  const updateTechnicianAvailability = (technicianId: string, status: TechnicianAvailabilityStatus) => {
+    setEmployees(prev => prev.map(e => e.id === technicianId ? {
+      ...e,
+      isAvailable: status === 'available'
+    } : e));
+    showToast(`Availability status updated to ${status.toUpperCase()}`, 'info');
+  };
+
+  const addTechnicianLeave = (leave: Omit<TechnicianLeave, 'id'>) => {
+    const newLeave: TechnicianLeave = {
+      ...leave,
+      id: `lev-${Date.now()}`
+    };
+    setTechnicianLeaves(prev => [newLeave, ...prev]);
+    showToast(`Leave request submitted for ${leave.technicianName} (${leave.startDate} to ${leave.endDate})`, 'success');
+  };
+
   // Quotations
   const createQuotation = (quoteData: Omit<Quotation, 'id' | 'quotationNumber' | 'createdDate'>): Quotation => {
     const newId = `quot-${Date.now()}`;
@@ -1342,6 +1652,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cancelSurvey,
       submitSurveyForm,
       updateSurveyStatus,
+      // Field & Engineering Lead Workflows
+      claimSurvey,
+      startSurvey,
+      saveSurveyDraft,
+      submitSurveyReport,
+      approveSurveyReport,
+      requestSurveyCorrections,
+      rejectSurveyReport,
+      updateTechnicianAvailability,
+      addTechnicianLeave,
       packages,
       quotations,
       createQuotation,

@@ -38,7 +38,22 @@ export const Navbar: React.FC = () => {
   const getPageTitle = (path: string) => {
     switch (path) {
       case '/':
-      case '/overview': return 'Executive Overview';
+      case '/overview': 
+        if (currentUser.role === 'survey_tech') return 'Field Operations Dashboard';
+        if (currentUser.role === 'engineering_lead') return 'Engineering Dashboard';
+        if (currentUser.role === 'sales_exec') return 'Sales Executive Workspace';
+        return 'Executive Overview';
+      case '/field':
+      case '/field/dashboard': return 'Field Operations Dashboard';
+      case '/field/assignments': return 'My Survey Assignments';
+      case '/field/available-surveys': return 'Available Field Surveys';
+      case '/field/schedule': return 'My Survey Schedule & Availability';
+      case '/field/reports': return 'Technical Survey Reports';
+      case '/field/team': return 'Field Survey Team Directory';
+      case '/engineering':
+      case '/engineering/dashboard': return 'Engineering Feasibility Dashboard';
+      case '/engineering/review': return 'Feasibility Review Queue';
+      case '/engineering/approved': return 'Approved Feasibilities History';
       case '/customers': return 'Customers & CRM';
       case '/surveys': return 'Site Surveys';
       case '/quotations': return 'Solar Packages & Quotations';
@@ -250,6 +265,7 @@ export const Navbar: React.FC = () => {
                         onClick={() => {
                           switchRole(u.role);
                           setIsProfileMenuOpen(false);
+                          navigate('/', { replace: true });
                         }}
                         className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg transition-colors ${
                           currentUser.role === u.role
