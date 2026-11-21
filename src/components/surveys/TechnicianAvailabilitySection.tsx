@@ -28,7 +28,7 @@ export const TechnicianAvailabilitySection: React.FC<TechnicianAvailabilitySecti
 
   // Survey technicians
   const technicians = employees.filter(
-    e => e.role === 'survey_tech' || e.department === 'Field Engineering'
+    e => e.role === 'survey_tech' || e.department === 'Field Engineering' || e.department === 'Field Operations'
   );
 
   // Compute stats for each technician
@@ -137,19 +137,99 @@ export const TechnicianAvailabilitySection: React.FC<TechnicianAvailabilitySecti
         </div>
       </div>
 
-      {/* Technicians Table */}
-      <div className="bg-white rounded-card border border-warmGrey/60 shadow-card overflow-hidden">
+      {/* Responsive View A: Mobile & Tablet Cards (< lg) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 lg:hidden">
+        {technicianStats.map(({ tech, status, surveysTodayCount, upcomingCount, nextAvailableSlot }) => {
+          const statusConfig = {
+            available: { label: 'Available', bg: 'bg-sage-50', text: 'text-sage', border: 'border-sage/40' },
+            assigned: { label: 'Assigned', bg: 'bg-amber-50', text: 'text-amber', border: 'border-amber/40' },
+            on_site: { label: 'On Site', bg: 'bg-navy/10', text: 'text-navy', border: 'border-navy/30' },
+            unavailable: { label: 'Max Workload', bg: 'bg-sand-200/70', text: 'text-mutedGrey', border: 'border-warmGrey' },
+            on_leave: { label: 'On Leave', bg: 'bg-terracotta-50', text: 'text-terracotta', border: 'border-terracotta/40' }
+          }[status];
+
+          return (
+            <div key={tech.id} className="bg-white rounded-card p-4 border border-warmGrey/60 shadow-card space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-xl bg-sand-200 text-charcoal flex items-center justify-center font-bold text-sm shrink-0 border border-warmGrey/40">
+                    {tech.fullName.split(' ').map(n => n[0]).join('')}
+                  </div>
+                  <div>
+                    <div className="flex items-center space-x-1.5">
+                      <h4 className="font-bold text-sm text-charcoal">{tech.fullName}</h4>
+                      <span className="flex items-center text-[10px] font-semibold text-amber bg-amber-50 px-1 py-0.2 rounded border border-amber/20">
+                        <Star className="w-2.5 h-2.5 fill-amber mr-0.5" />
+                        {tech.rating}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-mutedGrey">{tech.designation}</p>
+                    <p className="text-[11px] font-mono font-semibold text-navy">{tech.phone}</p>
+                  </div>
+                </div>
+
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${statusConfig.bg} ${statusConfig.text} ${statusConfig.border}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full mr-1 ${
+                    status === 'available' ? 'bg-sage' :
+                    status === 'on_site' ? 'bg-navy' :
+                    status === 'assigned' ? 'bg-amber' :
+                    status === 'on_leave' ? 'bg-terracotta' : 'bg-mutedGrey'
+                  }`} />
+                  {statusConfig.label}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 p-2.5 bg-sand-50/70 rounded-xl border border-warmGrey/40 text-xs">
+                <div>
+                  <span className="text-[10px] text-mutedGrey block">Today's Visits</span>
+                  <span className="font-bold text-charcoal">{surveysTodayCount}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-mutedGrey block">Upcoming</span>
+                  <span className="font-bold text-charcoal">{upcomingCount}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-mutedGrey block">Next Free Slot</span>
+                  <span className="font-semibold text-navy text-[11px] truncate block">{nextAvailableSlot}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => onViewSchedule(tech)}
+                  className="flex-1 py-1.5 bg-white border border-warmGrey text-charcoal text-xs font-semibold rounded-lg hover:bg-sand-100 transition-colors shadow-2xs text-center"
+                >
+                  View Schedule
+                </button>
+                {status !== 'on_leave' && (
+                  <button
+                    type="button"
+                    onClick={() => onAssignSurvey(tech)}
+                    className="flex-1 py-1.5 bg-navy text-white text-xs font-bold rounded-lg hover:bg-navy-light transition-colors shadow-2xs text-center"
+                  >
+                    Assign Survey
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Responsive View B: Generous Desktop Table (>= lg) */}
+      <div className="bg-white rounded-card border border-warmGrey/60 shadow-card overflow-hidden hidden lg:block">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-sand-50 text-mutedGrey font-semibold uppercase tracking-wider border-b border-warmGrey/80">
               <tr>
-                <th className="py-3 px-4">Technician</th>
-                <th className="py-3 px-4">Contact</th>
-                <th className="py-3 px-4">Availability</th>
-                <th className="py-3 px-4">Today's Assignments</th>
-                <th className="py-3 px-4">Upcoming Jobs</th>
-                <th className="py-3 px-4">Next Available Slot</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+                <th className="py-3.5 px-4 min-w-[220px]">Technician Specialist</th>
+                <th className="py-3.5 px-4 whitespace-nowrap min-w-[130px]">Contact Number</th>
+                <th className="py-3.5 px-4 whitespace-nowrap min-w-[120px]">Live Status</th>
+                <th className="py-3.5 px-4 whitespace-nowrap min-w-[130px]">Today's Schedule</th>
+                <th className="py-3.5 px-4 whitespace-nowrap min-w-[110px]">Upcoming Jobs</th>
+                <th className="py-3.5 px-4 whitespace-nowrap min-w-[170px]">Next Available Slot</th>
+                <th className="py-3.5 px-4 text-right whitespace-nowrap min-w-[210px]">Operations</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-warmGrey/40 text-charcoal">
@@ -170,29 +250,29 @@ export const TechnicianAvailabilitySection: React.FC<TechnicianAvailabilitySecti
                     {/* Technician Name & Avatar */}
                     <td className="py-3.5 px-4">
                       <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 rounded-lg bg-sand-200 text-charcoal flex items-center justify-center font-bold text-xs shrink-0">
+                        <div className="w-9 h-9 rounded-xl bg-sand-200 text-charcoal flex items-center justify-center font-bold text-xs shrink-0 border border-warmGrey/50">
                           {tech.fullName.split(' ').map(n => n[0]).join('')}
                         </div>
                         <div>
                           <div className="flex items-center space-x-1.5">
-                            <span className="font-bold text-charcoal">{tech.fullName}</span>
+                            <span className="font-bold text-charcoal text-xs">{tech.fullName}</span>
                             <span className="flex items-center text-[10px] font-semibold text-amber bg-amber-50 px-1 py-0.2 rounded border border-amber/20">
                               <Star className="w-2.5 h-2.5 fill-amber mr-0.5" />
                               {tech.rating}
                             </span>
                           </div>
-                          <p className="text-[11px] text-mutedGrey">{tech.designation}</p>
+                          <p className="text-[11px] text-mutedGrey mt-0.5">{tech.designation}</p>
                         </div>
                       </div>
                     </td>
 
                     {/* Contact */}
-                    <td className="py-3.5 px-4 font-mono text-[11px] text-navy font-semibold">
+                    <td className="py-3.5 px-4 font-mono text-[11px] text-navy font-semibold whitespace-nowrap">
                       {tech.phone}
                     </td>
 
                     {/* Availability Status Badge */}
-                    <td className="py-3.5 px-4">
+                    <td className="py-3.5 px-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border ${statusConfig.bg} ${statusConfig.text} ${statusConfig.border}`}>
                         <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
                           status === 'available' ? 'bg-sage' :
@@ -205,35 +285,35 @@ export const TechnicianAvailabilitySection: React.FC<TechnicianAvailabilitySecti
                     </td>
 
                     {/* Today's Assignments */}
-                    <td className="py-3.5 px-4">
+                    <td className="py-3.5 px-4 whitespace-nowrap">
                       <div className="flex items-center space-x-1.5">
                         <span className={`font-bold ${surveysTodayCount > 0 ? 'text-charcoal' : 'text-mutedGrey'}`}>
                           {surveysTodayCount} survey{surveysTodayCount === 1 ? '' : 's'}
                         </span>
                         {surveysTodayCount > 0 && (
-                          <span className="text-[10px] text-mutedGrey">today</span>
+                          <span className="text-[10px] font-medium text-navy bg-navy/10 px-1.5 py-0.2 rounded">today</span>
                         )}
                       </div>
                     </td>
 
                     {/* Upcoming Jobs */}
-                    <td className="py-3.5 px-4 font-semibold text-charcoal">
+                    <td className="py-3.5 px-4 font-semibold text-charcoal whitespace-nowrap">
                       {upcomingCount} assigned
                     </td>
 
-                    {/* Next Available Slot */}
-                    <td className="py-3.5 px-4 font-medium text-navy">
-                      <span className="px-2 py-0.5 rounded-lg bg-sand-100/80 border border-warmGrey/60 text-[11px]">
+                    {/* Next Available Slot (Never wrap into awkward fragments) */}
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <span className="px-2.5 py-1 rounded-lg bg-sand-100/90 border border-warmGrey/60 text-xs font-semibold text-navy inline-block">
                         {nextAvailableSlot}
                       </span>
                     </td>
 
-                    {/* Actions */}
-                    <td className="py-3.5 px-4 text-right space-x-2">
+                    {/* Actions with generous spacing and alignment */}
+                    <td className="py-3.5 px-4 text-right whitespace-nowrap space-x-2">
                       <button
                         type="button"
                         onClick={() => onViewSchedule(tech)}
-                        className="px-2.5 py-1 bg-white border border-warmGrey text-charcoal text-xs font-semibold rounded-lg hover:bg-sand-100 transition-colors shadow-2xs"
+                        className="px-3 py-1.5 bg-white border border-warmGrey text-charcoal text-xs font-semibold rounded-lg hover:bg-sand-100 transition-colors shadow-2xs"
                       >
                         View Schedule
                       </button>
@@ -242,7 +322,7 @@ export const TechnicianAvailabilitySection: React.FC<TechnicianAvailabilitySecti
                         <button
                           type="button"
                           onClick={() => onAssignSurvey(tech)}
-                          className="px-2.5 py-1 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy-light transition-colors shadow-2xs"
+                          className="px-3 py-1.5 bg-navy text-white text-xs font-bold rounded-lg hover:bg-navy-light transition-colors shadow-2xs"
                         >
                           Assign Survey
                         </button>

@@ -230,12 +230,12 @@ export const Navbar: React.FC = () => {
               />
               <div className="hidden lg:block">
                 <div className="text-xs font-semibold text-white leading-tight flex items-center space-x-1">
-                  <span>{currentUser.name}</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-warmGrey" />
+                  <span className="whitespace-nowrap">{currentUser.name}</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-warmGrey shrink-0" />
                 </div>
-                <div className="text-[11px] text-warmGrey flex items-center space-x-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-sage inline-block"></span>
-                  <span className="truncate max-w-[120px]">{currentUser.roleTitle}</span>
+                <div className="text-[11px] text-warmGrey flex items-center space-x-1 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-sage inline-block shrink-0"></span>
+                  <span className="whitespace-nowrap text-sand-200/90">{currentUser.roleTitle}</span>
                 </div>
               </div>
             </button>

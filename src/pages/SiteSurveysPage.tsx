@@ -298,13 +298,13 @@ export const SiteSurveysPage: React.FC = () => {
             <table className="w-full text-left text-xs">
               <thead className="bg-sand-50 text-mutedGrey font-semibold uppercase tracking-wider border-b border-warmGrey/80">
                 <tr>
-                  <th className="py-3 px-4">Survey ID</th>
-                  <th className="py-3 px-4">Customer & Location</th>
-                  <th className="py-3 px-4">Scheduled Date</th>
-                  <th className="py-3 px-4">Allocated Technician</th>
-                  <th className="py-3 px-4">Roof Shadow-Free Area</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                  <th className="py-3 px-4 min-w-[130px] whitespace-nowrap">Survey ID</th>
+                  <th className="py-3 px-4 min-w-[220px]">Customer & Location</th>
+                  <th className="py-3 px-4 min-w-[150px] whitespace-nowrap">Scheduled Date</th>
+                  <th className="py-3 px-4 min-w-[170px] whitespace-nowrap">Allocated Technician</th>
+                  <th className="py-3 px-4 min-w-[160px] whitespace-nowrap">Roof Shadow-Free Area</th>
+                  <th className="py-3 px-4 min-w-[120px] whitespace-nowrap">Status</th>
+                  <th className="py-3 px-4 text-right min-w-[210px] whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-warmGrey/40 text-charcoal">
@@ -341,7 +341,7 @@ export const SiteSurveysPage: React.FC = () => {
                         </td>
 
                         {/* Scheduled Date & Slot */}
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4 whitespace-nowrap">
                           <div className="font-semibold text-charcoal">
                             {new Date(survey.scheduledDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </div>
@@ -351,7 +351,7 @@ export const SiteSurveysPage: React.FC = () => {
                         </td>
 
                         {/* Allocated Technician */}
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4 whitespace-nowrap">
                           {survey.technicianName ? (
                             <div className="flex items-center space-x-1.5">
                               <span className="w-2 h-2 rounded-full bg-sage shrink-0" />
@@ -365,7 +365,7 @@ export const SiteSurveysPage: React.FC = () => {
                         </td>
 
                         {/* Roof Shadow-Free Area */}
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4 whitespace-nowrap">
                           {survey.shadowFreeAreaSqm ? (
                             <div>
                               <span className="font-bold text-navy">{survey.shadowFreeAreaSqm} m²</span>
@@ -377,12 +377,12 @@ export const SiteSurveysPage: React.FC = () => {
                         </td>
 
                         {/* Status */}
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4 whitespace-nowrap">
                           <StatusBadge status={survey.status} />
                         </td>
 
                         {/* Actions according to Status */}
-                        <td className="py-3.5 px-4 text-right space-x-1.5">
+                        <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
                           
                           {/* Unassigned Actions */}
                           {isUnassigned && (
