@@ -1382,6 +1382,115 @@ export const INITIAL_INSTALLATIONS: Installation[] = [
       biDirectionalMeterSync: false
     },
     photos: []
+  },
+  {
+    id: 'inst-3',
+    installationCode: 'INS-2026-033',
+    orderId: 'ord-3',
+    orderNumber: 'ORD-2026-036',
+    customerId: 'cust-2',
+    customerName: 'Anand Joshi',
+    customerPhone: '+91 97654 32109',
+    customerAddress: 'Row House 8, Mayur Nagari, Kothrud, Pune',
+    capacityKw: 3.0,
+    systemType: 'on_grid',
+    scheduledDate: '2026-11-20',
+    scheduledEndDate: '2026-11-22',
+    actualStartTime: '2026-11-21T09:30:00',
+    assignedTechnicianIds: ['emp-1'],
+    technicianNames: ['Amit Jadhav (Lead)'],
+    status: 'in_progress',
+    checklist: {
+      structureMounting: true,
+      panelsMounted: true,
+      earthingPitConnected: true,
+      lightningArresterInstalled: true,
+      inverterWired: true,
+      dcWiringTested: false,
+      acDbBoxConnected: false,
+      biDirectionalMeterSync: false
+    },
+    photos: [
+      'https://images.unsplash.com/photo-1508873696983-2df5293cb395?w=500&auto=format&fit=crop&q=80'
+    ],
+    technicianRemarks: 'Structure bolted and panels mounted. Inverter placed. Pending DC polarity meter testing.'
+  },
+  {
+    id: 'inst-4',
+    installationCode: 'INS-2026-034',
+    orderId: 'ord-4',
+    orderNumber: 'ORD-2026-037',
+    customerId: 'cust-4',
+    customerName: 'Kiran Thorat',
+    customerPhone: '+91 98901 23456',
+    customerAddress: 'Plot 18, Sector 21, Yamunanagar, Nigdi, PCMC',
+    capacityKw: 3.0,
+    systemType: 'on_grid',
+    scheduledDate: '2026-11-26',
+    scheduledEndDate: '2026-11-28',
+    assignedTechnicianIds: ['emp-5'],
+    technicianNames: ['Sachin Kale (Lead)'],
+    status: 'scheduled',
+    checklist: {
+      structureMounting: false,
+      panelsMounted: false,
+      earthingPitConnected: false,
+      lightningArresterInstalled: false,
+      inverterWired: false,
+      dcWiringTested: false,
+      acDbBoxConnected: false,
+      biDirectionalMeterSync: false
+    },
+    photos: []
+  },
+  {
+    id: 'inst-5',
+    installationCode: 'INS-2026-035',
+    orderId: 'ord-5',
+    orderNumber: 'ORD-2026-038',
+    customerId: 'cust-5',
+    customerName: 'Dr. Anil Deshmukh',
+    customerPhone: '+91 98220 11990',
+    customerAddress: 'Flat 502, Sky High Towers, Shivaji Nagar, Pune',
+    capacityKw: 5.0,
+    systemType: 'on_grid',
+    scheduledDate: '2026-11-14',
+    scheduledEndDate: '2026-11-17',
+    assignedTechnicianIds: ['emp-1'],
+    technicianNames: ['Amit Jadhav (Lead)'],
+    status: 'delayed',
+    isDelayed: true,
+    adminNotes: 'Delayed due to building society terrace access clearance delay. Society NOC received on Nov 20.',
+    checklist: {
+      structureMounting: false,
+      panelsMounted: false,
+      earthingPitConnected: false,
+      lightningArresterInstalled: false,
+      inverterWired: false,
+      dcWiringTested: false,
+      acDbBoxConnected: false,
+      biDirectionalMeterSync: false
+    },
+    photos: []
+  }
+];
+
+export const INITIAL_DELEGATIONS: import('../types').OperationalDelegation[] = [
+  {
+    id: 'dlg-1',
+    delegationCode: 'DLG-2026-001',
+    employeeId: 'usr-5',
+    employeeName: 'Amit Jadhav',
+    employeeRole: 'install_tech',
+    grantedPermission: 'installations.execute',
+    departmentScope: 'Operations & Installations',
+    authorizedByEmployeeId: 'usr-1',
+    authorizedByName: 'Vikramaditya Rao',
+    justification: 'Certified lead engineer authorized for high-voltage industrial solar commissioning.',
+    startDate: '2026-01-01',
+    expiresDate: '2026-12-31',
+    active: true,
+    createdAt: '2026-01-01T00:00:00Z'
   }
 ];
 

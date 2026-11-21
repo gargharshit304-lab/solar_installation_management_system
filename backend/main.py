@@ -407,6 +407,302 @@ def get_project_profitability():
         )
     ]
 
+# -----------------------------------------------------------------------------
+# RBAC Operational Delegations & Installation Management
+# -----------------------------------------------------------------------------
+
+INSTALLATIONS_DB = [
+    {
+        "id": "inst-1",
+        "installation_code": "INS-2026-031",
+        "order_id": "ord-1",
+        "order_number": "ORD-2026-038",
+        "customer_id": "cust-1",
+        "customer_name": "Rajesh Sharma",
+        "customer_phone": "+91 98201 44512",
+        "customer_address": "Plot 42, Green Park Avenue, Aundh, Pune",
+        "capacity_kw": 5.0,
+        "system_type": "on_grid",
+        "scheduled_date": "2026-03-24",
+        "scheduled_end_date": "2026-03-25",
+        "assigned_technician_ids": ["emp-1"],
+        "technician_names": ["Amit Jadhav (Lead)"],
+        "status": "completed",
+        "actual_start_time": "2026-03-24T09:00:00Z",
+        "actual_finish_time": "2026-03-25T16:30:00Z",
+        "executed_by_technician_id": "usr-5",
+        "executed_by_technician_name": "Amit Jadhav",
+        "customer_sign_name": "Rajesh Sharma",
+        "checklist": {
+            "structureMounting": True, "panelsMounted": True, "earthingPitConnected": True,
+            "lightningArresterInstalled": True, "inverterWired": True, "dcWiringTested": True,
+            "acDbBoxConnected": True, "biDirectionalMeterSync": True
+        }
+    },
+    {
+        "id": "inst-2",
+        "installation_code": "INS-2026-032",
+        "order_id": "ord-2",
+        "order_number": "ORD-2026-039",
+        "customer_id": "cust-2",
+        "customer_name": "Priya Patel",
+        "customer_phone": "+91 98220 11234",
+        "customer_address": "Flat 804, Sky High Towers, Baner, Pune",
+        "capacity_kw": 3.0,
+        "system_type": "on_grid",
+        "scheduled_date": "2026-03-28",
+        "scheduled_end_date": "2026-03-29",
+        "assigned_technician_ids": ["emp-1"],
+        "technician_names": ["Amit Jadhav (Lead)"],
+        "status": "in_progress",
+        "actual_start_time": "2026-03-28T08:30:00Z",
+        "checklist": {
+            "structureMounting": True, "panelsMounted": True, "earthingPitConnected": True,
+            "lightningArresterInstalled": True, "inverterWired": True, "dcWiringTested": False,
+            "acDbBoxConnected": False, "biDirectionalMeterSync": False
+        }
+    }
+]
+
+DELEGATIONS_DB = [
+    {
+        "id": "del-1",
+        "delegation_code": "DEL-2026-001",
+        "employee_id": "usr-5",
+        "employee_name": "Amit Jadhav",
+        "granted_permission": "installations.signoff",
+        "department_scope": "Operations",
+        "authorized_by": "Vikramaditya Rao (MD)",
+        "justification": "Certified Lead Installer authorized for autonomous safety commissioning and customer signoff signoff",
+        "effective_from": "2026-01-01",
+        "effective_to": "2026-12-31",
+        "active": True
+    }
+]
+
+class ChecklistVerificationRequest(BaseModel):
+    checklist: Dict[str, bool]
+    customer_sign_name: str
+    signature_data: Optional[str] = None
+    technician_remarks: Optional[str] = None
+
+class ReassignTechnicianRequest(BaseModel):
+    technician_names: List[str]
+    reason: str
+
+class RescheduleInstallationRequest(BaseModel):
+    start_date: str
+    end_date: str
+    reason: str
+
+class DelegationCreateRequest(BaseModel):
+    employee_id: str
+    employee_name: str
+    granted_permission: str
+    department_scope: str
+    resource_id: Optional[str] = None
+    justification: str
+    effective_from: str
+    effective_to: str
+
+def get_current_user_from_request(
+    authorization: Optional[str] = Header(None),
+    request: Request = None
+) -> dict:
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ")[1]
+    elif request and "solaros_session_token" in request.cookies:
+        token = request.cookies.get("solaros_session_token")
+    
+    if not token:
+        # Fallback to default user for unauthenticated requests in demo
+        return SYSTEM_USERS_DB[0]
+    
+    payload = verify_jwt_token(token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired session token."
+        )
+    user = next((u for u in SYSTEM_USERS_DB if u["id"] == payload.get("sub")), None)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found."
+        )
+    return user
+
+@app.get("/api/rbac/delegations")
+def get_delegations(current_user: dict = None):
+    return DELEGATIONS_DB
+
+@app.post("/api/rbac/delegations", status_code=status.HTTP_201_CREATED)
+def create_delegation(
+    req: DelegationCreateRequest,
+    authorization: Optional[str] = Header(None),
+    request: Request = None
+):
+    user = get_current_user_from_request(authorization, request)
+    if user["role"] != "owner_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Owner / Administrator can authorize operational delegations."
+        )
+    
+    new_del = {
+        "id": f"del-{len(DELEGATIONS_DB) + 1}",
+        "delegation_code": f"DEL-2026-{str(len(DELEGATIONS_DB) + 1).zfill(3)}",
+        "employee_id": req.employee_id,
+        "employee_name": req.employee_name,
+        "granted_permission": req.granted_permission,
+        "department_scope": req.department_scope,
+        "resource_id": req.resource_id,
+        "authorized_by": user["name"],
+        "justification": req.justification,
+        "effective_from": req.effective_from,
+        "effective_to": req.effective_to,
+        "active": True
+    }
+    DELEGATIONS_DB.append(new_del)
+    return new_del
+
+@app.delete("/api/rbac/delegations/{delegation_id}")
+def revoke_delegation(
+    delegation_id: str,
+    authorization: Optional[str] = Header(None),
+    request: Request = None
+):
+    user = get_current_user_from_request(authorization, request)
+    if user["role"] != "owner_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Owner / Administrator can revoke operational delegations."
+        )
+    
+    target = next((d for d in DELEGATIONS_DB if d["id"] == delegation_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Delegation record not found")
+    target["active"] = False
+    return {"status": "success", "message": "Operational delegation revoked."}
+
+@app.post("/api/installations/{installation_id}/execute")
+def execute_installation_job(
+    installation_id: str,
+    payload: ChecklistVerificationRequest,
+    authorization: Optional[str] = Header(None),
+    request: Request = None
+):
+    user = get_current_user_from_request(authorization, request)
+
+    # STRICT RBAC CHECK: Owner cannot execute field jobs directly
+    if user["role"] == "owner_admin":
+        # Check if there is an explicit delegation for this owner (typically not allowed)
+        has_delegation = any(
+            d["employee_id"] == user["id"] and d["granted_permission"] == "installations.execute" and d["active"]
+            for d in DELEGATIONS_DB
+        )
+        if not has_delegation:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Operational Execution Denied: The Managing Director & Owner possesses Administrative Authority but must not perform routine field execution. Please assign an Installation Technician or inspect this work order in Oversight mode."
+            )
+    
+    # Must have install_tech role or explicit operational delegation
+    is_installer = user["role"] == "install_tech"
+    has_delegation = any(
+        d["employee_id"] == user["id"] and d["granted_permission"] in ["installations.execute", "installations.signoff"] and d["active"]
+        for d in DELEGATIONS_DB
+    )
+    if not (is_installer or has_delegation):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Only certified installation technicians or authorized operational delegates can commission systems and record signoffs."
+        )
+    
+    target = next((i for i in INSTALLATIONS_DB if i["id"] == installation_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Installation job not found.")
+    
+    # Check that all 8 checklist items are complete
+    if not all(payload.checklist.values()) or len(payload.checklist) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="All 8 commissioning and electrical safety checklist items must be verified before signoff."
+        )
+    
+    target["status"] = "completed"
+    target["checklist"] = payload.checklist
+    target["actual_finish_time"] = datetime.utcnow().isoformat()
+    target["customer_sign_name"] = payload.customer_sign_name
+    target["customer_signature"] = payload.signature_data
+    target["technician_remarks"] = payload.technician_remarks
+    target["executed_by_technician_id"] = user["id"]
+    target["executed_by_technician_name"] = user["name"]
+
+    return {
+        "status": "success",
+        "message": f"Installation {target['installation_code']} successfully commissioned by {user['name']}.",
+        "installation": target
+    }
+
+@app.post("/api/installations/{installation_id}/reassign")
+def reassign_installation(
+    installation_id: str,
+    payload: ReassignTechnicianRequest,
+    authorization: Optional[str] = Header(None),
+    request: Request = None
+):
+    user = get_current_user_from_request(authorization, request)
+    if user["role"] not in ["owner_admin", "sales_exec"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Technician reassignment requires Administrative Authority."
+        )
+    
+    target = next((i for i in INSTALLATIONS_DB if i["id"] == installation_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Installation job not found.")
+    
+    target["technician_names"] = payload.technician_names
+    target["reassigned_by"] = user["name"]
+    target["admin_notes"] = f"Reassigned: {payload.reason}"
+    
+    return {
+        "status": "success",
+        "message": f"Installation {target['installation_code']} reassigned to {', '.join(payload.technician_names)} by {user['name']}.",
+        "installation": target
+    }
+
+@app.post("/api/installations/{installation_id}/reschedule")
+def reschedule_installation(
+    installation_id: str,
+    payload: RescheduleInstallationRequest,
+    authorization: Optional[str] = Header(None),
+    request: Request = None
+):
+    user = get_current_user_from_request(authorization, request)
+    if user["role"] not in ["owner_admin", "sales_exec"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Installation rescheduling requires Administrative Authority."
+        )
+    
+    target = next((i for i in INSTALLATIONS_DB if i["id"] == installation_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Installation job not found.")
+    
+    target["scheduled_date"] = payload.start_date
+    target["scheduled_end_date"] = payload.end_date
+    target["rescheduled_by"] = user["name"]
+    target["admin_notes"] = f"Rescheduled: {payload.reason}"
+    
+    return {
+        "status": "success",
+        "message": f"Installation window updated to {payload.start_date} - {payload.end_date} by {user['name']}.",
+        "installation": target
+    }
+
 @app.post("/api/ai/query")
 def process_ai_query(query: dict):
     """Conversational Business Intelligence Endpoint for AI Command Center"""

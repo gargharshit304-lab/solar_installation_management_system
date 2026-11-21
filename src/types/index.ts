@@ -384,6 +384,13 @@ export interface Installation {
   customerSignature?: string;
   customerSignName?: string;
   technicianRemarks?: string;
+  // RBAC Attribution & Administrative Oversight metadata
+  executedByTechnicianId?: string;
+  executedByTechnicianName?: string;
+  reassignedBy?: string;
+  rescheduledBy?: string;
+  adminNotes?: string;
+  isDelayed?: boolean;
 }
 
 export interface WarrantyRecord {
@@ -641,6 +648,114 @@ export interface Team {
 }
 
 export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'assign' | 'approve' | 'export' | 'manage';
+
+export type CapabilityPermission =
+  // Administrative Capabilities (Governance, oversight, delegation)
+  | 'company.view_all'
+  | 'company.manage_settings'
+  | 'employees.view_all'
+  | 'employees.create'
+  | 'employees.update'
+  | 'employees.deactivate'
+  | 'employees.assign_roles'
+  | 'departments.manage'
+  | 'roles_permissions.manage'
+  | 'approvals.view_all'
+  | 'approvals.decide'
+  | 'audit.view_all'
+  | 'exceptions.authorize'
+  | 'delegations.manage'
+
+  // Installations Capabilities (Separation: Monitor/Assign vs Execute/Sign)
+  | 'installations.view_all'
+  | 'installations.view_assigned'
+  | 'installations.monitor'
+  | 'installations.assign'
+  | 'installations.reassign'
+  | 'installations.reschedule'
+  | 'installations.flag_issue'
+  | 'installations.execute'
+  | 'installations.start'
+  | 'installations.update_checklist'
+  | 'installations.capture_signature'
+  | 'installations.submit_report'
+
+  // Site Surveys Capabilities (Separation: Schedule/Assign vs Claim/Conduct vs Approve)
+  | 'surveys.view_all'
+  | 'surveys.view_assigned'
+  | 'surveys.view_available'
+  | 'surveys.monitor'
+  | 'surveys.schedule'
+  | 'surveys.assign'
+  | 'surveys.reassign'
+  | 'surveys.claim'
+  | 'surveys.start'
+  | 'surveys.enter_measurements'
+  | 'surveys.upload_photos'
+  | 'surveys.submit_report'
+  | 'surveys.review'
+  | 'surveys.request_corrections'
+  | 'surveys.approve'
+  | 'surveys.reject'
+
+  // Warehouse & Logistics Capabilities (Separation: Monitor vs Receive/Scan/Release)
+  | 'inventory.view_all'
+  | 'inventory.receive'
+  | 'inventory.adjust'
+  | 'inventory.scan_serial'
+  | 'inventory.allocate_serial'
+  | 'dispatch.view_all'
+  | 'dispatch.prepare'
+  | 'dispatch.release'
+  | 'dispatch.authorize_override'
+  | 'delivery.confirm'
+
+  // Sales Capabilities (Separation: Conversion Pipeline vs Direct Sales Work)
+  | 'enquiries.view_all'
+  | 'enquiries.create'
+  | 'enquiries.update'
+  | 'enquiries.mark_lost'
+  | 'quotations.create'
+  | 'quotations.update'
+  | 'quotations.send'
+  | 'orders.create'
+  | 'orders.view_all'
+
+  // Finance Capabilities (Separation: Executive P&L vs Bookkeeping & Receipts)
+  | 'finance.view_all'
+  | 'invoices.create'
+  | 'payments.record'
+  | 'payments.verify'
+  | 'expenses.review'
+  | 'profitability.view_all'
+  | 'subsidies.view'
+  | 'subsidies.manage'
+
+  // Support & Warranty Capabilities
+  | 'support.tickets.create'
+  | 'support.tickets.update'
+  | 'support.tickets.resolve'
+  | 'warranty.view_all'
+  | 'warranty.claims.create'
+  | 'warranty.claims.adjudicate';
+
+export interface OperationalDelegation {
+  id: string;
+  delegationCode: string;
+  employeeId: string;
+  employeeName: string;
+  employeeRole: UserRole;
+  grantedPermission: CapabilityPermission;
+  departmentScope: string;
+  resourceId?: string; // e.g. specific installationId or surveyId
+  authorizedByEmployeeId: string;
+  authorizedByName: string;
+  justification: string;
+  startDate: string;
+  expiresDate?: string;
+  active: boolean;
+  createdAt: string;
+}
 
 export interface RoleDefinition {
   id: string;

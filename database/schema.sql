@@ -21,15 +21,38 @@ CREATE TABLE IF NOT EXISTS roles (
 );
 
 INSERT INTO roles (id, name, description, permissions) VALUES
-('owner_admin', 'Owner / Administrator', 'Full system access across all departments, financials, and configurations', '["all"]'::jsonb),
-('sales_exec', 'Sales Executive', 'Access to customers, enquiries, surveys, quotations, and orders', '["customers.read", "customers.write", "enquiries.all", "surveys.read", "quotations.all", "orders.read"]'::jsonb),
-('survey_tech', 'Survey Technician', 'Access to assigned site surveys, roof measurement data, site photography, self-claiming', '["surveys.assigned", "surveys.claim", "surveys.submit"]'::jsonb),
-('engineering_lead', 'Engineering Lead', 'Technical review of survey measurements, shadow analysis, engineering sign-off and approval', '["surveys.all", "surveys.review", "surveys.approve", "surveys.reject"]'::jsonb),
-('warehouse_mgr', 'Warehouse Manager', 'Access to inventory, products, serial numbers, dispatches, purchase orders', '["inventory.all", "dispatch.all", "products.all"]'::jsonb),
-('install_tech', 'Installation Technician', 'Access to assigned installations, checklist verification, photos, signatures', '["installations.assigned", "installations.update"]'::jsonb),
-('support_exec', 'Support Executive', 'Access to customer warranty lookups, service tickets, complaint management', '["warranty.read", "service.all"]'::jsonb),
-('accountant', 'Accountant', 'Access to invoices, customer payments, expense entries, project profitability', '["finance.all", "invoices.all", "reports.finance"]'::jsonb)
-ON CONFLICT (id) DO NOTHING;
+('owner_admin', 'Owner / Administrator', 'Full executive and administrative authority across departments, audit oversight, approvals, and exceptions (excludes routine operational job execution)', '["admin.all", "customers.read", "customers.write", "surveys.assign", "surveys.reassign", "surveys.reschedule", "surveys.read", "installations.oversight", "installations.assign", "installations.reassign", "installations.reschedule", "inventory.oversight", "finance.oversight", "finance.approve_exceptions", "support.oversight", "users.manage", "reports.all"]'::jsonb),
+('sales_exec', 'Sales Executive', 'Access to customers, enquiries, survey bookings, quotations, and orders', '["customers.read", "customers.write", "enquiries.all", "surveys.assign", "surveys.reassign", "surveys.reschedule", "surveys.read", "quotations.all", "orders.read"]'::jsonb),
+('survey_tech', 'Survey Technician', 'Operational access to assigned site surveys, roof measurement data, site photography, report submission', '["surveys.assigned", "surveys.claim", "surveys.execute", "surveys.submit_report"]'::jsonb),
+('engineering_lead', 'Engineering Lead', 'Technical review of survey measurements, shadow analysis, engineering sign-off, approval and correction requests', '["surveys.all", "surveys.review", "surveys.approve", "surveys.reject"]'::jsonb),
+('warehouse_mgr', 'Warehouse Manager', 'Operational control of warehouse inventory, product stock levels, serial numbers, dispatch orders', '["inventory.all", "inventory.adjust", "inventory.dispatch", "dispatch.all", "products.all"]'::jsonb),
+('install_tech', 'Installation Technician', 'Operational execution of assigned installations, 8-point checklist verification, photos, customer digital signatures', '["installations.assigned", "installations.execute", "installations.checklist_toggle", "installations.signoff"]'::jsonb),
+('support_exec', 'Support Executive', 'Customer warranty verification, service ticket registration, complaint resolution', '["warranty.read", "service.all", "service.resolve"]'::jsonb),
+('accountant', 'Accountant', 'Invoices, customer payment entry, expense recording, project profitability audits', '["finance.all", "payments.record", "invoices.all", "reports.finance"]'::jsonb)
+ON CONFLICT (id) DO UPDATE SET 
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    permissions = EXCLUDED.permissions;
+
+-- ----------------------------------------------------------------------------
+-- 1.1 OPERATIONAL DELEGATIONS & EXCEPTION GOVERNANCE
+-- ----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS operational_delegations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    delegation_code VARCHAR(30) UNIQUE NOT NULL,
+    employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    employee_name VARCHAR(150) NOT NULL,
+    granted_permission VARCHAR(100) NOT NULL,
+    department_scope VARCHAR(50) NOT NULL,
+    resource_id VARCHAR(50),
+    authorized_by VARCHAR(150) NOT NULL,
+    justification TEXT NOT NULL,
+    effective_from DATE NOT NULL DEFAULT CURRENT_DATE,
+    effective_to DATE NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 CREATE TABLE IF NOT EXISTS profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

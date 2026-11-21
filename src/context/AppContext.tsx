@@ -23,7 +23,8 @@ import {
   INITIAL_CUSTOMER_SITES, INITIAL_DEPARTMENTS, INITIAL_TEAMS,
   INITIAL_ROLES_PERMISSIONS, INITIAL_APPROVALS,
   INITIAL_EMPLOYEE_ACTIVITIES, INITIAL_AI_AGENTS,
-  INITIAL_SMART_ALERTS, INITIAL_SUBSIDY_APPLICATIONS
+  INITIAL_SMART_ALERTS, INITIAL_SUBSIDY_APPLICATIONS,
+  INITIAL_DELEGATIONS
 } from '../data/mockData';
 import { 
   AuthSession, 
@@ -33,6 +34,7 @@ import {
   generateAuthSession, 
   verifySessionToken 
 } from '../utils/authSession';
+import { verifyCapability } from '../utils/rbac';
 
 export interface Toast {
   id: string;
@@ -140,6 +142,14 @@ interface AppContextType {
   startInstallation: (installationId: string) => void;
   updateInstallationChecklist: (installationId: string, key: keyof Installation['checklist'], value: boolean) => void;
   completeInstallationJob: (installationId: string, signatureName: string, signatureDataUrl?: string, remarks?: string) => void;
+  reassignInstallationTechnician: (installationId: string, technicianNames: string[], reason: string) => void;
+  rescheduleInstallation: (installationId: string, startDate: string, endDate: string, reason: string) => void;
+
+  // RBAC Capability & Controlled Delegation
+  hasPermission: (permission: import('../types').CapabilityPermission, context?: { assignedTechnicians?: string[]; entityId?: string }) => boolean;
+  delegations: import('../types').OperationalDelegation[];
+  createDelegation: (delegation: Omit<import('../types').OperationalDelegation, 'id' | 'delegationCode' | 'createdAt' | 'active'>) => import('../types').OperationalDelegation;
+  revokeDelegation: (delegationId: string) => void;
   
   warranties: WarrantyRecord[];
   complaints: ServiceComplaint[];
@@ -326,6 +336,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [serialNumbers, setSerialNumbers] = useState<SerialNumberRecord[]>(INITIAL_SERIAL_NUMBERS);
   const [dispatches, setDispatches] = useState<DispatchOrder[]>(INITIAL_DISPATCHES);
   const [installations, setInstallations] = useState<Installation[]>(INITIAL_INSTALLATIONS);
+  const [delegations, setDelegations] = useState<import('../types').OperationalDelegation[]>(INITIAL_DELEGATIONS);
   const [warranties, setWarranties] = useState<WarrantyRecord[]>(INITIAL_WARRANTIES);
   const [complaints, setComplaints] = useState<ServiceComplaint[]>(INITIAL_COMPLAINTS);
   const [profitability, setProfitability] = useState<ProjectProfitability[]>(INITIAL_PROFITABILITY);
@@ -1514,54 +1525,145 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Delivery confirmed! Equipment warranties calculated and activated from ${todayStr}.`, 'success');
   };
 
-  // Installations
+  // Installations & RBAC Enforcement
+  const hasPermission = (
+    permission: import('../types').CapabilityPermission, 
+    context?: { assignedTechnicians?: string[]; entityId?: string }
+  ): boolean => {
+    return verifyCapability(currentUser, permission, delegations, context).allowed;
+  };
+
+  const createDelegation = (
+    delegationData: Omit<import('../types').OperationalDelegation, 'id' | 'delegationCode' | 'createdAt' | 'active'>
+  ): import('../types').OperationalDelegation => {
+    const newDelegation: import('../types').OperationalDelegation = {
+      ...delegationData,
+      id: `del-${Date.now()}`,
+      delegationCode: `DEL-2026-${String(delegations.length + 1).padStart(3, '0')}`,
+      createdAt: new Date().toISOString(),
+      active: true
+    };
+    setDelegations(prev => [newDelegation, ...prev]);
+    showToast(`Operational delegation ${newDelegation.delegationCode} granted to ${delegationData.employeeName}`, 'success');
+    return newDelegation;
+  };
+
+  const revokeDelegation = (delegationId: string) => {
+    setDelegations(prev => prev.map(d => d.id === delegationId ? { ...d, active: false } : d));
+    showToast('Operational delegation revoked', 'info');
+  };
+
   const startInstallation = (installationId: string) => {
-    setInstallations(prev => prev.map(inst => inst.id === installationId ? {
-      ...inst,
+    const inst = installations.find(i => i.id === installationId);
+    if (!inst) return;
+
+    if (!hasPermission('installations.execute', { assignedTechnicians: inst.technicianNames, entityId: installationId })) {
+      showToast('Unauthorized: Operational job execution is reserved for assigned installation technicians.', 'error');
+      return;
+    }
+
+    setInstallations(prev => prev.map(i => i.id === installationId ? {
+      ...i,
       status: 'in_progress',
       actualStartTime: new Date().toISOString()
-    } : inst));
+    } : i));
     showToast('Installation job started. Work timers active.', 'info');
   };
 
   const updateInstallationChecklist = (installationId: string, key: keyof Installation['checklist'], value: boolean) => {
-    setInstallations(prev => prev.map(inst => {
-      if (inst.id === installationId) {
+    const inst = installations.find(i => i.id === installationId);
+    if (!inst) return;
+
+    if (!hasPermission('installations.execute', { assignedTechnicians: inst.technicianNames, entityId: installationId })) {
+      showToast('Unauthorized: Only assigned technicians or delegates can record commissioning checks.', 'error');
+      return;
+    }
+
+    setInstallations(prev => prev.map(i => {
+      if (i.id === installationId) {
         return {
-          ...inst,
+          ...i,
           checklist: {
-            ...inst.checklist,
+            ...i.checklist,
             [key]: value
           }
         };
       }
-      return inst;
+      return i;
     }));
   };
 
   const completeInstallationJob = (installationId: string, signatureName: string, signatureDataUrl?: string, remarks?: string) => {
+    const inst = installations.find(i => i.id === installationId);
+    if (!inst) return;
+
+    if (!hasPermission('installations.execute', { assignedTechnicians: inst.technicianNames, entityId: installationId })) {
+      showToast('Unauthorized: Only assigned technicians or delegates can submit installation signoffs.', 'error');
+      return;
+    }
+
     const nowStr = new Date().toISOString();
-    setInstallations(prev => prev.map(inst => {
-      if (inst.id === installationId) {
+    setInstallations(prev => prev.map(i => {
+      if (i.id === installationId) {
         return {
-          ...inst,
+          ...i,
           status: 'completed',
           actualFinishTime: nowStr,
           customerSignName: signatureName,
           customerSignature: signatureDataUrl,
-          technicianRemarks: remarks
+          technicianRemarks: remarks,
+          executedByTechnicianId: currentUser.id,
+          executedByTechnicianName: currentUser.name
+        };
+      }
+      return i;
+    }));
+
+    // Update corresponding order
+    setOrders(prev => prev.map(o => o.id === inst.orderId ? { ...o, orderStatus: 'completed' } : o));
+
+    showToast(`Installation completed and commissioned by ${currentUser.name}! Customer digital signoff archived.`, 'success');
+  };
+
+  const reassignInstallationTechnician = (installationId: string, technicianNames: string[], reason: string) => {
+    if (!hasPermission('installations.reassign')) {
+      showToast('Unauthorized: Technician reassignment requires Administrative Authority.', 'error');
+      return;
+    }
+
+    setInstallations(prev => prev.map(inst => {
+      if (inst.id === installationId) {
+        return {
+          ...inst,
+          technicianNames,
+          reassignedBy: currentUser.name,
+          adminNotes: reason ? `${inst.adminNotes ? inst.adminNotes + ' | ' : ''}Reassigned to ${technicianNames.join(', ')}: ${reason}` : inst.adminNotes
         };
       }
       return inst;
     }));
+    showToast(`Installation successfully reassigned to ${technicianNames.join(', ')} by ${currentUser.name}`, 'success');
+  };
 
-    // Update corresponding order
-    const inst = installations.find(i => i.id === installationId);
-    if (inst) {
-      setOrders(prev => prev.map(o => o.id === inst.orderId ? { ...o, orderStatus: 'completed' } : o));
+  const rescheduleInstallation = (installationId: string, startDate: string, endDate: string, reason: string) => {
+    if (!hasPermission('installations.reschedule')) {
+      showToast('Unauthorized: Installation rescheduling requires Administrative Authority.', 'error');
+      return;
     }
 
-    showToast('Installation completed successfully with customer digital signoff!', 'success');
+    setInstallations(prev => prev.map(inst => {
+      if (inst.id === installationId) {
+        return {
+          ...inst,
+          scheduledDate: startDate,
+          scheduledEndDate: endDate,
+          rescheduledBy: currentUser.name,
+          adminNotes: reason ? `${inst.adminNotes ? inst.adminNotes + ' | ' : ''}Rescheduled: ${reason}` : inst.adminNotes
+        };
+      }
+      return inst;
+    }));
+    showToast(`Installation window updated to ${startDate} - ${endDate} by ${currentUser.name}`, 'info');
   };
 
   // Service Complaints
@@ -2174,6 +2276,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       startInstallation,
       updateInstallationChecklist,
       completeInstallationJob,
+      reassignInstallationTechnician,
+      rescheduleInstallation,
+      hasPermission,
+      delegations,
+      createDelegation,
+      revokeDelegation,
       warranties,
       complaints,
       createServiceTicket,
