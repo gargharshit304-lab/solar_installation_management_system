@@ -56,8 +56,13 @@ export const SurveyReportViewerModal: React.FC<SurveyReportViewerModalProps> = (
                   <span>Approved by Engineering Lead</span>
                 </div>
                 <div className="text-[11px] text-mutedGrey">
-                  Sign-off: {survey.engineeringApproverName || 'Vikramaditya Rao'} ({survey.approvedAt || '2026-11-09'})
+                  Approver: <strong>{survey.approvedByName || survey.engineeringApproverName || 'Sandeep Patil (Lead Engineer)'}</strong> ({survey.approvedAt || 'Certified'})
                 </div>
+                {survey.reviewedByName && (
+                  <div className="text-[10px] text-mutedGrey">
+                    Reviewed by: {survey.reviewedByName}
+                  </div>
+                )}
               </div>
             ) : survey.status === 'rejected' ? (
               <div className="p-2.5 bg-terracotta-50 border border-terracotta/40 rounded-xl text-xs space-y-0.5 text-right">

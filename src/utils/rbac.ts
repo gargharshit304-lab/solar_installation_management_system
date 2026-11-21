@@ -31,6 +31,10 @@ export const ROLE_CAPABILITIES: Record<UserRole, CapabilityPermission[]> = {
     'approvals.view_all',
     'approvals.decide',
     'audit.view_all',
+    'audit.view',
+    'audit.view_company_wide',
+    'audit.export',
+    'activity_center.view',
     'exceptions.authorize',
     'delegations.manage',
 
@@ -176,6 +180,14 @@ export function checkActionPermission(
 ): boolean {
   if (!user || !user.role) return false;
 
+  // Strict Audit Log Immutability: Audit records are append-only.
+  // No role, including owner_admin, may edit, delete, or modify audit records.
+  if (['audit', 'activity_center', 'activity'].includes(resource)) {
+    if (['edit', 'delete', 'update', 'modify', 'purge'].includes(action)) {
+      return false;
+    }
+  }
+
   // Strict Administrative Separation: Owner cannot execute field installations without explicit delegation
   if (user.role === 'owner_admin' && (action === 'execute' || (resource === 'installations' && action.startsWith('execute')))) {
     const hasDelegation = delegations.some(
@@ -200,13 +212,20 @@ export function checkActionPermission(
         return true;
       }
     }
+    // Company-wide audit trail access: read and export only
+    if (['audit', 'activity_center', 'activity'].includes(resource)) {
+      if (['view', 'view_all', 'view_company_wide', 'export', 'read'].includes(action)) {
+        return true;
+      }
+      return false;
+    }
   }
 
   // 1. Check Dynamic Role Definition (Highest Priority Authority)
   if (dynamicRoles && dynamicRoles.length > 0) {
     const roleDef = dynamicRoles.find(r => r.roleKey === user.role || r.id === user.role);
     if (roleDef && roleDef.permissions) {
-      // Map canonical resource aliases (e.g. roles <-> roles_permissions <-> permissions, workforce <-> employees)
+      // Map canonical resource aliases (e.g. roles <-> roles_permissions <-> permissions, workforce <-> employees, audit <-> activity_center)
       const resourceAliases = [resource];
       if (resource === 'roles' || resource === 'permissions') {
         resourceAliases.push('roles_permissions', 'roles', 'permissions');
@@ -216,6 +235,8 @@ export function checkActionPermission(
         resourceAliases.push('employees');
       } else if (resource === 'employees') {
         resourceAliases.push('workforce');
+      } else if (resource === 'audit' || resource === 'activity_center' || resource === 'activity') {
+        resourceAliases.push('audit', 'activity_center', 'activity');
       }
 
       let actions: PermissionAction[] = [];
@@ -225,9 +246,14 @@ export function checkActionPermission(
         }
       }
 
-      // View action check: view or manage grants viewing
-      if (action === 'view') {
-        if (actions.includes('view') || actions.includes('manage')) return true;
+      // View action check: view, view_company_wide, view_all, or manage grants viewing
+      if (action === 'view' || action === 'view_company_wide' || action === 'view_all' || action === 'read') {
+        if (
+          actions.includes('view') || 
+          actions.includes('view_company_wide' as any) || 
+          actions.includes('view_all' as any) || 
+          actions.includes('manage')
+        ) return true;
       } else {
         // Mutation actions: VIEW never implies CREATE, EDIT, DELETE, ASSIGN, APPROVE, EXPORT
         if (actions.includes(action as any)) return true;
@@ -527,6 +553,18 @@ export const ROUTE_PERMISSIONS: Record<string, RoutePermission> = {
     requiredCapability: 'audit.view_all',
     description: 'Employee activity and audit stream'
   },
+  '/audit': {
+    path: '/audit',
+    allowedRoles: ['owner_admin'],
+    requiredCapability: 'audit.view_all',
+    description: 'Enterprise audit trail and activity log'
+  },
+  '/audit-logs': {
+    path: '/audit-logs',
+    allowedRoles: ['owner_admin'],
+    requiredCapability: 'audit.view_all',
+    description: 'Enterprise audit trail and activity log'
+  },
   '/departments': {
     path: '/departments',
     allowedRoles: ['owner_admin'],
@@ -627,6 +665,8 @@ export const ROUTE_TO_MODULE_MAP: Record<string, string> = {
   '/installations': 'installations',
   '/workforce': 'workforce',
   '/activity-center': 'activity_center',
+  '/audit': 'audit',
+  '/audit-logs': 'audit',
   '/departments': 'departments',
   '/roles-permissions': 'roles_permissions',
   '/approvals': 'approvals',
@@ -675,9 +715,30 @@ export function isRouteAllowedForRole(
   if (dynamicRoles && dynamicRoles.length > 0 && moduleKey) {
     const roleDef = dynamicRoles.find(r => r.roleKey === role || r.id === role);
     if (roleDef && roleDef.permissions) {
-      const moduleActions = roleDef.permissions[moduleKey] || [];
-      // If user has view or manage permission on this module, route access is GRANTED
-      if (moduleActions.includes('view') || moduleActions.includes('manage')) {
+      // Map aliases for modules
+      const moduleAliases = [moduleKey];
+      if (moduleKey === 'audit' || moduleKey === 'activity_center' || moduleKey === 'activity') {
+        moduleAliases.push('audit', 'activity_center', 'activity');
+      } else if (moduleKey === 'roles' || moduleKey === 'permissions' || moduleKey === 'roles_permissions') {
+        moduleAliases.push('roles_permissions', 'roles', 'permissions');
+      } else if (moduleKey === 'workforce' || moduleKey === 'employees') {
+        moduleAliases.push('workforce', 'employees');
+      }
+
+      let moduleActions: PermissionAction[] = [];
+      for (const m of moduleAliases) {
+        if (roleDef.permissions[m]) {
+          moduleActions = [...moduleActions, ...roleDef.permissions[m]];
+        }
+      }
+
+      // If user has view, view_all, view_company_wide, or manage permission on this module, route access is GRANTED
+      if (
+        moduleActions.includes('view') || 
+        moduleActions.includes('manage') ||
+        moduleActions.includes('view_company_wide' as any) ||
+        moduleActions.includes('view_all' as any)
+      ) {
         return true;
       }
       // If module is configured in dynamic permissions and view is NOT granted, deny access

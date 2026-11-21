@@ -86,6 +86,8 @@ model Employee {
 
   @@index([employeeCode])
   @@index([department])
+  @@index([email])
+  @@index([firstName, lastName])
   @@map("employees")
 }
 
@@ -181,4 +183,126 @@ model AuditLog {
   @@index([action])
   @@index([timestamp])
   @@map("audit_logs")
+}
+
+// ----------------------------------------------------------------------------
+// 8. Financial Transactions & Direct Project Expenses
+// ----------------------------------------------------------------------------
+
+model FinancialTransaction {
+  id                String   @id @default(uuid()) @db.Uuid
+  transactionNumber String   @unique @map("transaction_number") @db.VarChar(50)
+  projectId         String?  @map("project_id") @db.VarChar(50)
+  projectCode       String?  @map("project_code") @db.VarChar(50)
+  orderId           String?  @map("order_id") @db.VarChar(50)
+  orderNumber       String?  @map("order_number") @db.VarChar(50)
+  customerId        String?  @map("customer_id") @db.VarChar(50)
+  customerName      String   @map("customer_name") @db.VarChar(150)
+  type              String   @db.VarChar(50)
+  category          String   @db.VarChar(100)
+  amount            Decimal  @db.Decimal(12, 2)
+  date              DateTime @db.Date
+  sourceModule      String   @map("source_module") @db.VarChar(50)
+  sourceRecordId    String   @map("source_record_id") @db.VarChar(50)
+  referenceNumber   String?  @map("reference_number") @db.VarChar(100)
+  paymentMethod     String?  @map("payment_method") @db.VarChar(50)
+  status            String   @default("verified") @db.VarChar(30)
+  createdBy         String   @map("created_by") @db.VarChar(150)
+  notes             String?  @db.Text
+  documentUrl       String?  @map("document_url") @db.Text
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@index([projectId])
+  @@index([orderId])
+  @@index([type])
+  @@index([date])
+  @@map("financial_transactions")
+}
+
+model DirectExpense {
+  id               String   @id @default(uuid()) @db.Uuid
+  expenseNumber    String   @unique @map("expense_number") @db.VarChar(50)
+  projectId        String?  @map("project_id") @db.VarChar(50)
+  projectCode      String?  @map("project_code") @db.VarChar(50)
+  orderId          String?  @map("order_id") @db.VarChar(50)
+  orderNumber      String?  @map("order_number") @db.VarChar(50)
+  customerName     String?  @map("customer_name") @db.VarChar(150)
+  isCompanyLevel   Boolean  @default(false) @map("is_company_level")
+  category         String   @db.VarChar(100)
+  amount           Decimal  @db.Decimal(12, 2)
+  vendor           String   @db.VarChar(150)
+  expenseDate      DateTime @map("expense_date") @db.Date
+  paymentMethod    String   @map("payment_method") @db.VarChar(50)
+  paymentStatus    String   @default("paid") @map("payment_status") @db.VarChar(30)
+  approvalStatus   String   @default("approved") @map("approval_status") @db.VarChar(30)
+  invoiceReference String?  @map("invoice_reference") @db.VarChar(100)
+  description      String   @db.Text
+  receiptUrl       String?  @map("receipt_url") @db.Text
+  receiptFileName  String?  @map("receipt_file_name") @db.VarChar(255)
+  recordedBy       String   @map("recorded_by") @db.VarChar(150)
+  recordedAt       DateTime @default(now()) @map("recorded_at")
+
+  @@index([projectId])
+  @@index([orderId])
+  @@index([category])
+  @@index([expenseDate])
+  @@map("direct_expenses")
+}
+
+model SiteSurvey {
+  id                        String    @id @default(uuid()) @db.Uuid
+  surveyNumber              String    @unique @map("survey_number") @db.VarChar(50)
+  customerId                String    @map("customer_id") @db.VarChar(50)
+  customerName              String    @map("customer_name") @db.VarChar(150)
+  customerPhone             String    @map("customer_phone") @db.VarChar(50)
+  customerAddress           String    @map("customer_address") @db.Text
+  scheduledDate             DateTime  @map("scheduled_date")
+  status                    String    @default("scheduled") @db.VarChar(30)
+  reviewStatus              String    @default("draft") @map("review_status") @db.VarChar(50)
+  approvalStatus            String    @default("pending_assignment") @map("approval_status") @db.VarChar(50)
+  technicianId              String?   @map("technician_id") @db.VarChar(50)
+  technicianName            String?   @map("technician_name") @db.VarChar(150)
+  assignedReviewerId        String?   @map("assigned_reviewer_id") @db.VarChar(50)
+  assignedReviewerName      String?   @map("assigned_reviewer_name") @db.VarChar(150)
+  assignedApproverId        String?   @map("assigned_approver_id") @db.VarChar(50)
+  assignedApproverName      String?   @map("assigned_approver_name") @db.VarChar(150)
+  reviewedById              String?   @map("reviewed_by_id") @db.VarChar(50)
+  reviewedByName            String?   @map("reviewed_by_name") @db.VarChar(150)
+  reviewedAt                DateTime? @map("reviewed_at")
+  reviewNotes               String?   @map("review_notes") @db.Text
+  reviewRecommendation      String?   @map("review_recommendation") @db.VarChar(50)
+  approvedById              String?   @map("approved_by_id") @db.VarChar(50)
+  approvedByName            String?   @map("approved_by_name") @db.VarChar(150)
+  approvedAt                DateTime? @map("approved_at")
+  approvalNotes             String?   @map("approval_notes") @db.Text
+  correctionsRequestedNotes String?   @map("corrections_requested_notes") @db.Text
+  rejectionReason           String?   @map("rejection_reason") @db.Text
+  reportVersion             Int       @default(1) @map("report_version")
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @default(now()) @map("updated_at")
+
+  @@index([customerId])
+  @@index([status])
+  @@index([reviewStatus])
+  @@index([approvalStatus])
+  @@map("site_surveys")
+}
+
+model SurveyWorkflowAudit {
+  id             String   @id @default(uuid()) @db.Uuid
+  surveyId       String   @map("survey_id") @db.VarChar(50)
+  surveyNumber   String   @map("survey_number") @db.VarChar(50)
+  eventType      String   @map("event_type") @db.VarChar(50)
+  actorId        String   @map("actor_id") @db.VarChar(50)
+  actorName      String   @map("actor_name") @db.VarChar(150)
+  actorRole      String   @map("actor_role") @db.VarChar(50)
+  timestamp      DateTime @default(now())
+  previousStatus String?  @map("previous_status") @db.VarChar(50)
+  newStatus      String   @map("new_status") @db.VarChar(50)
+  comments       String?  @db.Text
+  version        Int      @default(1)
+
+  @@index([surveyId])
+  @@index([eventType])
+  @@map("survey_workflow_audits")
 }

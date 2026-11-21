@@ -235,6 +235,16 @@ export function App() {
                   <EmployeeActivityCenterPage />
                 </RoleGuard>
               } />
+              <Route path="audit" element={
+                <RoleGuard routePath="/audit" allowedRoles={['owner_admin']}>
+                  <EmployeeActivityCenterPage />
+                </RoleGuard>
+              } />
+              <Route path="audit-logs" element={
+                <RoleGuard routePath="/audit-logs" allowedRoles={['owner_admin']}>
+                  <EmployeeActivityCenterPage />
+                </RoleGuard>
+              } />
               <Route path="departments" element={
                 <RoleGuard routePath="/departments" allowedRoles={['owner_admin']}>
                   <DepartmentsTeamsPage />

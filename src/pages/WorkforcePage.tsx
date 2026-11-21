@@ -3,10 +3,11 @@ import {
   UserCheck, Search, Filter, Phone, Mail, Award, 
   Clock, CheckCircle2, XCircle, Star, ShieldCheck, 
   Plus, Edit2, UserX, UserPlus, X, Calendar, MapPin, 
-  AlertTriangle, Briefcase, ChevronRight, Activity, Shield
+  AlertTriangle, Briefcase, ChevronRight, Activity, Shield, RotateCcw
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Employee, UserRole } from '../types';
+import { EmployeeFilterToolbar } from '../components/workforce/EmployeeFilterToolbar';
 
 export const WorkforcePage: React.FC = () => {
   const { 
@@ -20,7 +21,7 @@ export const WorkforcePage: React.FC = () => {
     showToast 
   } = useApp();
 
-  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [deptFilter, setDeptFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'on_leave' | 'inactive'>('all');
 
@@ -49,25 +50,46 @@ export const WorkforcePage: React.FC = () => {
   const [formEmergencyRelation, setFormEmergencyRelation] = useState('');
   const [formEmergencyPhone, setFormEmergencyPhone] = useState('');
 
-  // Filtered employees
+  // Normalize department names for flexible matching
+  const normalizeDept = (dept: string) => dept.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
+
+  const isSameDept = (empDept: string, targetDept: string) => {
+    if (!targetDept || targetDept.toLowerCase() === 'all') return true;
+    if (!empDept) return false;
+    const cleanEmp = normalizeDept(empDept);
+    const cleanTarget = normalizeDept(targetDept);
+    if (cleanEmp === cleanTarget || cleanEmp.includes(cleanTarget) || cleanTarget.includes(cleanEmp)) return true;
+    if ((cleanTarget.includes('sales') || cleanTarget === 'sls') && cleanEmp.includes('sales')) return true;
+    if ((cleanTarget.includes('field') || cleanTarget === 'fld') && cleanEmp.includes('field')) return true;
+    if ((cleanTarget.includes('eng') || cleanTarget === 'eng') && cleanEmp.includes('eng')) return true;
+    if ((cleanTarget.includes('install') || cleanTarget.includes('ops') || cleanTarget === 'ops') && cleanEmp.includes('install')) return true;
+    if ((cleanTarget.includes('warehouse') || cleanTarget.includes('log') || cleanTarget === 'log') && cleanEmp.includes('warehouse')) return true;
+    if ((cleanTarget.includes('account') || cleanTarget.includes('fin') || cleanTarget === 'fin') && cleanEmp.includes('account')) return true;
+    if ((cleanTarget.includes('support') || cleanTarget.includes('warrant') || cleanTarget === 'sup') && (cleanEmp.includes('care') || cleanEmp.includes('warrant') || cleanEmp.includes('support'))) return true;
+    return false;
+  };
+
+  // Filtered employees adhering to Department, Employee Selector, and Duty Status
   const filteredEmployees = employees.filter(emp => {
-    const term = searchTerm.toLowerCase();
-    const matchesSearch = 
-      emp.fullName.toLowerCase().includes(term) ||
-      emp.employeeCode.toLowerCase().includes(term) ||
-      emp.skills.some(s => s.toLowerCase().includes(term)) ||
-      emp.designation.toLowerCase().includes(term);
+    // 1. Employee specific filter (if an employee is explicitly chosen)
+    if (selectedEmployee && emp.id !== selectedEmployee.id) {
+      return false;
+    }
 
-    const matchesDept = deptFilter === 'all' || 
-      emp.department.toLowerCase() === deptFilter.toLowerCase() ||
-      emp.department.toLowerCase().includes(deptFilter.toLowerCase());
+    // 2. Department filter
+    if (deptFilter !== 'all' && !isSameDept(emp.department, deptFilter)) {
+      return false;
+    }
 
-    const matchesStatus = statusFilter === 'all' || 
-      (statusFilter === 'active' && (emp.status === 'active' || !emp.status)) ||
-      (statusFilter === 'on_leave' && emp.status === 'on_leave') ||
-      (statusFilter === 'inactive' && emp.status === 'inactive');
+    // 3. Status filter
+    if (statusFilter !== 'all') {
+      const empStatus = (emp.status || 'active').toLowerCase();
+      if (empStatus !== statusFilter.toLowerCase()) {
+        return false;
+      }
+    }
 
-    return matchesSearch && matchesDept && matchesStatus;
+    return true;
   });
 
   // KPI calculations
@@ -220,50 +242,47 @@ export const WorkforcePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-white rounded-2xl p-4 border border-warmGrey/60 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-mutedGrey absolute left-3 top-2.5" />
-          <input
-            type="text"
-            placeholder="Search employee by name, code, designation or skill..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs border border-warmGrey rounded-xl focus:outline-none focus:ring-1 focus:ring-navy"
-          />
-        </div>
+      {/* Advanced Scalable Employee & Department Filter Toolbar */}
+      <EmployeeFilterToolbar
+        selectedDepartment={deptFilter}
+        onDepartmentChange={setDeptFilter}
+        selectedEmployee={selectedEmployee}
+        onEmployeeSelect={setSelectedEmployee}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        totalResultsCount={filteredEmployees.length}
+        totalEmployeesCount={employees.length}
+        onClearAll={() => {
+          setDeptFilter('all');
+          setSelectedEmployee(null);
+          setStatusFilter('all');
+        }}
+      />
 
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={deptFilter}
-            onChange={e => setDeptFilter(e.target.value)}
-            className="px-3 py-2 text-xs border border-warmGrey rounded-xl bg-white text-charcoal focus:outline-none focus:ring-1 focus:ring-navy"
+      {/* Employees Grid or Empty State */}
+      {filteredEmployees.length === 0 ? (
+        <div className="bg-white rounded-2xl p-12 text-center border border-[rgba(196,138,66,0.18)] shadow-[0_3px_12px_rgba(196,138,66,0.10)] space-y-3">
+          <div className="w-12 h-12 rounded-full bg-sand-100 flex items-center justify-center mx-auto text-navy">
+            <UserX className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-charcoal">No matching personnel found</h3>
+          <p className="text-xs text-mutedGrey max-w-md mx-auto">
+            No employees match the selected department, employee filter, or duty status. Clear filters to view all personnel.
+          </p>
+          <button
+            onClick={() => {
+              setDeptFilter('all');
+              setSelectedEmployee(null);
+              setStatusFilter('all');
+            }}
+            className="px-4 py-2 bg-navy text-white text-xs font-semibold rounded-xl hover:bg-navy-light transition-colors inline-flex items-center space-x-1.5 shadow-2xs"
           >
-            <option value="all">All Departments</option>
-            <option value="Sales">Sales & Business Dev</option>
-            <option value="Field Operations">Field Operations</option>
-            <option value="Engineering">Engineering & Design</option>
-            <option value="Installation">Installation & Operations</option>
-            <option value="Warehouse">Warehouse & Logistics</option>
-            <option value="Accounts">Accounts & Finance</option>
-            <option value="Customer Support">Client Care & Warranty</option>
-          </select>
-
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value as any)}
-            className="px-3 py-2 text-xs border border-warmGrey rounded-xl bg-white text-charcoal focus:outline-none focus:ring-1 focus:ring-navy"
-          >
-            <option value="all">All Employment Statuses</option>
-            <option value="active">Active Only</option>
-            <option value="on_leave">On Leave Only</option>
-            <option value="inactive">Inactive Only</option>
-          </select>
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Reset All Filters</span>
+          </button>
         </div>
-      </div>
-
-      {/* Employees Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
         {filteredEmployees.map(emp => {
           const isInactive = emp.status === 'inactive';
           const isOnLeave = emp.status === 'on_leave';
@@ -392,7 +411,8 @@ export const WorkforcePage: React.FC = () => {
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {/* Employee 360° Profile Modal */}
       {selectedProfileEmp && (

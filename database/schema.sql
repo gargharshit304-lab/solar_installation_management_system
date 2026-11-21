@@ -91,6 +91,64 @@ CREATE TABLE IF NOT EXISTS employees (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS financial_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    transaction_number VARCHAR(50) UNIQUE NOT NULL,
+    project_id VARCHAR(50),
+    project_code VARCHAR(50),
+    order_id VARCHAR(50),
+    order_number VARCHAR(50),
+    customer_id VARCHAR(50),
+    customer_name VARCHAR(150) NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    amount NUMERIC(12, 2) NOT NULL,
+    date DATE NOT NULL,
+    source_module VARCHAR(50) NOT NULL,
+    source_record_id VARCHAR(50) NOT NULL,
+    reference_number VARCHAR(100),
+    payment_method VARCHAR(50),
+    status VARCHAR(30) NOT NULL DEFAULT 'verified',
+    created_by VARCHAR(150) NOT NULL,
+    notes TEXT,
+    document_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fin_tx_project ON financial_transactions(project_id);
+CREATE INDEX IF NOT EXISTS idx_fin_tx_order ON financial_transactions(order_id);
+CREATE INDEX IF NOT EXISTS idx_fin_tx_type ON financial_transactions(type);
+CREATE INDEX IF NOT EXISTS idx_fin_tx_date ON financial_transactions(date);
+
+CREATE TABLE IF NOT EXISTS direct_expenses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    expense_number VARCHAR(50) UNIQUE NOT NULL,
+    project_id VARCHAR(50),
+    project_code VARCHAR(50),
+    order_id VARCHAR(50),
+    order_number VARCHAR(50),
+    customer_name VARCHAR(150),
+    is_company_level BOOLEAN NOT NULL DEFAULT FALSE,
+    category VARCHAR(100) NOT NULL,
+    amount NUMERIC(12, 2) NOT NULL,
+    vendor VARCHAR(150) NOT NULL,
+    expense_date DATE NOT NULL,
+    payment_method VARCHAR(50) NOT NULL,
+    payment_status VARCHAR(30) NOT NULL DEFAULT 'paid',
+    approval_status VARCHAR(30) NOT NULL DEFAULT 'approved',
+    invoice_reference VARCHAR(100),
+    description TEXT NOT NULL,
+    receipt_url TEXT,
+    receipt_file_name VARCHAR(255),
+    recorded_by VARCHAR(150) NOT NULL,
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_direct_exp_project ON direct_expenses(project_id);
+CREATE INDEX IF NOT EXISTS idx_direct_exp_order ON direct_expenses(order_id);
+CREATE INDEX IF NOT EXISTS idx_direct_exp_category ON direct_expenses(category);
+CREATE INDEX IF NOT EXISTS idx_direct_exp_date ON direct_expenses(expense_date);
+
 -- ----------------------------------------------------------------------------
 -- 3. CUSTOMERS & CRM
 -- ----------------------------------------------------------------------------
@@ -172,10 +230,39 @@ CREATE TABLE IF NOT EXISTS site_surveys (
     structural_suitability VARCHAR(50) DEFAULT 'suitable', -- 'suitable', 'needs_reinforcement', 'unsuitable'
     rejection_reason TEXT,
     
+    -- Engineering Review & Approval Workflow
     assigned_technician_id UUID REFERENCES employees(id),
+    assigned_reviewer_id UUID REFERENCES employees(id),
+    assigned_approver_id UUID REFERENCES employees(id),
+    reviewed_by_id UUID REFERENCES employees(id),
+    reviewed_at TIMESTAMPTZ,
+    review_notes TEXT,
+    review_recommendation VARCHAR(50), -- 'recommend_approval', 'revisions_required', 'recommend_rejection'
+    review_status VARCHAR(50) DEFAULT 'draft', -- 'draft', 'submitted', 'under_review', 'corrections_required', 'resubmitted', 'awaiting_approval', 'approved', 'rejected'
+    approval_status VARCHAR(50) DEFAULT 'pending_assignment', -- 'pending_assignment', 'under_review', 'revisions_required', 'awaiting_approval', 'approved', 'rejected'
     approved_by_id UUID REFERENCES employees(id),
+    approved_at TIMESTAMPTZ,
+    approval_notes TEXT,
+    corrections_requested_notes TEXT,
+    report_version INT NOT NULL DEFAULT 1,
+
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS survey_workflow_audits (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    survey_id UUID NOT NULL REFERENCES site_surveys(id) ON DELETE CASCADE,
+    event_type VARCHAR(50) NOT NULL,
+    actor_id UUID REFERENCES employees(id),
+    actor_name VARCHAR(150) NOT NULL,
+    actor_role VARCHAR(50) NOT NULL,
+    previous_status VARCHAR(50),
+    new_status VARCHAR(50) NOT NULL,
+    comments TEXT,
+    version INT NOT NULL DEFAULT 1,
+    metadata JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS survey_assignments (

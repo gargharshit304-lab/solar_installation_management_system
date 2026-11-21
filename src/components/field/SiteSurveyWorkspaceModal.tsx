@@ -25,6 +25,7 @@ export const SiteSurveyWorkspaceModal: React.FC<SiteSurveyWorkspaceModalProps> =
     startSurvey, 
     saveSurveyDraft, 
     submitSurveyReport,
+    resubmitSurveyReport,
     customers,
     showToast 
   } = useApp();
@@ -185,7 +186,7 @@ export const SiteSurveyWorkspaceModal: React.FC<SiteSurveyWorkspaceModalProps> =
       return;
     }
 
-    submitSurveyReport(survey.id, {
+    const payload = {
       roofType,
       roofLengthM: l,
       roofWidthM: w,
@@ -215,7 +216,13 @@ export const SiteSurveyWorkspaceModal: React.FC<SiteSurveyWorkspaceModalProps> =
       additionalSiteObservations,
       technicianNotes,
       surveyPhotos: photos
-    });
+    };
+
+    if (survey.reviewStatus === 'corrections_required' || survey.reviewStatus === 'revisions_required') {
+      resubmitSurveyReport(survey.id, payload);
+    } else {
+      submitSurveyReport(survey.id, payload);
+    }
 
     onClose();
   };
@@ -956,10 +963,18 @@ export const SiteSurveyWorkspaceModal: React.FC<SiteSurveyWorkspaceModalProps> =
                 <button
                   type="button"
                   onClick={handleSubmitReport}
-                  className="px-5 py-2 bg-navy hover:bg-navy-light text-white font-semibold text-xs rounded-xl shadow-xs flex items-center space-x-1.5 transition-all active:scale-95"
+                  className={`px-5 py-2 text-white font-semibold text-xs rounded-xl shadow-xs flex items-center space-x-1.5 transition-all active:scale-95 ${
+                    survey.reviewStatus === 'corrections_required' || survey.reviewStatus === 'revisions_required'
+                      ? 'bg-amber-dark hover:bg-amber text-charcoal font-bold'
+                      : 'bg-navy hover:bg-navy-light'
+                  }`}
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>Submit for Engineering Approval</span>
+                  <span>
+                    {survey.reviewStatus === 'corrections_required' || survey.reviewStatus === 'revisions_required'
+                      ? `Resubmit Revised Report (v${(survey.version || 1) + 1})`
+                      : 'Submit for Engineering Approval'}
+                  </span>
                 </button>
               </>
             )}

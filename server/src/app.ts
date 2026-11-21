@@ -18,6 +18,7 @@ import { surveyRoutes } from './modules/surveys/survey.routes';
 import { installationRoutes } from './modules/installations/installation.routes';
 import { dispatchRoutes } from './modules/dispatch/dispatch.routes';
 import { financeRoutes } from './modules/finance/finance.routes';
+import { employeeRoutes } from './modules/employees/employee.routes';
 import openApiSpec from './docs/openapi.json';
 
 export const app = express();
@@ -55,12 +56,14 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/rbac', rbacRoutes);
 app.use('/api/v1/audit-logs', auditRoutes);
+app.use('/api/v1/audit', auditRoutes);
 app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/customers', customerRoutes);
 app.use('/api/v1/surveys', surveyRoutes);
 app.use('/api/v1/installations', installationRoutes);
 app.use('/api/v1/dispatch', dispatchRoutes);
 app.use('/api/v1/finance', financeRoutes);
+app.use('/api/v1/employees', employeeRoutes);
 
 // 8. 404 Catch-All Handler
 app.use((req, res, next) => {

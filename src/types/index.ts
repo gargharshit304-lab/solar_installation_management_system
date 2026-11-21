@@ -1,4 +1,4 @@
-export type UserRole = 
+export type UserRole =
   | 'owner_admin'
   | 'sales_exec'
   | 'survey_tech'
@@ -23,7 +23,7 @@ export interface UserProfile {
   permissions?: string[];
 }
 
-export type LeadStatus = 
+export type LeadStatus =
   | 'new'
   | 'contacted'
   | 'survey_scheduled'
@@ -70,7 +70,7 @@ export interface Customer {
   sites?: CustomerSite[];
 }
 
-export type SurveyStatus = 
+export type SurveyStatus =
   | 'unassigned'
   | 'scheduled'
   | 'assigned'
@@ -136,7 +136,7 @@ export interface SiteSurvey {
   technicianName?: string;
   status: SurveyStatus;
   distanceKm?: number;
-  
+
   // Section A: Rooftop Measurements
   roofType?: string; // 'RCC Flat Concrete', 'Sloped Metal Tin Shed', 'Sloping Tiled Roof', 'Terrace with Shed'
   roofLengthM?: number;
@@ -188,15 +188,85 @@ export interface SiteSurvey {
   // Workflow timestamps & review state
   surveyStartedAt?: string;
   submittedAt?: string;
-  reviewStatus?: 'draft' | 'submitted' | 'under_review' | 'corrections_required' | 'approved' | 'rejected';
+  reviewStatus?: 'draft' | 'unassigned' | 'assigned' | 'submitted' | 'under_review' | 'in_review' | 'corrections_required' | 'revisions_required' | 'resubmitted' | 'awaiting_approval' | 'recommend_approval' | 'recommend_rejection' | 'approved' | 'rejected';
+  approvalStatus?: 'unassigned' | 'pending_assignment' | 'under_review' | 'revisions_required' | 'pending_approval' | 'awaiting_approval' | 'approved' | 'rejected';
+
+  // Reviewer attribution
+  assignedReviewerId?: string;
+  assignedReviewerName?: string;
+  reviewedById?: string;
+  reviewedByName?: string;
+  reviewedAt?: string;
+  reviewNotes?: string;
+  reviewRecommendation?: 'recommend_approval' | 'revisions_required' | 'recommend_rejection' | 'approve' | 'reject';
+  correctionsRequestedNotes?: string;
+
+  // Final Approver attribution
+  assignedApproverId?: string;
+  assignedApproverName?: string;
+  approvedById?: string;
+  approvedByName?: string;
+  approvedAt?: string;
+  approvalNotes?: string;
   engineeringApproverName?: string;
   engineeringReviewNotes?: string;
-  correctionsRequestedNotes?: string;
   rejectionReason?: string;
-  approvedAt?: string;
+
   isDraft?: boolean;
   version?: number;
   assignmentHistory?: SurveyAssignmentAudit[];
+  previousVersions?: SurveyVersionHistoryItem[];
+  workflowAuditTrail?: SurveyWorkflowAuditEvent[];
+}
+
+export type SurveyWorkflowEventType =
+  | 'report_submitted'
+  | 'reviewer_assigned'
+  | 'reviewer_reassigned'
+  | 'review_started'
+  | 'review_notes_saved'
+  | 'corrections_requested'
+  | 'technician_resubmitted'
+  | 'recommendation_submitted'
+  | 'approval_assigned'
+  | 'report_approved'
+  | 'report_rejected';
+
+export interface SurveyWorkflowAuditEvent {
+  id: string;
+  surveyId: string;
+  surveyNumber?: string;
+  eventType: SurveyWorkflowEventType;
+  actorId: string;
+  actorName: string;
+  actorRole: string;
+  timestamp: string;
+  previousStatus?: string;
+  newStatus?: string;
+  summary?: string;
+  comments?: string;
+  notes?: string;
+  version?: number;
+  metadata?: Record<string, any>;
+}
+
+export interface SurveyVersionHistoryItem {
+  version: number;
+  submittedAt: string;
+  technicianName?: string;
+  submittedBy?: string;
+  notes?: string;
+  snapshot?: any;
+  roofType?: string;
+  totalRoofAreaSqm?: number;
+  shadowFreeAreaSqm?: number;
+  roofDirection?: string;
+  roofTiltDegrees?: number;
+  sanctionedLoadKw?: number;
+  phaseType?: string;
+  cableDistanceMeters?: number;
+  notesSnapshot?: string;
+  correctionsRequestedNotes?: string;
 }
 
 export interface SolarPackage {
@@ -241,7 +311,7 @@ export interface Quotation {
   preparedBy: string;
 }
 
-export type OrderStatus = 
+export type OrderStatus =
   | 'pending'
   | 'confirmed'
   | 'processing'
@@ -283,9 +353,12 @@ export interface PaymentRecord {
   paymentStage: 'advance' | 'dispatch_milestone' | 'final_commissioning';
   paymentDate: string;
   recordedBy: string;
+  status?: 'pending' | 'completed' | 'verified' | 'failed';
+  verifiedBy?: string;
+  verifiedAt?: string;
 }
 
-export type ProductCategory = 
+export type ProductCategory =
   | 'Solar Panels'
   | 'Inverters'
   | 'Batteries'
@@ -382,7 +455,7 @@ export interface InventoryItem {
   };
 }
 
-export type SerialNumberStatus = 
+export type SerialNumberStatus =
   | 'received'
   | 'in_stock'
   | 'reserved'
@@ -670,7 +743,7 @@ export interface DispatchOrder {
   deliveryRemarks?: string;
 }
 
-export type InstallationStatus = 
+export type InstallationStatus =
   | 'scheduled'
   | 'assigned'
   | 'in_progress'
@@ -762,18 +835,195 @@ export interface ServiceComplaint {
 export interface ProjectProfitability {
   id: string;
   projectCode: string;
+  orderId?: string;
   orderNumber: string;
+  customerId?: string;
   customerName: string;
+  customerCity?: string;
   capacityKw: number;
   systemType: string;
-  revenue: number;
-  equipmentCosts: number;
-  labourCosts: number;
-  otherExpenses: number;
-  profit: number;
+  contractedValue?: number;
+  invoicedValue?: number;
+  verifiedCash?: number;
+  revenue: number; // Recognized revenue
+  equipmentCosts: number; // Actual dispatched equipment cost
+  labourCosts: number; // Approved technician labour cost
+  otherExpenses: number; // Direct project expenses
+  profit: number; // Net project profit
   profitMarginPercent: number;
+  receivables?: number;
   paymentStatus: 'fully_paid' | 'partially_paid' | 'unpaid';
   completionDate: string;
+  workflowStage?: 'survey' | 'quotation' | 'advance_paid' | 'dispatched' | 'installed' | 'commissioned' | 'completed';
+}
+
+export type FinancialTransactionType =
+  | 'revenue'
+  | 'invoice'
+  | 'payment'
+  | 'equipment_cost'
+  | 'labour_cost'
+  | 'direct_expense'
+  | 'vendor_payment'
+  | 'refund_adjustment';
+
+export type FinancialTransactionStatus = 'pending' | 'verified' | 'approved' | 'paid' | 'cancelled';
+
+export interface FinancialTransaction {
+  id: string;
+  transactionNumber: string;
+  projectId?: string;
+  projectCode?: string;
+  orderId?: string;
+  orderNumber?: string;
+  customerId?: string;
+  customerName: string;
+  type: FinancialTransactionType;
+  category: string;
+  amount: number;
+  date: string;
+  sourceModule: 'orders' | 'inventory_dispatch' | 'installations' | 'direct_expense' | 'payments' | 'finance';
+  sourceRecordId: string;
+  referenceNumber?: string;
+  paymentMethod?: string;
+  status: FinancialTransactionStatus;
+  createdBy: string;
+  recordedBy?: string;
+  description?: string;
+  notes?: string;
+  documentUrl?: string;
+  createdAt: string;
+}
+
+export type DirectExpenseCategory =
+  | 'Technician Labour Expense'
+  | 'Freight & Site Transport'
+  | 'Crane & Scaffolding Rental'
+  | 'DISCOM Inspection Fees'
+  | 'Tools & Consumables'
+  | 'Civil Works & Mounting Structure'
+  | 'Electrical Conduit & Wiring'
+  | 'Administrative Overhead';
+
+export interface DirectExpense {
+  id: string;
+  expenseNumber: string;
+  projectId?: string;
+  projectCode?: string;
+  orderId?: string;
+  orderNumber?: string;
+  customerName?: string;
+  isCompanyLevel: boolean;
+  category: DirectExpenseCategory | string;
+  amount: number;
+  vendor: string;
+  expenseDate: string;
+  paymentMethod: string;
+  paymentStatus: 'paid' | 'pending' | 'reimbursed';
+  approvalStatus: 'draft' | 'submitted' | 'approved' | 'rejected';
+  invoiceReference?: string;
+  description: string;
+  receiptUrl?: string;
+  receiptFileName?: string;
+  recordedBy: string;
+  recordedAt: string;
+  approvedBy?: string;
+  approvedAt?: string;
+}
+
+export interface ProjectFinancialDetail {
+  project: {
+    id: string;
+    projectCode: string;
+    orderId: string;
+    orderNumber: string;
+    customerId: string;
+    customerName: string;
+    customerPhone: string;
+    customerCity: string;
+    capacityKw: number;
+    systemType: string;
+    orderDate: string;
+    orderStatus: string;
+  };
+  revenue: {
+    contractedValue: number;
+    invoicedValue: number;
+    recognizedRevenue: number;
+    verifiedCashCollected: number;
+    outstandingReceivables: number;
+    invoices: Array<{
+      invoiceNumber: string;
+      stage: string;
+      amount: number;
+      date: string;
+      status: string;
+    }>;
+    payments: Array<{
+      paymentNumber: string;
+      stage: string;
+      amount: number;
+      date: string;
+      method: string;
+      refNumber: string;
+      status: string;
+    }>;
+  };
+  equipment: {
+    totalActualCost: number;
+    estimatedBomCost: number;
+    dispatches: Array<{
+      dispatchNumber: string;
+      dispatchDate: string;
+      status: string;
+      items: Array<{
+        productName: string;
+        category: string;
+        quantity: number;
+        serials: string[];
+        unitCost: number;
+        totalCost: number;
+      }>;
+    }>;
+  };
+  labour: {
+    totalActualCost: number;
+    estimatedCost: number;
+    workOrders: Array<{
+      installationCode: string;
+      scheduledDate: string;
+      status: string;
+      technicians: Array<{
+        technicianName: string;
+        role: string;
+        hours: number;
+        hourlyRate: number;
+        cost: number;
+      }>;
+    }>;
+  };
+  otherExpenses: {
+    totalDirectExpenses: number;
+    expenses: DirectExpense[];
+  };
+  profitability: {
+    revenue: number;
+    equipmentCosts: number;
+    labourCosts: number;
+    otherExpenses: number;
+    netProfit: number;
+    profitMarginPercent: number;
+  };
+  operationalCompletion: {
+    surveyApproved: boolean;
+    quotationApproved: boolean;
+    advancePaymentReceived: boolean;
+    materialsDispatched: boolean;
+    installationCompleted: boolean;
+    customerSignoff: boolean;
+    warrantyActivated: boolean;
+    currentStage: string;
+  };
 }
 
 export interface Employee {
@@ -870,13 +1120,13 @@ export interface CustomerEnquiry {
   territory?: string;
 }
 
-export type SubsidyStatus = 
-  | 'draft' 
-  | 'documents_pending' 
-  | 'submitted' 
-  | 'under_review' 
-  | 'approved' 
-  | 'rejected' 
+export type SubsidyStatus =
+  | 'draft'
+  | 'documents_pending'
+  | 'submitted'
+  | 'under_review'
+  | 'approved'
+  | 'rejected'
   | 'disbursed';
 
 export interface SubsidyApplication {
@@ -919,7 +1169,7 @@ export interface CommunicationHistoryItem {
   timestamp: string;
 }
 
-export type SalesActivityType = 
+export type SalesActivityType =
   | 'enquiry_received'
   | 'customer_contacted'
   | 'followup_completed'
@@ -973,7 +1223,7 @@ export interface Team {
   currentObjective?: string;
 }
 
-export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'assign' | 'approve' | 'export' | 'manage';
+export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'assign' | 'approve' | 'export' | 'manage' | 'view_company_wide';
 
 export type CapabilityPermission =
   // Administrative Capabilities (Governance, oversight, delegation)
@@ -1000,6 +1250,10 @@ export type CapabilityPermission =
   | 'approvals.view_all'
   | 'approvals.decide'
   | 'audit.view_all'
+  | 'audit.view'
+  | 'audit.view_company_wide'
+  | 'audit.export'
+  | 'activity_center.view'
   | 'exceptions.authorize'
   | 'delegations.manage'
 
@@ -1104,12 +1358,12 @@ export interface RoleDefinition {
   permissions: Record<string, PermissionAction[]>;
 }
 
-export type ApprovalCategory = 
-  | 'purchase_order' 
-  | 'expense' 
-  | 'supplier_payment' 
-  | 'discount' 
-  | 'budget_overrun' 
+export type ApprovalCategory =
+  | 'purchase_order'
+  | 'expense'
+  | 'supplier_payment'
+  | 'discount'
+  | 'budget_overrun'
   | 'leave';
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'info_requested';
@@ -1135,7 +1389,7 @@ export interface ApprovalRequest {
   attachments?: string[];
 }
 
-export type ActivityDepartment = 'Sales' | 'Field Operations' | 'Engineering' | 'Installation' | 'Warehouse' | 'Accounts';
+export type ActivityDepartment = 'Sales' | 'Field Operations' | 'Engineering' | 'Installation' | 'Warehouse' | 'Accounts' | 'Executive Management' | 'System' | string;
 
 export interface EmployeeActivityLog {
   id: string;
@@ -1145,11 +1399,18 @@ export interface EmployeeActivityLog {
   department: ActivityDepartment;
   role: string;
   actionType: string;
+  action?: 'CREATE' | 'UPDATE' | 'DELETE' | 'APPROVE' | 'REJECT' | 'DISPATCH' | 'COMPLETE' | 'LOGIN' | 'PERMISSION_CHANGE' | string;
+  module?: string;
   actionDetails: string;
   targetEntity?: string;
   targetId?: string;
+  recordId?: string;
+  previousValue?: any;
+  newValue?: any;
+  result?: 'SUCCESS' | 'FAILURE' | 'DENIED' | string;
   timestamp: string;
   ipAddress?: string;
+  sessionMetadata?: string;
   severity?: 'normal' | 'important' | 'critical';
 }
 

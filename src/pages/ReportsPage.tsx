@@ -46,6 +46,7 @@ export const ReportsPage: React.FC = () => {
     installations,
     warranties,
     profitability,
+    financialSummary,
     complaints,
     currentUser,
     showToast
@@ -72,9 +73,10 @@ export const ReportsPage: React.FC = () => {
     showToast(`Exported ${reportType.toUpperCase()} report (${dateRange}) to CSV`, 'success');
   };
 
-  const contractedValue = orders.reduce((sum, order) => sum + order.totalOrderValue, 0);
-  const collectedValue = payments.reduce((sum, payment) => sum + payment.amount, 0);
-  const outstandingValue = orders.reduce((sum, order) => sum + order.outstandingBalance, 0);
+  // Authoritative metrics synchronized with Finance Module
+  const contractedValue = financialSummary?.contractedValue ?? orders.reduce((sum, order) => sum + order.totalOrderValue, 0);
+  const collectedValue = financialSummary?.verifiedCashCollected ?? payments.filter(p => p.status === 'verified').reduce((sum, payment) => sum + payment.amount, 0);
+  const outstandingValue = financialSummary?.outstandingReceivables ?? Math.max(0, contractedValue - collectedValue);
   const completedInstallations = installations.filter(item => item.status === 'completed').length;
   const activeInstallations = installations.filter(item => item.status !== 'completed').length;
   const lowStockItems = inventory.filter(item => item.stockStatus !== 'in_stock');
@@ -84,11 +86,9 @@ export const ReportsPage: React.FC = () => {
   );
   const activeWarranties = warranties.filter(item => item.status === 'active').length;
   const openTickets = complaints.filter(item => item.status !== 'resolved' && item.status !== 'closed').length;
-  const totalProfit = profitability.reduce((sum, item) => sum + item.profit, 0);
-  const totalRevenue = profitability.reduce((sum, item) => sum + item.revenue, 0);
-  const averageMargin = totalRevenue
-    ? (totalProfit / totalRevenue) * 100
-    : 0;
+  const totalProfit = financialSummary?.netProjectProfit ?? profitability.reduce((sum, item) => sum + item.profit, 0);
+  const totalRevenue = financialSummary?.recognizedRevenue ?? profitability.reduce((sum, item) => sum + item.revenue, 0);
+  const averageMargin = financialSummary?.overallMarginPercent ?? (totalRevenue ? (totalProfit / totalRevenue) * 100 : 0);
 
   const reportOptions: {
     id: ReportType;

@@ -105,8 +105,11 @@ export class AuthService {
       actorId: user.id,
       actorName: user.fullName || user.name,
       actorRole: user.roleId || user.role,
+      department: user.department || 'Executive Management',
       action: 'AUTH_LOGIN',
       entity: 'Session',
+      entityId: user.id,
+      result: 'SUCCESS',
       ipAddress: params.ipAddress,
       reason: `Successful authentication via credentials (RememberMe: ${!!params.rememberMe})`
     });

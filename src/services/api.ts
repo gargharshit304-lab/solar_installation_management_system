@@ -168,11 +168,294 @@ export const rbacApi = {
   }
 };
 
+export interface AuditLogQueryParams {
+  page?: number;
+  limit?: number;
+  entity?: string;
+  module?: string;
+  action?: string;
+  actorId?: string;
+  department?: string;
+  result?: string;
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+}
+
 export const auditApi = {
-  getLogs: async (params: { page?: number; limit?: number; entity?: string } = {}, token?: string) => {
-    const query = new URLSearchParams(params as any).toString();
+  getLogs: async (params: AuditLogQueryParams = {}, token?: string) => {
+    const cleanParams: Record<string, string> = {};
+    Object.entries(params).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== '' && val !== 'All') {
+        cleanParams[key] = String(val);
+      }
+    });
+    const query = new URLSearchParams(cleanParams).toString();
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
     return request<any[]>(`/audit-logs?${query}`, { method: 'GET', headers });
   }
 };
+
+export const employeeApi = {
+  getDepartments: async (token?: string, signal?: AbortSignal) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any[]>('/employees/departments', { method: 'GET', headers, signal });
+  },
+
+  searchEmployees: async (
+    params: {
+      department?: string;
+      search?: string;
+      status?: string;
+      page?: number;
+      limit?: number;
+    } = {},
+    token?: string,
+    signal?: AbortSignal
+  ) => {
+    const query = new URLSearchParams();
+    if (params.department && params.department !== 'all') query.set('department', params.department);
+    if (params.search) query.set('search', params.search);
+    if (params.status && params.status !== 'all') query.set('status', params.status);
+    if (params.page) query.set('page', String(params.page));
+    if (params.limit) query.set('limit', String(params.limit));
+
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const qs = query.toString();
+    return request<any[]>(`/employees${qs ? `?${qs}` : ''}`, { method: 'GET', headers, signal });
+  }
+};
+
+export const financeApi = {
+  getSummary: async (token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>('/finance/summary', { method: 'GET', headers });
+  },
+
+  getProjects: async (token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any[]>('/finance/projects', { method: 'GET', headers });
+  },
+
+  getProjectDetail: async (projectId: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/finance/projects/${projectId}`, { method: 'GET', headers });
+  },
+
+  getTransactions: async (
+    params: {
+      projectId?: string;
+      type?: string;
+      category?: string;
+      status?: string;
+      search?: string;
+      startDate?: string;
+      endDate?: string;
+    } = {},
+    token?: string
+  ) => {
+    const query = new URLSearchParams();
+    if (params.projectId) query.set('projectId', params.projectId);
+    if (params.type && params.type !== 'ALL') query.set('type', params.type);
+    if (params.category && params.category !== 'ALL') query.set('category', params.category);
+    if (params.status && params.status !== 'ALL') query.set('status', params.status);
+    if (params.search) query.set('search', params.search);
+    if (params.startDate) query.set('startDate', params.startDate);
+    if (params.endDate) query.set('endDate', params.endDate);
+
+    const qs = query.toString();
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any[]>(`/finance/transactions${qs ? `?${qs}` : ''}`, { method: 'GET', headers });
+  },
+
+  getExpenses: async (params: { projectId?: string; orderId?: string } = {}, token?: string) => {
+    const query = new URLSearchParams();
+    if (params.projectId) query.set('projectId', params.projectId);
+    if (params.orderId) query.set('orderId', params.orderId);
+    const qs = query.toString();
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any[]>(`/finance/expenses${qs ? `?${qs}` : ''}`, { method: 'GET', headers });
+  },
+
+  recordExpense: async (data: any, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>('/finance/expenses', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data)
+    });
+  },
+
+  approveExpense: async (expenseId: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/finance/expenses/${expenseId}/approve`, {
+      method: 'POST',
+      headers
+    });
+  },
+
+  recordPayment: async (data: any, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>('/finance/payments', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data)
+    });
+  },
+
+  verifyPayment: async (paymentId: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>('/finance/verify', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ paymentId })
+    });
+  },
+
+  exportLedger: async (token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>('/finance/export', { method: 'GET', headers });
+  }
+};
+
+export const surveyReviewApi = {
+  getSurveys: async (
+    params: { queue?: string; status?: string; reviewerId?: string; technicianId?: string; search?: string } = {},
+    token?: string
+  ) => {
+    const query = new URLSearchParams();
+    if (params.queue) query.set('queue', params.queue);
+    if (params.status) query.set('status', params.status);
+    if (params.reviewerId) query.set('reviewerId', params.reviewerId);
+    if (params.technicianId) query.set('technicianId', params.technicianId);
+    if (params.search) query.set('search', params.search);
+
+    const qs = query.toString();
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any[]>(`/surveys${qs ? `?${qs}` : ''}`, { method: 'GET', headers });
+  },
+
+  getEligibleReviewers: async (excludeTechnicianId?: string, token?: string) => {
+    const query = excludeTechnicianId ? `?excludeTechnicianId=${encodeURIComponent(excludeTechnicianId)}` : '';
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any[]>(`/surveys/eligible-reviewers${query}`, { method: 'GET', headers });
+  },
+
+  getEligibleApprovers: async (excludeTechnicianId?: string, token?: string) => {
+    const query = excludeTechnicianId ? `?excludeTechnicianId=${encodeURIComponent(excludeTechnicianId)}` : '';
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any[]>(`/surveys/eligible-approvers${query}`, { method: 'GET', headers });
+  },
+
+  assignReviewer: async (surveyId: string, reviewerId: string, reviewerName?: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/surveys/${surveyId}/assign-reviewer`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ reviewerId, reviewerName })
+    });
+  },
+
+  assignApprover: async (surveyId: string, approverId: string, approverName?: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/surveys/${surveyId}/assign-approver`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ approverId, approverName })
+    });
+  },
+
+  startReview: async (surveyId: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/surveys/${surveyId}/start-review`, {
+      method: 'POST',
+      headers
+    });
+  },
+
+  saveReviewNotes: async (surveyId: string, notes: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/surveys/${surveyId}/review-notes`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ notes })
+    });
+  },
+
+  requestCorrections: async (surveyId: string, comments: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/surveys/${surveyId}/request-corrections`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ comments })
+    });
+  },
+
+  resubmit: async (surveyId: string, data: any, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/surveys/${surveyId}/resubmit`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data)
+    });
+  },
+
+  submitRecommendation: async (surveyId: string, recommendation: string, notes?: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/surveys/${surveyId}/recommend`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ recommendation, notes })
+    });
+  },
+
+  approve: async (surveyId: string, notes?: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/surveys/${surveyId}/approve`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ notes })
+    });
+  },
+
+  reject: async (surveyId: string, reason: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/surveys/${surveyId}/reject`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ reason })
+    });
+  },
+
+  getAuditTrail: async (surveyId: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any[]>(`/surveys/${surveyId}/audit-trail`, { method: 'GET', headers });
+  }
+};
+

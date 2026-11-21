@@ -40,6 +40,7 @@ const INITIAL_ROLE_MATRIX: Record<UserRole, Record<string, string[]>> = {
     service: ['view', 'create', 'edit', 'delete', 'manage'],
     subsidies: ['view', 'create', 'edit', 'approve', 'manage', 'export'],
     activity_center: ['view', 'export'],
+    audit: ['view', 'view_company_wide', 'export'],
     settings: ['view', 'edit', 'manage']
   },
   sales_exec: {
@@ -150,11 +151,13 @@ export class RbacService {
     actor: any
   ): Promise<DynamicRoleDefinition> {
     if (roleKey === 'owner_admin') {
-      // Ensure owner maintains core governance
+      // Ensure owner maintains core governance and append-only audit trail access
       permissions['roles_permissions'] = ['view', 'create', 'edit', 'delete', 'manage'];
       permissions['roles'] = ['view', 'create', 'edit', 'delete', 'manage'];
       permissions['permissions'] = ['view', 'create', 'edit', 'delete', 'manage'];
       permissions['approvals'] = ['view', 'approve', 'edit', 'delete', 'manage'];
+      permissions['activity_center'] = ['view', 'export'];
+      permissions['audit'] = ['view', 'view_company_wide', 'export'];
     }
 
     const previousRole = await this.getRoleByKey(roleKey);
@@ -227,8 +230,16 @@ export class RbacService {
     }
 
     // Normalize read synonyms strictly to view
-    if (actionKey === 'read' || actionKey === 'view_all' || actionKey === 'view_assigned' || actionKey === 'view_available') {
+    if (actionKey === 'read' || actionKey === 'view_all' || actionKey === 'view_company_wide' || actionKey === 'view_assigned' || actionKey === 'view_available') {
       actionKey = 'view';
+    }
+
+    // Strict Audit Log Immutability: Audit records are append-only.
+    // No role, including owner_admin, may edit, delete, or modify audit records.
+    if (['audit', 'activity_center', 'activity'].includes(moduleKey)) {
+      if (['edit', 'delete', 'update', 'modify', 'purge'].includes(actionKey)) {
+        return false;
+      }
     }
 
     // Safe bootstrap for canonical Owner (owner_admin) administrative governance
@@ -239,6 +250,12 @@ export class RbacService {
         if (['view', 'create', 'edit', 'delete', 'assign', 'approve', 'manage', 'export'].includes(actionKey)) {
           return true;
         }
+      }
+      if (['audit', 'activity_center', 'activity'].includes(moduleKey)) {
+        if (['view', 'view_all', 'view_company_wide', 'export', 'read'].includes(actionKey)) {
+          return true;
+        }
+        return false;
       }
     }
 
@@ -252,6 +269,8 @@ export class RbacService {
       moduleKeysToCheck.push('employees');
     } else if (moduleKey === 'employees') {
       moduleKeysToCheck.push('workforce');
+    } else if (moduleKey === 'audit' || moduleKey === 'activity_center' || moduleKey === 'activity') {
+      moduleKeysToCheck.push('audit', 'activity_center', 'activity');
     }
 
     let grantedActions: string[] = [];
@@ -287,6 +306,14 @@ export class RbacService {
   ): Promise<boolean> {
     if (!user || !user.role) return false;
 
+    // Strict Audit Log Immutability: Audit records are append-only.
+    // No role, including owner_admin, may edit, delete, or modify audit records.
+    if (['audit', 'activity_center', 'activity'].includes(resource)) {
+      if (['edit', 'delete', 'update', 'modify', 'purge'].includes(action)) {
+        return false;
+      }
+    }
+
     // Strict Administrative Separation: Owner cannot execute field installations without explicit delegation
     if (user.role === 'owner_admin' && (action === 'execute' || resource === 'installations' && action.startsWith('execute'))) {
       const activeDelegations = await this.getActiveDelegationsForUser(user.id, 'installations.execute');
@@ -304,6 +331,12 @@ export class RbacService {
           return true;
         }
       }
+      if (['audit', 'activity_center', 'activity'].includes(resource)) {
+        if (['view', 'view_all', 'view_company_wide', 'export', 'read'].includes(action)) {
+          return true;
+        }
+        return false;
+      }
     }
 
     const rolePermissions = inMemoryRoleMatrix[user.role] || {};
@@ -318,6 +351,8 @@ export class RbacService {
       targetResources.push('employees');
     } else if (resource === 'employees') {
       targetResources.push('workforce');
+    } else if (resource === 'audit' || resource === 'activity_center' || resource === 'activity') {
+      targetResources.push('audit', 'activity_center', 'activity');
     }
 
     let moduleActions: string[] = [];

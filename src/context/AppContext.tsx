@@ -12,7 +12,9 @@ import {
   PermissionAction, Warehouse, StorageLocation, Supplier,
   GoodsReceiptNote, StockMovementRecord, StockAdjustment,
   StockReservation, WarehouseTransfer, StockCountSession,
-  WarehouseTask, WarrantyRuleConfig, StockCountItem, ProductCategory
+  WarehouseTask, WarrantyRuleConfig, StockCountItem, ProductCategory,
+  DirectExpense, FinancialTransaction, ProjectFinancialDetail,
+  SurveyWorkflowAuditEvent
 } from '../types';
 import {
   SYSTEM_USERS, INITIAL_CUSTOMERS, INITIAL_SURVEYS,
@@ -32,8 +34,15 @@ import {
   INITIAL_GOODS_RECEIPTS, INITIAL_STOCK_MOVEMENTS,
   INITIAL_STOCK_ADJUSTMENTS, INITIAL_STOCK_RESERVATIONS,
   INITIAL_WAREHOUSE_TRANSFERS, INITIAL_STOCK_COUNT_SESSIONS,
-  INITIAL_WAREHOUSE_TASKS, INITIAL_WARRANTY_RULES
+  INITIAL_WAREHOUSE_TASKS, INITIAL_WARRANTY_RULES, INITIAL_DIRECT_EXPENSES
 } from '../data/mockData';
+import { 
+  calculateProjectFinancials, 
+  calculateCompanyFinancialSummary, 
+  buildProjectFinancialDetail, 
+  generateFinancialLedger, 
+  FinancialSummaryKPIs 
+} from '../utils/finance';
 import { 
   AuthSession, 
   retrieveStoredSession, 
@@ -57,7 +66,7 @@ import {
   canManage as rbacCanManage,
   canExecute as rbacCanExecute
 } from '../utils/rbac';
-import { authApi, rbacApi } from '../services/api';
+import { authApi, rbacApi, financeApi, surveyReviewApi } from '../services/api';
 
 export interface Toast {
   id: string;
@@ -131,14 +140,22 @@ interface AppContextType {
   submitSurveyForm: (surveyId: string, details: Partial<SiteSurvey>) => void;
   updateSurveyStatus: (surveyId: string, status: SiteSurvey['status'], rejectionReason?: string) => void;
   
-  // Field Survey Specialist & Engineering Lead Workflows
+  // Field Survey Specialist & Engineering Review Workflows
   claimSurvey: (surveyId: string) => { success: boolean; message: string };
   startSurvey: (surveyId: string) => boolean;
   saveSurveyDraft: (surveyId: string, details: Partial<SiteSurvey>) => void;
   submitSurveyReport: (surveyId: string, details: Partial<SiteSurvey>) => { success: boolean; message: string };
-  approveSurveyReport: (surveyId: string, notes: string) => void;
-  requestSurveyCorrections: (surveyId: string, comments: string) => void;
-  rejectSurveyReport: (surveyId: string, reason: string) => void;
+  approveSurveyReport: (surveyId: string, notes: string) => boolean;
+  requestSurveyCorrections: (surveyId: string, comments: string) => boolean;
+  rejectSurveyReport: (surveyId: string, reason: string) => boolean;
+  assignSurveyReviewer: (surveyId: string, reviewerId: string, reviewerName: string) => Promise<boolean>;
+  assignSurveyApprover: (surveyId: string, approverId: string, approverName: string) => Promise<boolean>;
+  startSurveyReview: (surveyId: string) => Promise<boolean>;
+  saveSurveyReviewNotes: (surveyId: string, notes: string) => Promise<boolean>;
+  resubmitSurveyReport: (surveyId: string, updatedDetails: Partial<SiteSurvey>) => Promise<{ success: boolean; message: string }>;
+  submitSurveyReviewRecommendation: (surveyId: string, recommendation: 'approve' | 'reject', notes: string) => Promise<boolean>;
+  getEligibleReviewers: (excludeTechnicianId?: string) => any[];
+  getEligibleApprovers: (excludeTechnicianId?: string) => any[];
   updateTechnicianAvailability: (technicianId: string, status: TechnicianAvailabilityStatus) => void;
   addTechnicianLeave: (leave: Omit<TechnicianLeave, 'id'>) => void;
   
@@ -227,6 +244,12 @@ interface AppContextType {
   updateTicketStatus: (ticketId: string, status: ServiceComplaint['status'], resolutionNotes?: string) => void;
   
   profitability: ProjectProfitability[];
+  directExpenses: DirectExpense[];
+  financialTransactions: FinancialTransaction[];
+  financialSummary: FinancialSummaryKPIs;
+  recordDirectExpense: (data: Omit<DirectExpense, 'id' | 'expenseNumber' | 'approvalStatus' | 'recordedBy' | 'recordedAt' | 'approvedBy' | 'approvedAt'>) => Promise<DirectExpense>;
+  approveDirectExpense: (expenseId: string) => Promise<void>;
+  getProjectFinancialDetail: (projectIdOrOrder: string) => ProjectFinancialDetail | null;
   employees: Employee[];
   addEmployee: (emp: Omit<Employee, 'id'>) => Employee;
   updateEmployee: (id: string, updates: Partial<Employee>) => void;
@@ -446,6 +469,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [delegations, setDelegations] = useState<import('../types').OperationalDelegation[]>(INITIAL_DELEGATIONS);
   const [warranties, setWarranties] = useState<WarrantyRecord[]>(INITIAL_WARRANTIES);
   const [complaints, setComplaints] = useState<ServiceComplaint[]>(INITIAL_COMPLAINTS);
+  const [directExpenses, setDirectExpenses] = useState<DirectExpense[]>(INITIAL_DIRECT_EXPENSES);
   const [profitability, setProfitability] = useState<ProjectProfitability[]>(INITIAL_PROFITABILITY);
   const [employees, setEmployees] = useState<Employee[]>(INITIAL_EMPLOYEES);
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
@@ -1347,25 +1371,423 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true, message: 'Report submitted successfully' };
   };
 
-  const approveSurveyReport = (surveyId: string, notes: string) => {
-    if (!canApprove('surveys')) {
-      showToast('Unauthorized: You lack surveys.approve permission to approve survey reports.', 'error');
-      return;
-    }
+  const getEligibleReviewers = (excludeTechnicianId?: string) => {
+    return employees.filter(e => {
+      if (excludeTechnicianId && e.id === excludeTechnicianId) return false;
+      // Exclude Owner from engineering review pool
+      if (e.role === 'owner_admin' || e.department === 'Executive Management') return false;
+      // Exclude survey technicians
+      if (e.role === 'survey_tech' || e.department?.toLowerCase().includes('field operations')) return false;
+      return e.department?.toLowerCase().includes('engineering') || e.role === 'engineering_lead';
+    }).map(e => {
+      const activeCount = surveys.filter(s => s.assignedReviewerId === e.id && s.status === 'submitted' && s.reviewStatus !== 'approved' && s.reviewStatus !== 'rejected').length;
+      return {
+        id: e.id,
+        name: e.fullName,
+        email: e.email,
+        designation: e.designation,
+        department: e.department,
+        activeReviewsCount: activeCount,
+        isAvailable: e.isAvailable
+      };
+    });
+  };
+
+  const getEligibleApprovers = (excludeTechnicianId?: string) => {
+    return employees.filter(e => {
+      if (excludeTechnicianId && e.id === excludeTechnicianId) return false;
+      // Owner is NOT automatically engineering approver
+      if (e.role === 'owner_admin' || e.department === 'Executive Management') return false;
+      if (e.role === 'survey_tech' || e.department?.toLowerCase().includes('field operations')) return false;
+      // User must have surveys.approve authority
+      const userProf = SYSTEM_USERS.find(u => u.name.toLowerCase() === e.fullName.toLowerCase() || u.email.toLowerCase() === e.email.toLowerCase());
+      if (userProf?.canApproveSurveys) return true;
+      if (e.role === 'engineering_lead' && e.id === 'emp-19') return true;
+      return false;
+    }).map(e => {
+      const activeApprovals = surveys.filter(s => s.assignedApproverId === e.id && s.status === 'submitted' && s.approvalStatus === 'pending_approval').length;
+      return {
+        id: e.id,
+        name: e.fullName,
+        email: e.email,
+        designation: e.designation,
+        department: e.department,
+        activeApprovalsCount: activeApprovals,
+        isAvailable: e.isAvailable
+      };
+    });
+  };
+
+  const assignSurveyReviewer = async (surveyId: string, reviewerId: string, reviewerName: string): Promise<boolean> => {
     const survey = surveys.find(s => s.id === surveyId);
-    if (!survey) return;
+    if (!survey) {
+      showToast('Survey not found.', 'error');
+      return false;
+    }
+    // Check technician separation
+    if (survey.technicianId === reviewerId) {
+      showToast('Validation Error: Survey technician cannot be assigned as the technical reviewer.', 'error');
+      return false;
+    }
+
+    const auditEvent: SurveyWorkflowAuditEvent = {
+      id: `aud-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      surveyId,
+      eventType: 'reviewer_assigned',
+      actorId: currentUser.id,
+      actorName: currentUser.name,
+      actorRole: currentUser.roleTitle || currentUser.role,
+      timestamp: new Date().toISOString(),
+      summary: `Assigned ${reviewerName} as Technical Reviewer`
+    };
+
+    setSurveys(prev => prev.map(s => {
+      if (s.id === surveyId) {
+        return {
+          ...s,
+          assignedReviewerId: reviewerId,
+          assignedReviewerName: reviewerName,
+          reviewStatus: s.reviewStatus === 'unassigned' || !s.reviewStatus ? 'assigned' : s.reviewStatus,
+          workflowAuditTrail: [...(s.workflowAuditTrail || []), auditEvent]
+        };
+      }
+      return s;
+    }));
+
+    setNotifications(prev => [{
+      id: `notif-${Date.now()}`,
+      title: `Assigned as Reviewer: ${survey.surveyNumber}`,
+      message: `You have been assigned to review site survey for ${survey.customerName}.`,
+      timeAgo: 'Just now',
+      type: 'info',
+      read: false,
+      link: '/engineering'
+    }, ...prev]);
+
+    showToast(`Assigned ${reviewerName} as Technical Reviewer for ${survey.surveyNumber}.`, 'success');
+    
+    try {
+      await surveyReviewApi.assignReviewer(surveyId, reviewerId, reviewerName, session?.token);
+    } catch (e) {
+      console.warn('Backend sync for assignReviewer:', e);
+    }
+    return true;
+  };
+
+  const assignSurveyApprover = async (surveyId: string, approverId: string, approverName: string): Promise<boolean> => {
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) {
+      showToast('Survey not found.', 'error');
+      return false;
+    }
+    if (survey.technicianId === approverId) {
+      showToast('Validation Error: Survey technician cannot be assigned as the engineering approver.', 'error');
+      return false;
+    }
+
+    const auditEvent: SurveyWorkflowAuditEvent = {
+      id: `aud-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      surveyId,
+      eventType: 'approval_assigned',
+      actorId: currentUser.id,
+      actorName: currentUser.name,
+      actorRole: currentUser.roleTitle || currentUser.role,
+      timestamp: new Date().toISOString(),
+      summary: `Assigned ${approverName} as Final Approver`
+    };
+
+    setSurveys(prev => prev.map(s => {
+      if (s.id === surveyId) {
+        return {
+          ...s,
+          assignedApproverId: approverId,
+          assignedApproverName: approverName,
+          workflowAuditTrail: [...(s.workflowAuditTrail || []), auditEvent]
+        };
+      }
+      return s;
+    }));
+
+    showToast(`Assigned ${approverName} as Final Approver for ${survey.surveyNumber}.`, 'success');
+
+    try {
+      await surveyReviewApi.assignApprover(surveyId, approverId, approverName, session?.token);
+    } catch (e) {
+      console.warn('Backend sync for assignApprover:', e);
+    }
+    return true;
+  };
+
+  const startSurveyReview = async (surveyId: string): Promise<boolean> => {
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) return false;
+
+    const auditEvent: SurveyWorkflowAuditEvent = {
+      id: `aud-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      surveyId,
+      eventType: 'review_started',
+      actorId: currentUser.id,
+      actorName: currentUser.name,
+      actorRole: currentUser.roleTitle || currentUser.role,
+      timestamp: new Date().toISOString(),
+      summary: `Technical review started by ${currentUser.name}`
+    };
+
+    setSurveys(prev => prev.map(s => {
+      if (s.id === surveyId) {
+        return {
+          ...s,
+          reviewStatus: 'in_review',
+          workflowAuditTrail: [...(s.workflowAuditTrail || []), auditEvent]
+        };
+      }
+      return s;
+    }));
+
+    showToast(`Review started for ${survey.surveyNumber}.`, 'info');
+
+    try {
+      await surveyReviewApi.startReview(surveyId, session?.token);
+    } catch (e) {
+      console.warn('Backend sync for startReview:', e);
+    }
+    return true;
+  };
+
+  const saveSurveyReviewNotes = async (surveyId: string, notes: string): Promise<boolean> => {
+    setSurveys(prev => prev.map(s => {
+      if (s.id === surveyId) {
+        return {
+          ...s,
+          reviewNotes: notes
+        };
+      }
+      return s;
+    }));
+    showToast('Review notes saved as draft.', 'info');
+    try {
+      await surveyReviewApi.saveReviewNotes(surveyId, notes, session?.token);
+    } catch (e) {
+      console.warn('Backend sync for saveReviewNotes:', e);
+    }
+    return true;
+  };
+
+  const requestSurveyCorrections = (surveyId: string, comments: string): boolean => {
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) return false;
+
+    if (!canApprove('surveys') && !canEdit('surveys') && currentUser.role !== 'engineering_lead') {
+      showToast('Unauthorized: You lack permissions to request technical survey corrections.', 'error');
+      return false;
+    }
+
+    const auditEvent: SurveyWorkflowAuditEvent = {
+      id: `aud-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      surveyId,
+      eventType: 'corrections_requested',
+      actorId: currentUser.id,
+      actorName: currentUser.name,
+      actorRole: currentUser.roleTitle || currentUser.role,
+      timestamp: new Date().toISOString(),
+      summary: `Corrections requested by ${currentUser.name}: ${comments.slice(0, 100)}...`,
+      notes: comments
+    };
+
+    setSurveys(prev => prev.map(s => {
+      if (s.id === surveyId) {
+        return {
+          ...s,
+          reviewStatus: 'corrections_required',
+          correctionsRequestedNotes: comments,
+          workflowAuditTrail: [...(s.workflowAuditTrail || []), auditEvent]
+        };
+      }
+      return s;
+    }));
+
+    setNotifications(prev => [{
+      id: `notif-${Date.now()}`,
+      title: `Corrections Requested: ${survey.surveyNumber}`,
+      message: `${currentUser.name} requested report revisions: "${comments}"`,
+      timeAgo: 'Just now',
+      type: 'warning',
+      read: false,
+      link: '/field/reports'
+    }, ...prev]);
+
+    showToast(`Corrections requested for ${survey.surveyNumber}. Technician notified.`, 'warning');
+
+    surveyReviewApi.requestCorrections(surveyId, comments, session?.token).catch(e => console.warn(e));
+    return true;
+  };
+
+  const resubmitSurveyReport = async (surveyId: string, updatedDetails: Partial<SiteSurvey>): Promise<{ success: boolean; message: string }> => {
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) return { success: false, message: 'Survey not found' };
+
+    const currentVersion = survey.version || 1;
+    const nextVersion = currentVersion + 1;
+
+    // Snapshot previous version
+    const versionSnapshot = {
+      version: currentVersion,
+      submittedAt: survey.scheduledDate || new Date().toISOString(),
+      submittedBy: survey.technicianName || currentUser.name,
+      notes: survey.technicianNotes || survey.technicianObservations || '',
+      snapshot: { ...survey }
+    };
+
+    const auditEvent: SurveyWorkflowAuditEvent = {
+      id: `aud-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      surveyId,
+      eventType: 'technician_resubmitted',
+      actorId: currentUser.id,
+      actorName: currentUser.name,
+      actorRole: currentUser.roleTitle || currentUser.role,
+      timestamp: new Date().toISOString(),
+      summary: `Revised survey report resubmitted by ${currentUser.name} (v${nextVersion})`
+    };
+
+    setSurveys(prev => prev.map(s => {
+      if (s.id === surveyId) {
+        return {
+          ...s,
+          ...updatedDetails,
+          version: nextVersion,
+          reviewStatus: 'resubmitted',
+          status: 'submitted',
+          previousVersions: [...(s.previousVersions || []), versionSnapshot],
+          workflowAuditTrail: [...(s.workflowAuditTrail || []), auditEvent]
+        };
+      }
+      return s;
+    }));
+
+    setNotifications(prev => [{
+      id: `notif-${Date.now()}`,
+      title: `Survey Resubmitted: ${survey.surveyNumber}`,
+      message: `Technician ${currentUser.name} has resubmitted corrected report (v${nextVersion}).`,
+      timeAgo: 'Just now',
+      type: 'info',
+      read: false,
+      link: '/engineering'
+    }, ...prev]);
+
+    showToast(`Survey ${survey.surveyNumber} resubmitted (v${nextVersion}) for engineering review.`, 'success');
+
+    try {
+      await surveyReviewApi.resubmit(surveyId, updatedDetails, session?.token);
+    } catch (e) {
+      console.warn('Backend sync for resubmit:', e);
+    }
+
+    return { success: true, message: 'Survey resubmitted successfully' };
+  };
+
+  const submitSurveyReviewRecommendation = async (surveyId: string, recommendation: 'approve' | 'reject', notes: string): Promise<boolean> => {
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) return false;
+
+    const auditEvent: SurveyWorkflowAuditEvent = {
+      id: `aud-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      surveyId,
+      eventType: 'recommendation_submitted',
+      actorId: currentUser.id,
+      actorName: currentUser.name,
+      actorRole: currentUser.roleTitle || currentUser.role,
+      timestamp: new Date().toISOString(),
+      summary: `Review completed by ${currentUser.name}. Recommendation: ${recommendation.toUpperCase()}`,
+      notes
+    };
+
+    setSurveys(prev => prev.map(s => {
+      if (s.id === surveyId) {
+        return {
+          ...s,
+          reviewedById: currentUser.id,
+          reviewedByName: currentUser.name,
+          reviewedAt: new Date().toISOString(),
+          reviewNotes: notes,
+          reviewRecommendation: recommendation,
+          reviewStatus: recommendation === 'approve' ? 'recommend_approval' : 'recommend_rejection',
+          approvalStatus: recommendation === 'approve' ? 'pending_approval' : s.approvalStatus,
+          assignedApproverId: s.assignedApproverId || 'emp-19',
+          assignedApproverName: s.assignedApproverName || 'Sandeep Patil',
+          workflowAuditTrail: [...(s.workflowAuditTrail || []), auditEvent]
+        };
+      }
+      return s;
+    }));
+
+    showToast(`Recommendation (${recommendation.toUpperCase()}) submitted. Sent to Engineering Lead for final approval sign-off.`, 'success');
+
+    try {
+      await surveyReviewApi.submitRecommendation(surveyId, recommendation, notes, session?.token);
+    } catch (e) {
+      console.warn('Backend sync for recommendation:', e);
+    }
+    return true;
+  };
+
+  const approveSurveyReport = (surveyId: string, notes: string): boolean => {
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) {
+      showToast('Survey not found.', 'error');
+      return false;
+    }
+
+    // 1. Strict Self-Approval Check
+    const currentEmp = employees.find(e => e.fullName.toLowerCase() === currentUser.name.toLowerCase() || e.email.toLowerCase() === currentUser.email.toLowerCase());
+    const isSurveyTechnician = survey.technicianId === currentUser.id || 
+      (currentEmp && survey.technicianId === currentEmp.id) ||
+      (survey.technicianName && survey.technicianName.toLowerCase() === currentUser.name.toLowerCase());
+
+    if (isSurveyTechnician) {
+      showToast('Self-Approval Prohibited: Survey technicians cannot approve their own survey reports. Must be approved by an authorized Engineering Lead.', 'error');
+      return false;
+    }
+
+    // 2. Permission check: requires surveys.approve or explicit engineering approval authority
+    const hasApprovePerm = canApprove('surveys') || (currentUser as any).canApproveSurveys;
+    if (!hasApprovePerm) {
+      showToast('Unauthorized: You lack surveys.approve permission for technical engineering sign-off.', 'error');
+      return false;
+    }
+
+    // 3. Owner constraint: Vikramaditya Rao must not bypass engineering domain sign-off
+    if (currentUser.role === 'owner_admin' && !(currentUser as any).canApproveSurveys && currentUser.name.includes('Vikramaditya')) {
+      showToast('Compliance Constraint: Owner/Managing Director cannot grant technical engineering sign-off without dedicated engineering approver credentials. Sandeep Patil (Engineering Lead) holds primary approval authority.', 'warning');
+      return false;
+    }
 
     const todayDate = new Date().toISOString().split('T')[0];
+    const auditEvent: SurveyWorkflowAuditEvent = {
+      id: `aud-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      surveyId,
+      eventType: 'report_approved',
+      actorId: currentUser.id,
+      actorName: currentUser.name,
+      actorRole: currentUser.roleTitle || currentUser.role,
+      timestamp: new Date().toISOString(),
+      summary: `Final Engineering Approval granted by ${currentUser.name}`,
+      notes
+    };
 
     setSurveys(prev => prev.map(s => {
       if (s.id === surveyId) {
         return {
           ...s,
           status: 'approved',
+          approvalStatus: 'approved',
           reviewStatus: 'approved',
           approvedAt: todayDate,
+          approvedById: currentUser.id,
+          approvedByName: currentUser.name,
+          approvalNotes: notes,
           engineeringApproverName: currentUser.name,
-          engineeringReviewNotes: notes
+          engineeringReviewNotes: notes,
+          workflowAuditTrail: [...(s.workflowAuditTrail || []), auditEvent]
         };
       }
       return s;
@@ -1374,8 +1796,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Notify Sales Executive that quotation can now be generated
     setNotifications(prev => [{
       id: `notif-${Date.now()}`,
-      title: `Survey Approved by Engineering: ${survey.surveyNumber}`,
-      message: `${currentUser.name} (Engineering Lead) approved ${survey.customerName}'s survey. Quotation can now be finalized!`,
+      title: `Survey Approved: ${survey.surveyNumber}`,
+      message: `${currentUser.name} (Engineering Lead) approved ${survey.customerName}'s survey. Commercial quotation gate unlocked!`,
       timeAgo: 'Just now',
       type: 'success',
       read: false,
@@ -1386,54 +1808,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type: 'survey_approved',
       customerName: survey.customerName,
       customerId: survey.customerId,
-      description: `Engineering Lead approved survey ${survey.surveyNumber}. Shadow-free area: ${survey.shadowFreeAreaSqm || 'N/A'} sq.m.`,
+      description: `Engineering Lead ${currentUser.name} approved survey ${survey.surveyNumber}. Feasibility confirmed.`,
       salesperson: currentUser.name,
       relatedLink: '/quotations'
     });
 
-    showToast(`Survey ${survey.surveyNumber} approved by Engineering! Ready for quotation.`, 'success');
+    showToast(`Survey ${survey.surveyNumber} approved by Engineering Lead! Quotation unlocked.`, 'success');
+
+    surveyReviewApi.approve(surveyId, notes, session?.token).catch(e => console.warn(e));
+    return true;
   };
 
-  const requestSurveyCorrections = (surveyId: string, comments: string) => {
-    if (!canApprove('surveys')) {
-      showToast('Unauthorized: You lack surveys.approve permission to request survey revisions.', 'error');
-      return;
-    }
+  const rejectSurveyReport = (surveyId: string, reason: string): boolean => {
     const survey = surveys.find(s => s.id === surveyId);
-    if (!survey) return;
+    if (!survey) return false;
 
-    setSurveys(prev => prev.map(s => {
-      if (s.id === surveyId) {
-        return {
-          ...s,
-          status: 'submitted',
-          reviewStatus: 'corrections_required',
-          correctionsRequestedNotes: comments
-        };
-      }
-      return s;
-    }));
+    // Self-approval / self-rejection check
+    const currentEmp = employees.find(e => e.fullName.toLowerCase() === currentUser.name.toLowerCase() || e.email.toLowerCase() === currentUser.email.toLowerCase());
+    const isSurveyTechnician = survey.technicianId === currentUser.id || 
+      (currentEmp && survey.technicianId === currentEmp.id) ||
+      (survey.technicianName && survey.technicianName.toLowerCase() === currentUser.name.toLowerCase());
 
-    setNotifications(prev => [{
-      id: `notif-${Date.now()}`,
-      title: `Corrections Requested: ${survey.surveyNumber}`,
-      message: `Engineering Lead ${currentUser.name} requested report revisions: "${comments}"`,
-      timeAgo: 'Just now',
-      type: 'warning',
-      read: false,
-      link: '/field/reports'
-    }, ...prev]);
+    if (isSurveyTechnician) {
+      showToast('Validation Error: Survey technicians cannot reject their own reports as engineering authority.', 'error');
+      return false;
+    }
 
-    showToast(`Corrections requested for ${survey.surveyNumber}. Technician notified.`, 'warning');
-  };
-
-  const rejectSurveyReport = (surveyId: string, reason: string) => {
-    if (!canApprove('surveys')) {
+    if (!canApprove('surveys') && !canEdit('surveys') && currentUser.role !== 'engineering_lead') {
       showToast('Unauthorized: You lack surveys.approve permission to reject survey reports.', 'error');
-      return;
+      return false;
     }
-    const survey = surveys.find(s => s.id === surveyId);
-    if (!survey) return;
+
+    const auditEvent: SurveyWorkflowAuditEvent = {
+      id: `aud-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      surveyId,
+      eventType: 'report_rejected',
+      actorId: currentUser.id,
+      actorName: currentUser.name,
+      actorRole: currentUser.roleTitle || currentUser.role,
+      timestamp: new Date().toISOString(),
+      summary: `Survey officially REJECTED by Engineering Lead ${currentUser.name}. Reason: ${reason}`,
+      notes: reason
+    };
 
     setSurveys(prev => prev.map(s => {
       if (s.id === surveyId) {
@@ -1441,7 +1857,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...s,
           status: 'rejected',
           reviewStatus: 'rejected',
-          rejectionReason: reason
+          approvalStatus: 'rejected',
+          rejectionReason: reason,
+          approvedById: currentUser.id,
+          approvedByName: currentUser.name,
+          workflowAuditTrail: [...(s.workflowAuditTrail || []), auditEvent]
         };
       }
       return s;
@@ -1458,6 +1878,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, ...prev]);
 
     showToast(`Survey ${survey.surveyNumber} marked as rejected.`, 'error');
+
+    surveyReviewApi.reject(surveyId, reason, session?.token).catch(e => console.warn(e));
+    return true;
   };
 
   const updateTechnicianAvailability = (technicianId: string, status: TechnicianAvailabilityStatus) => {
@@ -2564,6 +2987,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Ticket status updated to ${status.replace('_', ' ').toUpperCase()}`, 'info');
   };
 
+  // Dynamic Project-Centric Financial Calculation Engine
+  const computedProfitability = React.useMemo<ProjectProfitability[]>(() => {
+    if (orders && orders.length > 0) {
+      return orders.map(order => calculateProjectFinancials(order, payments, dispatches, installations, directExpenses));
+    }
+    return INITIAL_PROFITABILITY;
+  }, [orders, payments, dispatches, installations, directExpenses]);
+
+  const financialSummary = React.useMemo<FinancialSummaryKPIs>(() => {
+    return calculateCompanyFinancialSummary(orders, payments, dispatches, installations, directExpenses);
+  }, [orders, payments, dispatches, installations, directExpenses]);
+
+  const financialTransactions = React.useMemo<FinancialTransaction[]>(() => {
+    return generateFinancialLedger(orders, payments, dispatches, installations, directExpenses);
+  }, [orders, payments, dispatches, installations, directExpenses]);
+
+  const getProjectFinancialDetail = (projectIdOrOrder: string): ProjectFinancialDetail | null => {
+    const order = orders.find(o => o.id === projectIdOrOrder || o.orderNumber === projectIdOrOrder) || orders[0];
+    if (!order) return null;
+    return buildProjectFinancialDetail(order, payments, dispatches, installations, directExpenses);
+  };
+
+  const recordDirectExpense = async (data: Omit<DirectExpense, 'id' | 'expenseNumber' | 'approvalStatus' | 'recordedBy' | 'recordedAt' | 'approvedBy' | 'approvedAt'>) => {
+    if (!canCreate('finance')) {
+      showToast('Unauthorized: You lack finance.create permission to record direct expenses.', 'error');
+      throw new Error('Unauthorized');
+    }
+    const nextNum = directExpenses.length + 1;
+    const newExpense: DirectExpense = {
+      ...data,
+      id: `exp-${Date.now()}`,
+      expenseNumber: `EXP-2026-${String(nextNum).padStart(3, '0')}`,
+      approvalStatus: 'approved',
+      recordedBy: currentUser.name,
+      recordedAt: new Date().toISOString()
+    };
+    setDirectExpenses(prev => [newExpense, ...prev]);
+
+    try {
+      if (session?.token) {
+        await financeApi.recordExpense(newExpense, session.token);
+      }
+    } catch (err) {
+      console.warn('Backend sync for expense failed, kept in local state:', err);
+    }
+
+    showToast(`Expense of ₹${newExpense.amount.toLocaleString('en-IN')} recorded for ${newExpense.category}`, 'success');
+    return newExpense;
+  };
+
+  const approveDirectExpense = async (expenseId: string) => {
+    if (!canApprove('finance')) {
+      showToast('Unauthorized: You lack finance.approve permission to approve expenses.', 'error');
+      return;
+    }
+    setDirectExpenses(prev => prev.map(e => e.id === expenseId ? { ...e, approvalStatus: 'approved' } : e));
+    try {
+      if (session?.token) {
+        await financeApi.approveExpense(expenseId, session.token);
+      }
+    } catch (err) {
+      console.warn('Backend sync for expense approval failed:', err);
+    }
+    showToast('Direct expense approved and posted to ledger', 'success');
+  };
+
   // Notifications
   const markNotificationAsRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
@@ -2934,6 +3423,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targetRole = rolesPermissions.find(r => r.id === roleId || r.roleKey === roleId);
     const roleKey = targetRole?.roleKey || roleId;
 
+    if (roleKey === 'owner_admin') {
+      updatedPermissions['activity_center'] = ['view', 'export'];
+      updatedPermissions['audit'] = ['view', 'view_company_wide', 'export'];
+    }
+
     try {
       await rbacApi.updateRolePermissions(roleKey, updatedPermissions as any, session?.token);
       showToast(`Permissions for '${targetRole?.name || roleKey}' synchronized with database`, 'success');
@@ -3205,6 +3699,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       approveSurveyReport,
       requestSurveyCorrections,
       rejectSurveyReport,
+      assignSurveyReviewer,
+      assignSurveyApprover,
+      startSurveyReview,
+      saveSurveyReviewNotes,
+      resubmitSurveyReport,
+      submitSurveyReviewRecommendation,
+      getEligibleReviewers,
+      getEligibleApprovers,
       updateTechnicianAvailability,
       addTechnicianLeave,
       packages,
@@ -3276,7 +3778,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       complaints,
       createServiceTicket,
       updateTicketStatus,
-      profitability,
+      profitability: computedProfitability,
+      directExpenses,
+      financialTransactions,
+      financialSummary,
+      recordDirectExpense,
+      approveDirectExpense,
+      getProjectFinancialDetail,
       employees,
       addEmployee,
       updateEmployee,
