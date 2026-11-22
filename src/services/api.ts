@@ -24,6 +24,15 @@ export interface ApiResponse<T = any> {
 }
 
 const API_BASE = '/api/v1';
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/** Reads a non-HttpOnly cookie value (used for the CSRF double-submit token). */
+function readCookie(name: string): string | null {
+  const match = document.cookie
+    .split('; ')
+    .find(entry => entry.startsWith(`${name}=`));
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : null;
+}
 
 async function request<T>(
   endpoint: string,
@@ -40,6 +49,14 @@ async function request<T>(
     headers,
     credentials: 'include'
   };
+
+  // Echo the CSRF cookie in a header for every state-changing request so the
+  // server's double-submit check can validate the request.
+  const method = (options.method || 'GET').toUpperCase();
+  if (!SAFE_METHODS.has(method)) {
+    const csrfToken = readCookie('solaros_csrf');
+    if (csrfToken) headers.set('X-CSRF-Token', csrfToken);
+  }
 
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, config);
@@ -68,8 +85,6 @@ export const authApi = {
   login: async (email: string, password: string, rememberMe = false) => {
     return request<{
       user: any;
-      accessToken: string;
-      refreshToken: string;
       expiresAt: number;
     }>('/auth/login', {
       method: 'POST',

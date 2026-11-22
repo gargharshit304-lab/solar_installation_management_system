@@ -12,6 +12,8 @@ declare global {
 
 const pool = global.__pgPool || new pg.Pool({
   connectionString: env.DATABASE_URL,
+  // Prisma shares this pool; enforce verified TLS unless explicitly opted out.
+  ssl: env.DATABASE_SSL_NO_VERIFY ? { rejectUnauthorized: false } : { rejectUnauthorized: true },
   connectionTimeoutMillis: 2000
 });
 

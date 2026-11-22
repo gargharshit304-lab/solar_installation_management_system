@@ -4,29 +4,20 @@ import { sendSuccess } from '../../utils/response';
 
 export class HealthController {
   async getHealth(req: Request, res: Response): Promise<void> {
-    const memory = process.memoryUsage();
+    // Public liveness probe: expose no environment, memory or build details.
     sendSuccess(res, {
       status: 'healthy',
-      system: 'SolarOS Enterprise Backend',
-      company: 'SunPower Solutions',
-      version: '1.0.0',
-      uptimeSeconds: Math.floor(process.uptime()),
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development',
-      memory: {
-        rssMb: Math.round(memory.rss / (1024 * 1024)),
-        heapUsedMb: Math.round(memory.heapUsed / (1024 * 1024))
-      }
+      timestamp: new Date().toISOString()
     });
   }
 
   async getDatabaseHealth(req: Request, res: Response): Promise<void> {
     const dbStatus = await checkDatabaseHealth();
+    // Never return raw driver errors to an unauthenticated caller; they can
+    // disclose hostnames, credentials in connection strings or schema layout.
     sendSuccess(res, {
       database: dbStatus.connected ? 'connected' : 'disconnected',
-      latencyMs: dbStatus.latencyMs,
-      error: dbStatus.error,
-      engine: 'PostgreSQL / Prisma ORM'
+      latencyMs: dbStatus.latencyMs
     }, dbStatus.connected ? 200 : 503);
   }
 }

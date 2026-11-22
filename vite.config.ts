@@ -6,7 +6,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    host: true,
+    // Bind to loopback only; do not expose the dev server (and its backend
+    // proxy) to the local network.
+    host: 'localhost',
     proxy: {
       '/api': {
         target: 'http://localhost:5000',

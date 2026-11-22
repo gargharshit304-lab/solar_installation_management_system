@@ -8,7 +8,7 @@ import { z } from 'zod';
 const router = Router();
 
 const updatePermissionsSchema = z.object({
-  permissions: z.record(z.array(z.string()))
+  permissions: z.record(z.string(), z.array(z.string()))
 });
 
 const createDelegationSchema = z.object({

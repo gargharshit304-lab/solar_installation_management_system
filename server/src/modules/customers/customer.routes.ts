@@ -1,10 +1,26 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth.middleware';
 import { requireAction } from '../../middleware/rbac.middleware';
+import { validateRequest } from '../../middleware/validate.middleware';
 import { auditService } from '../audit/audit.service';
 import { AppError } from '../../utils/response';
 
 const router = Router();
+
+const createCustomerSchema = z.object({
+  fullName: z.string().min(2).max(150),
+  phone: z.string().min(6).max(30),
+  city: z.string().max(100).optional(),
+  address: z.string().max(300).optional()
+}).strict();
+
+const updateCustomerSchema = z.object({
+  fullName: z.string().min(2).max(150).optional(),
+  phone: z.string().min(6).max(30).optional(),
+  city: z.string().max(100).optional(),
+  address: z.string().max(300).optional()
+}).strict();
 
 let customersStore: any[] = [
   { id: 'cust-1', fullName: 'Rajesh Sharma', phone: '+91 98220 12345', city: 'Pune', leadStatus: 'new' },
@@ -20,12 +36,9 @@ router.get('/', requireAuth, requireAction('customers', 'view'), (req, res) => {
   });
 });
 
-router.post('/', requireAuth, requireAction('customers', 'create'), async (req, res, next) => {
+router.post('/', requireAuth, requireAction('customers', 'create'), validateRequest({ body: createCustomerSchema }), async (req, res, next) => {
   try {
     const { fullName, phone, city, address } = req.body;
-    if (!fullName || !phone) {
-      throw new AppError(422, 'VALIDATION_FAILED', 'Customer full name and phone number are required');
-    }
     const newCustomer = {
       id: `cust-${Date.now()}`,
       fullName,
@@ -58,11 +71,15 @@ router.post('/', requireAuth, requireAction('customers', 'create'), async (req, 
   }
 });
 
-router.patch('/:id', requireAuth, requireAction('customers', 'edit'), async (req, res, next) => {
+router.patch('/:id', requireAuth, requireAction('customers', 'edit'), validateRequest({ body: updateCustomerSchema }), async (req, res, next) => {
   try {
     const cust = customersStore.find(c => c.id === req.params.id);
     if (!cust) throw new AppError(404, 'NOT_FOUND', 'Customer not found');
-    Object.assign(cust, req.body);
+    const { fullName, phone, city, address } = req.body;
+    if (fullName !== undefined) cust.fullName = fullName;
+    if (phone !== undefined) cust.phone = phone;
+    if (city !== undefined) cust.city = city;
+    if (address !== undefined) cust.address = address;
     res.json({
       success: true,
       data: cust,

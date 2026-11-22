@@ -1,5 +1,12 @@
+import crypto from 'crypto';
 import { prisma } from '../../db/prisma';
 import { INITIAL_SYSTEM_USERS } from '../../db/seed';
+import { hashPassword } from '../../utils/password';
+import { AppError } from '../../utils/response';
+import { env } from '../../config/env';
+import { ROLE_DEFINITIONS, UserRole } from '../../config/constants';
+
+const allowDevFallback = env.NODE_ENV !== 'production' && env.DEV_AUTH_FALLBACK;
 
 export interface EmployeeRecord {
   id: string;
@@ -455,12 +462,9 @@ export class EmployeeService {
   async getAuthorizedDepartments(user: any): Promise<DepartmentRecord[]> {
     if (!user) return [];
 
-    // Owner / Administrator or users with company-wide / workforce authority can view all departments
-    const isCompanyWide = 
-      user.role === 'owner_admin' || 
-      user.role === 'admin' ||
-      user.roleTitle?.toLowerCase().includes('managing director') ||
-      user.roleTitle?.toLowerCase().includes('owner');
+    // Only explicit administrative roles may view all departments. Never infer
+    // authorization from free-text role titles, which are user-influenced data.
+    const isCompanyWide = user.role === 'owner_admin';
 
     if (isCompanyWide) {
       return DEPARTMENTS_DATA;
@@ -517,11 +521,7 @@ export class EmployeeService {
     const authorizedDeptNames = authorizedDepartments.map(d => d.name);
 
     // Check if user is restricted to a subset of departments
-    const isCompanyWide = 
-      user.role === 'owner_admin' || 
-      user.role === 'admin' ||
-      user.roleTitle?.toLowerCase().includes('managing director') ||
-      user.roleTitle?.toLowerCase().includes('owner');
+    const isCompanyWide = user.role === 'owner_admin';
 
     let pool: EmployeeRecord[] = [...BASELINE_EMPLOYEES];
 
@@ -598,35 +598,52 @@ export class EmployeeService {
     };
   }
 
-  async createEmployee(user: any, data: Partial<EmployeeRecord>): Promise<EmployeeRecord> {
+  async createEmployee(
+    user: any,
+    data: Partial<EmployeeRecord> & { password?: string }
+  ): Promise<EmployeeRecord> {
+    const role = data.role as UserRole;
+    if (!ROLE_DEFINITIONS[role]) {
+      throw new AppError(400, 'INVALID_ROLE', 'The selected role is not valid.');
+    }
+
     const employeeCode = data.employeeCode || `EMP-${String(BASELINE_EMPLOYEES.length + 1).padStart(3, '0')}`;
-    
+    // A temporary password is required for the employee to sign in. If none is
+    // supplied, generate a strong random one; the caller must communicate it.
+    const passwordHash = await hashPassword(
+      data.password || crypto.randomBytes(24).toString('base64')
+    );
+    const roleTitle = ROLE_DEFINITIONS[role].title;
+
     try {
       const created = await prisma.employee.create({
         data: {
           employeeCode,
           firstName: data.fullName?.split(' ')[0] || '',
           lastName: data.fullName?.split(' ').slice(1).join(' ') || '',
-          email: data.email,
-          phone: data.phone,
-          department: data.department,
-          designation: data.designation,
-          roleId: data.role,
+          email: data.email!,
+          phone: data.phone || '',
+          department: data.department!,
+          designation: data.designation!,
+          roleId: role,
           hourlyRate: data.hourlyRate || 0,
           skills: data.skills || [],
           isAvailable: data.isAvailable ?? true,
           currentAssignedJobs: data.activeJobs || 0,
           hireDate: data.joiningDate ? new Date(data.joiningDate) : new Date(),
-          profile: data.avatarUrl ? {
+          profile: {
             create: {
               fullName: data.fullName || '',
-              email: data.email,
-              roleId: data.role,
+              email: data.email!,
+              phone: data.phone,
+              passwordHash,
+              roleId: role,
+              roleTitle,
               department: data.department,
               avatarUrl: data.avatarUrl,
               isActive: true
             }
-          } : undefined
+          }
         },
         include: { profile: true }
       });
@@ -648,9 +665,12 @@ export class EmployeeService {
         status: 'active' as const,
         avatarUrl: created.profile?.avatarUrl
       };
-    } catch (err) {
-      console.error('Failed to create employee in DB:', err);
-      // Fallback to in-memory
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        throw new AppError(409, 'DUPLICATE_EMPLOYEE', 'An employee with this email or employee code already exists.');
+      }
+      if (!allowDevFallback) throw err;
+      // Development-only in-memory fallback
       const newEmp: EmployeeRecord = {
         id: `emp-${Date.now()}`,
         employeeCode,
@@ -675,7 +695,14 @@ export class EmployeeService {
     }
   }
 
-  async updateEmployee(id: string, data: Partial<EmployeeRecord>): Promise<EmployeeRecord | null> {
+  async updateEmployee(
+    id: string,
+    data: Partial<EmployeeRecord> & { password?: string }
+  ): Promise<EmployeeRecord | null> {
+    if (data.role && !ROLE_DEFINITIONS[data.role as UserRole]) {
+      throw new AppError(400, 'INVALID_ROLE', 'The selected role is not valid.');
+    }
+
     try {
       const updated = await prisma.employee.update({
         where: { id },
@@ -696,6 +723,33 @@ export class EmployeeService {
         include: { profile: true }
       });
 
+      // Keep the linked login profile in sync with workforce changes.
+      if (updated.profileId) {
+        const profileData: Record<string, any> = {};
+        if (data.fullName) profileData.fullName = data.fullName;
+        if (data.email) profileData.email = data.email;
+        if (data.phone) profileData.phone = data.phone;
+        if (data.department) profileData.department = data.department;
+        if (data.avatarUrl) profileData.avatarUrl = data.avatarUrl;
+        if (data.role) {
+          profileData.roleId = data.role;
+          profileData.roleTitle = ROLE_DEFINITIONS[data.role as UserRole].title;
+        }
+        if (data.password) profileData.passwordHash = await hashPassword(data.password);
+        if (data.status) profileData.isActive = data.status === 'active';
+
+        if (Object.keys(profileData).length > 0) {
+          await prisma.profile.update({ where: { id: updated.profileId }, data: profileData });
+        }
+
+        if (profileData.isActive === false) {
+          await prisma.session.updateMany({
+            where: { profileId: updated.profileId },
+            data: { isRevoked: true }
+          });
+        }
+      }
+
       return {
         id: updated.id,
         employeeCode: updated.employeeCode,
@@ -710,12 +764,16 @@ export class EmployeeService {
         isAvailable: updated.isAvailable,
         activeJobs: updated.currentAssignedJobs,
         rating: 4.8,
-        status: 'active' as const,
+        status: (data.status as EmployeeRecord['status']) || 'active',
         avatarUrl: updated.profile?.avatarUrl
       };
-    } catch (err) {
-      console.error('Failed to update employee in DB:', err);
-      // Fallback to in-memory
+    } catch (err: any) {
+      if (err instanceof AppError) throw err;
+      if (err?.code === 'P2002') {
+        throw new AppError(409, 'DUPLICATE_EMPLOYEE', 'An employee with this email or employee code already exists.');
+      }
+      if (!allowDevFallback) throw err;
+      // Development-only in-memory fallback
       const idx = BASELINE_EMPLOYEES.findIndex(e => e.id === id);
       if (idx >= 0) {
         BASELINE_EMPLOYEES[idx] = { ...BASELINE_EMPLOYEES[idx], ...data };
@@ -725,16 +783,37 @@ export class EmployeeService {
     }
   }
 
+  /**
+   * Soft-deactivates an employee and revokes their login sessions instead of
+   * deleting the record, preserving audit history.
+   */
   async deleteEmployee(id: string): Promise<boolean> {
     try {
-      await prisma.employee.delete({ where: { id } });
+      const employee = await prisma.employee.findUnique({ where: { id } });
+      if (!employee) return false;
+
+      await prisma.employee.update({
+        where: { id },
+        data: { isAvailable: false }
+      });
+
+      if (employee.profileId) {
+        await prisma.profile.update({
+          where: { id: employee.profileId },
+          data: { isActive: false }
+        });
+        await prisma.session.updateMany({
+          where: { profileId: employee.profileId },
+          data: { isRevoked: true }
+        });
+      }
       return true;
     } catch (err) {
-      console.error('Failed to delete employee from DB:', err);
-      // Fallback to in-memory
+      if (!allowDevFallback) throw err;
+      // Development-only in-memory fallback
       const idx = BASELINE_EMPLOYEES.findIndex(e => e.id === id);
       if (idx >= 0) {
-        BASELINE_EMPLOYEES.splice(idx, 1);
+        BASELINE_EMPLOYEES[idx] = { ...BASELINE_EMPLOYEES[idx], status: 'inactive', isAvailable: false };
         return true;
       }
       return false;

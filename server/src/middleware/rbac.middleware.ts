@@ -16,7 +16,7 @@ export function requireRole(allowedRoles: UserRole[]) {
       return next(new AppError(
         403,
         'INSUFFICIENT_ROLE_PERMISSIONS',
-        `Access denied. Role '${req.user.role}' lacks authority for this workspace.`
+        'Access denied. Your role lacks authority for this workspace.'
       ));
     }
 
@@ -34,11 +34,12 @@ export function requireAction(resource: string, action: string) {
       return next(new AppError(401, 'AUTHENTICATION_REQUIRED', 'Authentication required.'));
     }
 
+    const entityId = typeof req.params.id === 'string' ? req.params.id : undefined;
     const isAllowed = await rbacService.checkActionPermission(
       req.user,
       resource,
       action,
-      { entityId: req.params.id }
+      { entityId }
     );
 
     if (!isAllowed) {

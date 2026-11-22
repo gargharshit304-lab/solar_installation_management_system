@@ -11,10 +11,14 @@ export interface TokenPayload {
   name: string;
 }
 
+const ALGORITHM = 'HS256';
+
 export function generateAccessToken(payload: TokenPayload): string {
   return jwt.sign(payload, env.JWT_ACCESS_SECRET, {
     expiresIn: env.JWT_ACCESS_EXPIRES_IN as any,
-    issuer: 'solaros.sunpowersolutions.in'
+    issuer: env.JWT_ISSUER,
+    audience: env.JWT_AUDIENCE,
+    algorithm: ALGORITHM
   });
 }
 
@@ -24,14 +28,20 @@ export function generateRefreshToken(payload: TokenPayload): string {
     env.JWT_REFRESH_SECRET,
     {
       expiresIn: env.JWT_REFRESH_EXPIRES_IN as any,
-      issuer: 'solaros.sunpowersolutions.in'
+      issuer: env.JWT_ISSUER,
+      audience: env.JWT_AUDIENCE,
+      algorithm: ALGORITHM
     }
   );
 }
 
 export function verifyAccessToken(token: string): TokenPayload | null {
   try {
-    return jwt.verify(token, env.JWT_ACCESS_SECRET) as TokenPayload;
+    return jwt.verify(token, env.JWT_ACCESS_SECRET, {
+      issuer: env.JWT_ISSUER,
+      audience: env.JWT_AUDIENCE,
+      algorithms: [ALGORITHM]
+    }) as TokenPayload;
   } catch {
     return null;
   }
@@ -39,7 +49,11 @@ export function verifyAccessToken(token: string): TokenPayload | null {
 
 export function verifyRefreshToken(token: string): { sub: string; email: string; type: string } | null {
   try {
-    return jwt.verify(token, env.JWT_REFRESH_SECRET) as any;
+    return jwt.verify(token, env.JWT_REFRESH_SECRET, {
+      issuer: env.JWT_ISSUER,
+      audience: env.JWT_AUDIENCE,
+      algorithms: [ALGORITHM]
+    }) as any;
   } catch {
     return null;
   }

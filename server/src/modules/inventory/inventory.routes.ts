@@ -1,11 +1,34 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth.middleware';
 import { requireAction } from '../../middleware/rbac.middleware';
-import { rbacService } from '../rbac/rbac.service';
+import { validateRequest } from '../../middleware/validate.middleware';
 import { auditService } from '../audit/audit.service';
 import { AppError } from '../../utils/response';
 
 const router = Router();
+
+const createProductSchema = z.object({
+  name: z.string().min(1).max(200),
+  category: z.string().max(100).optional(),
+  unitCost: z.number().min(0).max(100000000).optional(),
+  availableQuantity: z.number().int().min(0).max(10000000).optional()
+}).strict();
+
+// Only these fields may be modified through PATCH. IDs and unknown/prototype
+// keys are rejected, preventing mass assignment and prototype pollution.
+const updateProductSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  category: z.string().max(100).optional(),
+  unitCost: z.number().min(0).max(100000000).optional(),
+  availableQuantity: z.number().int().min(0).max(10000000).optional()
+}).strict();
+
+const adjustStockSchema = z.object({
+  delta: z.number().int().min(-10000000).max(10000000),
+  reason: z.string().max(200).optional(),
+  notes: z.string().max(1000).optional()
+}).strict();
 
 // In-memory demo products data
 let productsStore: any[] = [
@@ -22,12 +45,9 @@ router.get('/', requireAuth, requireAction('inventory', 'view'), (req, res) => {
   });
 });
 
-router.post('/', requireAuth, requireAction('inventory', 'create'), async (req, res, next) => {
+router.post('/', requireAuth, requireAction('inventory', 'create'), validateRequest({ body: createProductSchema }), async (req, res, next) => {
   try {
     const { name, category, unitCost, availableQuantity } = req.body;
-    if (!name) {
-      throw new AppError(422, 'VALIDATION_FAILED', 'Product name is required');
-    }
     const newProduct = {
       id: `prd-${Date.now()}`,
       name,
@@ -59,13 +79,17 @@ router.post('/', requireAuth, requireAction('inventory', 'create'), async (req, 
   }
 });
 
-router.patch('/:id', requireAuth, requireAction('inventory', 'edit'), async (req, res, next) => {
+router.patch('/:id', requireAuth, requireAction('inventory', 'edit'), validateRequest({ body: updateProductSchema }), async (req, res, next) => {
   try {
     const item = productsStore.find(p => p.id === req.params.id);
     if (!item) {
       throw new AppError(404, 'NOT_FOUND', 'Inventory item not found');
     }
-    Object.assign(item, req.body);
+    const { name, category, unitCost, availableQuantity } = req.body;
+    if (name !== undefined) item.name = name;
+    if (category !== undefined) item.category = category;
+    if (unitCost !== undefined) item.unitCost = unitCost;
+    if (availableQuantity !== undefined) item.availableQuantity = availableQuantity;
     res.json({
       success: true,
       data: item,
@@ -93,7 +117,7 @@ router.delete('/:id', requireAuth, requireAction('inventory', 'delete'), async (
   }
 });
 
-router.post('/:id/adjust', requireAuth, requireAction('inventory', 'edit'), async (req, res, next) => {
+router.post('/:id/adjust', requireAuth, requireAction('inventory', 'edit'), validateRequest({ body: adjustStockSchema }), async (req, res, next) => {
   try {
     const { delta, reason, notes } = req.body;
     const item = productsStore.find(p => p.id === req.params.id);

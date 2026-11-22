@@ -1,5 +1,7 @@
+import crypto from 'crypto';
 import { prisma } from './prisma';
 import { hashPassword } from '../utils/password';
+import { env } from '../config/env';
 import { ROLE_DEFINITIONS, ROLE_CAPABILITIES, UserRole } from '../config/constants';
 
 export const INITIAL_SYSTEM_USERS = [
@@ -131,7 +133,17 @@ export const INITIAL_DELEGATIONS = [
 
 export async function seedDatabase(): Promise<void> {
   console.log('--- Starting SolarOS Database Seed ---');
-  const defaultPasswordHash = await hashPassword('solaros2026');
+  // Never seed a shared or well-known password. Operators provide
+  // SEED_ADMIN_PASSWORD explicitly; otherwise each account gets an
+  // unguessable random password that must be reset through the admin flow.
+  if (env.SEED_ADMIN_PASSWORD) {
+    console.warn('Seeding demo accounts with the password from SEED_ADMIN_PASSWORD.');
+  } else {
+    console.warn('SEED_ADMIN_PASSWORD is not set; seeded accounts receive unusable random passwords.');
+  }
+  const defaultPasswordHash = await hashPassword(
+    env.SEED_ADMIN_PASSWORD || crypto.randomBytes(32).toString('base64url')
+  );
 
   // 1. Seed Roles & Capabilities
   for (const [roleKey, def] of Object.entries(ROLE_DEFINITIONS)) {

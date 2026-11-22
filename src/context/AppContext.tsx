@@ -48,8 +48,7 @@ import {
   retrieveStoredSession, 
   persistSession, 
   clearStoredSession, 
-  generateAuthSession, 
-  verifySessionToken 
+  generateAuthSession 
 } from '../utils/authSession';
 import { 
   verifyCapability, 
@@ -89,7 +88,6 @@ interface AppContextType {
   login: (email: string, password: string, rememberMe?: boolean) => Promise<UserProfile | null>;
   logout: () => void;
   refreshSession: () => Promise<boolean>;
-  switchRole: (role: UserRole) => void;
   usersList: UserProfile[];
   
   // UI State
@@ -342,7 +340,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const restoreSession = async () => {
       try {
         const stored = retrieveStoredSession();
-        if (!stored || !stored.token || !stored.userId) {
+        if (!stored || !stored.userId) {
           if (isMounted) {
             setAuthStatus('UNAUTHENTICATED');
             setSession(null);
@@ -350,9 +348,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return;
         }
 
-        // 1. Attempt Backend Session Validation
+        // The backend session cookie is the single source of truth. Never
+        // trust locally stored metadata if the server cannot confirm it.
         try {
-          const serverCheck = await authApi.getSession(stored.token);
+          const serverCheck = await authApi.getSession();
           if (serverCheck.success && serverCheck.data?.authenticated && serverCheck.data.user) {
             if (isMounted) {
               setCurrentUser(serverCheck.data.user);
@@ -361,61 +360,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
             return;
           }
-        } catch (serverErr: any) {
-          // If server explicitly denied with 401/403, revoke session
-          if (serverErr.statusCode === 401 || serverErr.statusCode === 403) {
-            clearStoredSession();
-            if (isMounted) {
-              setAuthStatus('UNAUTHENTICATED');
-              setSession(null);
-            }
-            return;
-          }
-          // Network error: continue to offline validation
+        } catch {
+          // Fall through to a clean unauthenticated state (no offline bypass).
         }
 
-        // 2. Validate token integrity and expiration locally
-        const verification = verifySessionToken(stored.token);
-        if (!verification.valid) {
-          // If expired, attempt transparent rotation using refresh token
-          if (verification.reason === 'Token expired' && stored.refreshToken) {
-            const user = SYSTEM_USERS.find(u => u.id === stored.userId);
-            if (user) {
-              const rotatedSession = generateAuthSession(user, stored.rememberMe);
-              persistSession(rotatedSession);
-              if (isMounted) {
-                setCurrentUser(user);
-                setSession(rotatedSession);
-                setAuthStatus('AUTHENTICATED');
-              }
-              return;
-            }
-          }
-
-          // Invalidation: clear stale session data
-          clearStoredSession();
-          if (isMounted) {
-            setAuthStatus('UNAUTHENTICATED');
-            setSession(null);
-          }
-          return;
-        }
-
-        // Token valid: restore trusted user record from SYSTEM_USERS repository
-        const user = SYSTEM_USERS.find(u => u.id === stored.userId);
-        if (!user) {
-          clearStoredSession();
-          if (isMounted) {
-            setAuthStatus('UNAUTHENTICATED');
-            setSession(null);
-          }
-          return;
-        }
-
+        clearStoredSession();
         if (isMounted) {
-          setCurrentUser(user);
-          setSession(stored);
-          setAuthStatus('AUTHENTICATED');
+          setAuthStatus('UNAUTHENTICATED');
+          setSession(null);
         }
       } catch (err) {
         console.error('Session restoration error:', err);
@@ -554,32 +506,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
-  const switchRole = (role: UserRole) => {
-    const matched = SYSTEM_USERS.find(u => u.role === role);
-    if (matched) {
-      const newSession = generateAuthSession(matched, session?.rememberMe ?? false);
-      persistSession(newSession);
-      setCurrentUser(matched);
-      setSession(newSession);
-      setAuthStatus('AUTHENTICATED');
-      showToast(`Switched active view to ${matched.roleTitle} (${matched.name})`, 'info');
-    }
-  };
-
   const login = async (email: string, password: string, rememberMe = false): Promise<UserProfile | null> => {
     try {
       // 1. Attempt Real Backend Authentication
       const response = await authApi.login(email, password, rememberMe);
-      if (response.success && response.data) {
-        const { user, accessToken, refreshToken, expiresAt } = response.data;
+      if (response.success && response.data?.user) {
+        const { user, expiresAt } = response.data;
         const newSession: AuthSession = {
-          token: accessToken,
-          refreshToken,
+          token: '',
+          refreshToken: '',
           userId: user.id,
           email: user.email,
           role: user.role,
           issuedAt: Date.now(),
-          expiresAt,
+          expiresAt: expiresAt || Date.now() + (rememberMe ? 30 : 1) * 86400000,
           rememberMe
         };
         persistSession(newSession);
@@ -589,36 +529,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return user;
       }
     } catch (apiErr: any) {
-      if (apiErr.statusCode === 401 || apiErr.statusCode === 403) {
-        showToast(apiErr.message || 'Invalid credentials', 'error');
-        return null;
-      }
-      console.warn('Backend server offline, falling back to local session authentication:', apiErr.message);
-    }
-
-    // 2. Offline / Local fallback
-    const DEMO_PASSWORD = 'solaros2026';
-    if (password !== DEMO_PASSWORD) {
-      showToast('Invalid credentials. Password: solaros2026', 'error');
+      showToast(apiErr.message || 'Invalid credentials', 'error');
       return null;
     }
-    const user = SYSTEM_USERS.find(u => u.email.toLowerCase() === email.toLowerCase());
-    if (user) {
-      const newSession = generateAuthSession(user, rememberMe);
-      persistSession(newSession);
-      setCurrentUser(user);
-      setSession(newSession);
-      setAuthStatus('AUTHENTICATED');
-      return user;
-    }
+
     return null;
   };
 
   const logout = async () => {
     try {
-      if (session?.refreshToken) {
-        await authApi.logout(session.refreshToken);
-      }
+      // The refresh token lives in an HttpOnly cookie, so no token is passed.
+      await authApi.logout();
     } catch (e) {
       // ignore network errors on logout
     }
@@ -631,20 +552,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const refreshSession = async (): Promise<boolean> => {
     const stored = retrieveStoredSession();
-    if (!stored || !stored.refreshToken) return false;
-    const user = SYSTEM_USERS.find(u => u.id === stored.userId);
-    if (!user) {
-      clearStoredSession();
-      setSession(null);
-      setAuthStatus('UNAUTHENTICATED');
-      return false;
+    try {
+      const response = await authApi.getSession();
+      if (response.success && response.data?.authenticated && response.data.user) {
+        const newSession = generateAuthSession(response.data.user, stored?.rememberMe ?? false);
+        persistSession(newSession);
+        setSession(newSession);
+        setCurrentUser(response.data.user);
+        setAuthStatus('AUTHENTICATED');
+        return true;
+      }
+    } catch {
+      // fall through
     }
-    const newSession = generateAuthSession(user, stored.rememberMe);
-    persistSession(newSession);
-    setSession(newSession);
-    setCurrentUser(user);
-    setAuthStatus('AUTHENTICATED');
-    return true;
+    clearStoredSession();
+    setSession(null);
+    setAuthStatus('UNAUTHENTICATED');
+    return false;
   };
 
   // Derive granular permissions from role definition
@@ -3741,7 +3665,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       login,
       logout,
       refreshSession,
-      switchRole,
       usersList: SYSTEM_USERS,
       isGlobalSearchOpen,
       setIsGlobalSearchOpen,

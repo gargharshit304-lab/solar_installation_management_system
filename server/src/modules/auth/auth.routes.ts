@@ -1,11 +1,10 @@
 import { Router } from 'express';
 import { authController } from './auth.controller';
 import { validateRequest } from '../../middleware/validate.middleware';
-import { requireAuth } from '../../middleware/auth.middleware';
+import { requireAuth, optionalAuth } from '../../middleware/auth.middleware';
 import { authRateLimiter } from '../../middleware/rateLimiter';
 import {
   loginSchema,
-  refreshSchema,
   passwordResetRequestSchema,
   passwordResetConfirmSchema
 } from './auth.validation';
@@ -27,13 +26,13 @@ router.get('/session', requireAuth, (req, res, next) => {
 
 router.post(
   '/refresh',
-  validateRequest({ body: refreshSchema }),
+  authRateLimiter,
   (req, res, next) => {
     authController.refresh(req, res, next);
   }
 );
 
-router.post('/logout', (req, res, next) => {
+router.post('/logout', authRateLimiter, optionalAuth, (req, res, next) => {
   authController.logout(req, res, next);
 });
 
