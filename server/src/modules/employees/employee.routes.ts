@@ -32,8 +32,8 @@ router.put('/:id', requireAuth, requireCapability('employees.update'), (req, res
   employeeController.updateEmployee(req, res, next);
 });
 
-// Delete employee (Owner/Admin only)
-router.delete('/:id', requireAuth, requireCapability('employees.create'), (req, res, next) => {
+// Deactivate/delete employee (Owner/Admin only)
+router.delete('/:id', requireAuth, requireCapability('employees.deactivate'), (req, res, next) => {
   employeeController.deleteEmployee(req, res, next);
 });
 

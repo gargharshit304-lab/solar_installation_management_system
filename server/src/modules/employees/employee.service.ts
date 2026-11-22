@@ -1,5 +1,8 @@
-import { prisma } from '../../db/prisma';
-import { INITIAL_SYSTEM_USERS } from '../../db/seed';
+import { prisma, pool as dbPool } from '../../db/prisma';
+import { hashPassword } from '../../utils/password';
+import { AppError } from '../../utils/response';
+import { auditService } from '../audit/audit.service';
+import crypto from 'crypto';
 
 export interface EmployeeRecord {
   id: string;
@@ -30,414 +33,38 @@ export interface DepartmentRecord {
   employeeCount: number;
 }
 
-// Canonical departments for SolarOS
-export const DEPARTMENTS_DATA: DepartmentRecord[] = [
-  { id: 'dept-1', name: 'Sales & Business Development', code: 'SLS', employeeCount: 2 },
-  { id: 'dept-2', name: 'Field Operations', code: 'FLD', employeeCount: 5 },
-  { id: 'dept-3', name: 'Engineering & Approvals', code: 'ENG', employeeCount: 1 },
-  { id: 'dept-4', name: 'Installation & Commissioning', code: 'OPS', employeeCount: 7 },
-  { id: 'dept-5', name: 'Warehouse & Supply Chain', code: 'LOG', employeeCount: 2 },
-  { id: 'dept-6', name: 'Accounts & Finance', code: 'FIN', employeeCount: 1 },
-  { id: 'dept-7', name: 'Client Care & Warranty', code: 'SUP', employeeCount: 1 }
-];
+const DEPARTMENT_CODES: Record<string, string> = {
+  'Executive Management': 'EXE',
+  'Sales & Business Development': 'SLS',
+  'Field Engineering & Surveys': 'FLD',
+  'Engineering & Approvals': 'ENG',
+  'Operations & Installations': 'OPS',
+  'Supply Chain & Inventory': 'SCM',
+  'Finance & Compliance': 'FIN',
+  'After-Sales & Customer Service': 'SUP'
+};
 
-// Baseline company employees
-export const BASELINE_EMPLOYEES: EmployeeRecord[] = [
-  { 
-    id: 'emp-1', 
-    employeeCode: 'EMP-001', 
-    fullName: 'Amit Jadhav', 
-    email: 'amit.j@sunpowersolutions.in', 
-    phone: '+91 98221 00912', 
-    department: 'Installation & Commissioning', 
-    designation: 'Senior Installation Engineer & Crew Lead', 
-    role: 'install_tech', 
-    hourlyRate: 350, 
-    skills: ['Grid Synchronization', 'Three-Phase Inverters', 'HT/LT Wiring', 'Earthing Pit Testing'], 
-    isAvailable: false, 
-    activeJobs: 2, 
-    rating: 4.9,
-    status: 'active',
-    reportingManagerId: 'usr-1',
-    reportingManagerName: 'Vikramaditya Rao',
-    joiningDate: '2024-03-15',
-    address: 'Kothrud, Pune, Maharashtra'
-  },
-  { 
-    id: 'emp-2', 
-    employeeCode: 'EMP-002', 
-    fullName: 'Vikas Shirole', 
-    email: 'vikas.s@sunpowersolutions.in', 
-    phone: '+91 98221 00913', 
-    department: 'Installation & Commissioning', 
-    designation: 'Installation Technician', 
-    role: 'install_tech', 
-    hourlyRate: 250, 
-    skills: ['Structure Mounting', 'DC Cabling', 'Safety Harnessing'], 
-    isAvailable: true, 
-    activeJobs: 1, 
-    rating: 4.7,
-    status: 'active',
-    reportingManagerId: 'emp-1',
-    reportingManagerName: 'Amit Jadhav',
-    joiningDate: '2024-06-10',
-    address: 'Sinhagad Road, Pune'
-  },
-  { 
-    id: 'emp-3', 
-    employeeCode: 'EMP-003', 
-    fullName: 'Suresh More', 
-    email: 'suresh.m@sunpowersolutions.in', 
-    phone: '+91 98221 00914', 
-    department: 'Field Operations', 
-    designation: 'Chief Survey Specialist', 
-    role: 'survey_tech', 
-    hourlyRate: 300, 
-    skills: ['Shadow Analysis', 'RCC Slab Load Testing', 'AutoCAD Layouts', 'Drone Surveys'], 
-    isAvailable: true, 
-    activeJobs: 1, 
-    rating: 4.8,
-    status: 'active',
-    reportingManagerId: 'usr-1',
-    reportingManagerName: 'Vikramaditya Rao',
-    joiningDate: '2024-01-20',
-    address: 'Baner, Pune'
-  },
-  { 
-    id: 'emp-4', 
-    employeeCode: 'EMP-004', 
-    fullName: 'Kiran Desai', 
-    email: 'kiran.d@sunpowersolutions.in', 
-    phone: '+91 98221 00915', 
-    department: 'Installation & Commissioning', 
-    designation: 'Electrical Assistant', 
-    role: 'install_tech', 
-    hourlyRate: 200, 
-    skills: ['Conduit Laying', 'AC Distribution Box', 'Earthing Resistance'], 
-    isAvailable: true, 
-    activeJobs: 0, 
-    rating: 4.6,
-    status: 'active',
-    reportingManagerId: 'emp-1',
-    reportingManagerName: 'Amit Jadhav',
-    joiningDate: '2024-07-01',
-    address: 'Hadapsar, Pune'
-  },
-  { 
-    id: 'emp-5', 
-    employeeCode: 'EMP-005', 
-    fullName: 'Pooja Kulkarni', 
-    email: 'pooja.k@sunpowersolutions.in', 
-    phone: '+91 98220 54321', 
-    department: 'Sales & Business Development', 
-    designation: 'Senior Solar Sales Consultant', 
-    role: 'sales_exec', 
-    hourlyRate: 400, 
-    skills: ['Solar Sizing', 'Government Subsidies', 'Client Negotiations'], 
-    isAvailable: true, 
-    activeJobs: 3, 
-    rating: 5.0,
-    status: 'active',
-    reportingManagerId: 'usr-1',
-    reportingManagerName: 'Vikramaditya Rao',
-    joiningDate: '2023-11-01',
-    address: 'Shivaji Nagar, Pune'
-  },
-  { 
-    id: 'emp-6', 
-    employeeCode: 'EMP-006', 
-    fullName: 'Ganesh Shinde', 
-    email: 'ganesh.s@sunpowersolutions.in', 
-    phone: '+91 98220 98765', 
-    department: 'Warehouse & Supply Chain', 
-    designation: 'Central Warehouse & Logistics Manager', 
-    role: 'warehouse_mgr', 
-    hourlyRate: 350, 
-    skills: ['Inventory Audit', 'FIFO Valuation', 'Tier-1 Panel Barcoding'], 
-    isAvailable: true, 
-    activeJobs: 0, 
-    rating: 4.9,
-    status: 'active',
-    reportingManagerId: 'usr-1',
-    reportingManagerName: 'Vikramaditya Rao',
-    joiningDate: '2023-10-15',
-    address: 'Bhosari MIDC, Pune'
-  },
-  { 
-    id: 'emp-7', 
-    employeeCode: 'EMP-007', 
-    fullName: 'Sneha Deshpande', 
-    email: 'sneha.d@sunpowersolutions.in', 
-    phone: '+91 98220 33445', 
-    department: 'Client Care & Warranty', 
-    designation: 'Client Care & Warranty Specialist', 
-    role: 'support_exec', 
-    hourlyRate: 280, 
-    skills: ['Warranty RMA', 'DISCOM Solar Net-Meter Sync', 'Service Ticketing'], 
-    isAvailable: true, 
-    activeJobs: 2, 
-    rating: 4.9,
-    status: 'active',
-    reportingManagerId: 'usr-1',
-    reportingManagerName: 'Vikramaditya Rao',
-    joiningDate: '2024-02-15',
-    address: 'Aundh, Pune'
-  },
-  { 
-    id: 'emp-8', 
-    employeeCode: 'EMP-008', 
-    fullName: 'Ramesh Patil', 
-    email: 'ramesh.p@sunpowersolutions.in', 
-    phone: '+91 98220 66778', 
-    department: 'Accounts & Finance', 
-    designation: 'Chief Financial Accountant', 
-    role: 'accountant', 
-    hourlyRate: 450, 
-    skills: ['GST Returns', 'Project P&L', 'Payment Gateways', 'Subsidy Disbursement'], 
-    isAvailable: true, 
-    activeJobs: 0, 
-    rating: 4.9,
-    status: 'active',
-    reportingManagerId: 'usr-1',
-    reportingManagerName: 'Vikramaditya Rao',
-    joiningDate: '2023-09-01',
-    address: 'Model Colony, Pune'
-  },
-  { 
-    id: 'emp-9', 
-    employeeCode: 'EMP-009', 
-    fullName: 'Nilesh Chavan', 
-    email: 'nilesh.c@sunpowersolutions.in', 
-    phone: '+91 98221 00916', 
-    department: 'Installation & Commissioning', 
-    designation: 'Safety & Quality Inspector', 
-    role: 'install_tech', 
-    hourlyRate: 320, 
-    skills: ['OSHA Standards', 'Thermal Imaging', 'Micro-Inverter Testing'], 
-    isAvailable: true, 
-    activeJobs: 1, 
-    rating: 4.8,
-    status: 'active',
-    reportingManagerId: 'emp-1',
-    reportingManagerName: 'Amit Jadhav',
-    joiningDate: '2024-04-10',
-    address: 'Wakad, Pune'
-  },
-  { 
-    id: 'emp-10', 
-    employeeCode: 'EMP-010', 
-    fullName: 'Mahesh Thorat', 
-    email: 'mahesh.t@sunpowersolutions.in', 
-    phone: '+91 98221 00917', 
-    department: 'Warehouse & Supply Chain', 
-    designation: 'Inventory Dispatch Executive', 
-    role: 'warehouse_mgr', 
-    hourlyRate: 240, 
-    skills: ['ERP Stock Updates', 'Inverter Serialization', 'BOM Picking'], 
-    isAvailable: true, 
-    activeJobs: 0, 
-    rating: 4.7,
-    status: 'active',
-    reportingManagerId: 'emp-6',
-    reportingManagerName: 'Ganesh Shinde',
-    joiningDate: '2024-05-01',
-    address: 'Chakan, Pune'
-  },
-  { 
-    id: 'emp-11', 
-    employeeCode: 'EMP-011', 
-    fullName: 'Sachin Gaikwad', 
-    email: 'sachin.g@sunpowersolutions.in', 
-    phone: '+91 98221 00918', 
-    department: 'Field Operations', 
-    designation: 'Junior Site Surveyor', 
-    role: 'survey_tech', 
-    hourlyRate: 220, 
-    skills: ['Terrace Measurement', 'Shadow Profiling', 'Site Photos'], 
-    isAvailable: true, 
-    activeJobs: 1, 
-    rating: 4.6,
-    status: 'active',
-    reportingManagerId: 'emp-3',
-    reportingManagerName: 'Suresh More',
-    joiningDate: '2024-08-01',
-    address: 'Pimpri, Pune'
-  },
-  { 
-    id: 'emp-12', 
-    employeeCode: 'EMP-012', 
-    fullName: 'Tanvi Joshi', 
-    email: 'tanvi.j@sunpowersolutions.in', 
-    phone: '+91 98220 77889', 
-    department: 'Sales & Business Development', 
-    designation: 'Solar Sales Associate', 
-    role: 'sales_exec', 
-    hourlyRate: 280, 
-    skills: ['Lead Qualification', 'CRM Management', 'Follow-up Cadence'], 
-    isAvailable: true, 
-    activeJobs: 2, 
-    rating: 4.7,
-    status: 'active',
-    reportingManagerId: 'emp-5',
-    reportingManagerName: 'Pooja Kulkarni',
-    joiningDate: '2024-06-15',
-    address: 'Kalyani Nagar, Pune'
-  },
-  { 
-    id: 'emp-13', 
-    employeeCode: 'EMP-013', 
-    fullName: 'Prashant Mohite', 
-    email: 'prashant.m@sunpowersolutions.in', 
-    phone: '+91 98221 00919', 
-    department: 'Installation & Commissioning', 
-    designation: 'Mounting Specialist', 
-    role: 'install_tech', 
-    hourlyRate: 230, 
-    skills: ['Elevated Superstructure', 'GI Channel Bolting', 'Waterproofing'], 
-    isAvailable: true, 
-    activeJobs: 1, 
-    rating: 4.6,
-    status: 'on_leave',
-    reportingManagerId: 'emp-1',
-    reportingManagerName: 'Amit Jadhav',
-    joiningDate: '2024-07-20',
-    address: 'Dhayari, Pune'
-  },
-  { 
-    id: 'emp-14', 
-    employeeCode: 'EMP-014', 
-    fullName: 'Deepak Salunkhe', 
-    email: 'deepak.s@sunpowersolutions.in', 
-    phone: '+91 98221 00920', 
-    department: 'Installation & Commissioning', 
-    designation: 'Inverter Wiring Specialist', 
-    role: 'install_tech', 
-    hourlyRate: 290, 
-    skills: ['ACDB/DCDB Dressing', 'Surge Protection Devices', 'Grid Handover'], 
-    isAvailable: true, 
-    activeJobs: 0, 
-    rating: 4.8,
-    status: 'active',
-    reportingManagerId: 'emp-1',
-    reportingManagerName: 'Amit Jadhav',
-    joiningDate: '2024-05-15',
-    address: 'Katraj, Pune'
-  },
-  { 
-    id: 'emp-15', 
-    employeeCode: 'EMP-015', 
-    fullName: 'Aditi Gokhale', 
-    email: 'aditi.g@sunpowersolutions.in', 
-    phone: '+91 98220 88990', 
-    department: 'Field Operations', 
-    designation: 'Solar Sizing & 3D Drone Modeler', 
-    role: 'survey_tech', 
-    hourlyRate: 310, 
-    skills: ['PVSyst Modeling', 'Drone Photogrammetry', 'Feeder Calculations'], 
-    isAvailable: true, 
-    activeJobs: 1, 
-    rating: 4.9,
-    status: 'active',
-    reportingManagerId: 'emp-3',
-    reportingManagerName: 'Suresh More',
-    joiningDate: '2024-03-01',
-    address: 'Kothrud, Pune'
-  },
-  { 
-    id: 'emp-16', 
-    employeeCode: 'EMP-016', 
-    fullName: 'Rohit Mane', 
-    email: 'rohit.m@sunpowersolutions.in', 
-    phone: '+91 98221 00921', 
-    department: 'Field Operations', 
-    designation: 'Field Survey Specialist', 
-    role: 'survey_tech', 
-    hourlyRate: 270, 
-    skills: ['Azimuth Verification', 'Roof Load Testing', 'Shadow Analysis'], 
-    isAvailable: true, 
-    activeJobs: 2, 
-    rating: 4.7,
-    status: 'active',
-    reportingManagerId: 'emp-3',
-    reportingManagerName: 'Suresh More',
-    joiningDate: '2024-04-01',
-    address: 'Bibwewadi, Pune'
-  },
-  { 
-    id: 'emp-17', 
-    employeeCode: 'EMP-017', 
-    fullName: 'Chetan Bhagat', 
-    email: 'chetan.b@sunpowersolutions.in', 
-    phone: '+91 98221 00922', 
-    department: 'Field Operations', 
-    designation: 'Site Measurement Associate', 
-    role: 'survey_tech', 
-    hourlyRate: 240, 
-    skills: ['Terrace Dimensioning', 'Obstacle Mapping', 'Customer Site Orientation'], 
-    isAvailable: true, 
-    activeJobs: 0, 
-    rating: 4.5,
-    status: 'on_leave',
-    reportingManagerId: 'emp-3',
-    reportingManagerName: 'Suresh More',
-    joiningDate: '2024-07-15',
-    address: 'Warje, Pune'
-  },
-  { 
-    id: 'emp-18', 
-    employeeCode: 'EMP-018', 
-    fullName: 'Aniket Jagtap', 
-    email: 'aniket.j@sunpowersolutions.in', 
-    phone: '+91 98221 00923', 
-    department: 'Installation & Commissioning', 
-    designation: 'Apprentice Installer', 
-    role: 'install_tech', 
-    hourlyRate: 180, 
-    skills: ['Module Unboxing', 'Rail Alignment', 'Tool Calibration'], 
-    isAvailable: false, 
-    activeJobs: 0, 
-    rating: 4.2,
-    status: 'inactive',
-    reportingManagerId: 'emp-1',
-    reportingManagerName: 'Amit Jadhav',
-    joiningDate: '2024-08-10',
-    address: 'Narhe, Pune'
-  },
-  { 
-    id: 'emp-19', 
-    employeeCode: 'EMP-019', 
-    fullName: 'Sandeep Patil', 
-    email: 'sandeep.p@sunpowersolutions.in', 
-    phone: '+91 98220 99001', 
-    department: 'Engineering & Approvals', 
-    designation: 'Lead Solar Design & Approvals Engineer', 
-    role: 'engineering_lead', 
-    hourlyRate: 480, 
-    skills: ['Single Line Diagrams', 'DISCOM Approvals', 'Feeder Net-Metering Validation'], 
-    isAvailable: true, 
-    activeJobs: 2, 
-    rating: 4.9,
-    status: 'active',
-    reportingManagerId: 'usr-1',
-    reportingManagerName: 'Vikramaditya Rao',
-    joiningDate: '2023-12-01',
-    address: 'Prabhat Road, Pune'
-  }
+const VALID_ROLES = [
+  'owner_admin',
+  'sales_exec',
+  'survey_tech',
+  'engineering_lead',
+  'warehouse_mgr',
+  'install_tech',
+  'support_exec',
+  'accountant'
 ];
 
 export class EmployeeService {
-  /**
-   * Helper to normalize department names for matching
-   */
   matchesDept(employeeDept: string, targetDept: string): boolean {
     if (!targetDept || targetDept.toLowerCase() === 'all') return true;
+    if (!employeeDept) return false;
     const cleanEmp = employeeDept.toLowerCase().trim();
     const cleanTarget = targetDept.toLowerCase().trim();
 
     if (cleanEmp === cleanTarget) return true;
     if (cleanEmp.includes(cleanTarget) || cleanTarget.includes(cleanEmp)) return true;
 
-    // Check abbreviation / code aliases
     if ((cleanTarget.includes('sales') || cleanTarget === 'sls') && cleanEmp.includes('sales')) return true;
     if ((cleanTarget.includes('field') || cleanTarget === 'fld') && cleanEmp.includes('field')) return true;
     if ((cleanTarget.includes('eng') || cleanTarget === 'eng') && cleanEmp.includes('eng')) return true;
@@ -449,45 +76,90 @@ export class EmployeeService {
     return false;
   }
 
-  /**
-   * Returns list of authorized departments for the user
-   */
+  private isCompanyWide(user: any): boolean {
+    return Boolean(
+      user &&
+      (user.role === 'owner_admin' ||
+        user.role === 'admin' ||
+        user.roleTitle?.toLowerCase().includes('managing director') ||
+        user.roleTitle?.toLowerCase().includes('owner'))
+    );
+  }
+
+  private departmentCode(name: string): string {
+    if (DEPARTMENT_CODES[name]) return DEPARTMENT_CODES[name];
+    const initials = name
+      .replace(/[^a-zA-Z0-9 ]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(part => part[0])
+      .join('')
+      .slice(0, 3)
+      .toUpperCase();
+    return initials || 'DEP';
+  }
+
+  private mapEmployee(employee: any): EmployeeRecord {
+    const isActive = employee.profile ? employee.profile.isActive !== false : true;
+    let status: EmployeeRecord['status'] = 'active';
+    if (!isActive) status = 'inactive';
+    else if (!employee.isAvailable) status = 'on_leave';
+
+    return {
+      id: employee.id,
+      employeeCode: employee.employeeCode,
+      fullName: `${employee.firstName} ${employee.lastName}`.trim(),
+      email: employee.email,
+      phone: employee.phone,
+      department: employee.department,
+      designation: employee.designation,
+      role: employee.roleId,
+      hourlyRate: Number(employee.hourlyRate) || 0,
+      skills: Array.isArray(employee.skills) ? employee.skills : [],
+      isAvailable: employee.isAvailable,
+      activeJobs: employee.currentAssignedJobs,
+      rating: 4.8,
+      status,
+      avatarUrl: employee.profile?.avatarUrl || undefined,
+      joiningDate: employee.hireDate ? employee.hireDate.toISOString().split('T')[0] : undefined
+    };
+  }
+
   async getAuthorizedDepartments(user: any): Promise<DepartmentRecord[]> {
     if (!user) return [];
 
-    // Owner / Administrator or users with company-wide / workforce authority can view all departments
-    const isCompanyWide = 
-      user.role === 'owner_admin' || 
-      user.role === 'admin' ||
-      user.roleTitle?.toLowerCase().includes('managing director') ||
-      user.roleTitle?.toLowerCase().includes('owner');
-
-    if (isCompanyWide) {
-      return DEPARTMENTS_DATA;
+    let allDepartments: DepartmentRecord[];
+    try {
+      const result = await dbPool.query(
+        `SELECT department, COUNT(*)::int AS employee_count
+         FROM employees
+         GROUP BY department
+         ORDER BY department ASC`
+      );
+      allDepartments = result.rows.map((row: any, index: number) => ({
+        id: `dept-${index + 1}`,
+        name: row.department,
+        code: this.departmentCode(row.department),
+        employeeCount: Number(row.employee_count) || 0
+      }));
+    } catch (err) {
+      console.error('Failed to load departments from database:', err);
+      throw new AppError(503, 'DATABASE_UNAVAILABLE', 'Department data is temporarily unavailable.');
     }
 
-    // Otherwise, restrict to the user's authorized department scope
+    if (this.isCompanyWide(user)) return allDepartments;
+
     const userDept = user.department || '';
-    const scopedDepts = DEPARTMENTS_DATA.filter(d => 
-      this.matchesDept(d.name, userDept) || this.matchesDept(userDept, d.name)
+    const scoped = allDepartments.filter(
+      dept => this.matchesDept(dept.name, userDept) || this.matchesDept(userDept, dept.name)
     );
+    if (scoped.length > 0) return scoped;
 
-    // If user's specific department is matched, return it; otherwise fallback to their department as custom record
-    if (scopedDepts.length > 0) {
-      return scopedDepts;
-    }
-
-    return [{
-      id: `dept-user`,
-      name: userDept || 'Assigned Department',
-      code: user.role?.substring(0, 3).toUpperCase() || 'USR',
-      employeeCount: 1
-    }];
+    return userDept
+      ? [{ id: 'dept-scoped', name: userDept, code: 'USR', employeeCount: 0 }]
+      : [];
   }
 
-  /**
-   * Search employees with server-side filtering, authorization scoping, and pagination
-   */
   async searchEmployees(
     user: any,
     params: {
@@ -499,245 +171,366 @@ export class EmployeeService {
     }
   ): Promise<{
     employees: EmployeeRecord[];
-    pagination: {
-      page: number;
-      limit: number;
-      total: number;
-      totalPages: number;
-    };
+    pagination: { page: number; limit: number; total: number; totalPages: number };
   }> {
     const page = Math.max(1, Number(params.page) || 1);
-    const limit = Math.max(1, Math.min(100, Number(params.limit) || 10));
-    const search = (params.search || '').trim().toLowerCase();
+    const limit = Math.max(1, Math.min(500, Number(params.limit) || 20));
+    const search = (params.search || '').trim();
     const department = (params.department || '').trim();
     const status = (params.status || 'all').toLowerCase();
 
-    // 1. Determine department authorization scope
-    const authorizedDepartments = await this.getAuthorizedDepartments(user);
-    const authorizedDeptNames = authorizedDepartments.map(d => d.name);
+    const conditions: any[] = [];
 
-    // Check if user is restricted to a subset of departments
-    const isCompanyWide = 
-      user.role === 'owner_admin' || 
-      user.role === 'admin' ||
-      user.roleTitle?.toLowerCase().includes('managing director') ||
-      user.roleTitle?.toLowerCase().includes('owner');
-
-    let pool: EmployeeRecord[] = [...BASELINE_EMPLOYEES];
-
-    // Try reading from Prisma PostgreSQL database first if available
-    try {
-      const dbEmployees = await prisma.employee.findMany({
-        include: { profile: true }
-      });
-      if (dbEmployees.length > 0) {
-        pool = dbEmployees.map(e => ({
-          id: e.id,
-          employeeCode: e.employeeCode,
-          fullName: `${e.firstName} ${e.lastName}`.trim(),
-          email: e.email,
-          phone: e.phone,
-          department: e.department,
-          designation: e.designation,
-          role: e.roleId,
-          hourlyRate: Number(e.hourlyRate) || 0,
-          skills: e.skills || [],
-          isAvailable: e.isAvailable,
-          activeJobs: e.currentAssignedJobs,
-          rating: 4.8,
-          status: 'active' as const,
-          avatarUrl: e.profile?.avatarUrl || undefined
-        }));
+    if (!this.isCompanyWide(user)) {
+      const authorized = await this.getAuthorizedDepartments(user);
+      if (authorized.length === 0) {
+        return { employees: [], pagination: { page, limit, total: 0, totalPages: 1 } };
       }
-    } catch {
-      // Prisma offline: smoothly fall back to BASELINE_EMPLOYEES
+      conditions.push({ department: { in: authorized.map(dept => dept.name) } });
     }
 
-    // Filter by User Authorization Scope (Never return employees user is unauthorized to view)
-    if (!isCompanyWide) {
-      pool = pool.filter(emp => 
-        authorizedDeptNames.some(deptName => this.matchesDept(emp.department, deptName))
-      );
-    }
-
-    // Filter by Selected Department (if provided and not 'all')
     if (department && department.toLowerCase() !== 'all') {
-      pool = pool.filter(emp => this.matchesDept(emp.department, department));
+      conditions.push({ department: { equals: department, mode: 'insensitive' } });
     }
 
-    // Filter by Search Query (name, employeeCode, email, designation)
     if (search.length >= 2) {
-      pool = pool.filter(emp => {
-        const matchesName = emp.fullName.toLowerCase().includes(search);
-        const matchesCode = emp.employeeCode.toLowerCase().includes(search);
-        const matchesEmail = emp.email.toLowerCase().includes(search);
-        const matchesDesig = emp.designation.toLowerCase().includes(search);
-        return matchesName || matchesCode || matchesEmail || matchesDesig;
+      conditions.push({
+        OR: [
+          { firstName: { contains: search, mode: 'insensitive' } },
+          { lastName: { contains: search, mode: 'insensitive' } },
+          { employeeCode: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+          { designation: { contains: search, mode: 'insensitive' } }
+        ]
       });
     }
 
-    // Filter by Employment Status
-    if (status && status !== 'all') {
-      pool = pool.filter(emp => (emp.status || 'active').toLowerCase() === status);
+    const activeProfileCondition = {
+      OR: [{ profile: { is: { isActive: true } } }, { profileId: null }]
+    };
+
+    if (status === 'inactive') {
+      conditions.push({ profile: { is: { isActive: false } } });
+    } else if (status === 'on_leave') {
+      conditions.push({ isAvailable: false, ...activeProfileCondition });
+    } else if (status === 'active') {
+      conditions.push({ isAvailable: true, ...activeProfileCondition });
     }
 
-    // Calculate Pagination
-    const total = pool.length;
-    const totalPages = Math.ceil(total / limit) || 1;
-    const offset = (page - 1) * limit;
-    const paginatedEmployees = pool.slice(offset, offset + limit);
+    const where = conditions.length > 0 ? { AND: conditions } : {};
 
-    return {
-      employees: paginatedEmployees,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages
-      }
-    };
+    try {
+      const [total, employees] = await Promise.all([
+        prisma.employee.count({ where }),
+        prisma.employee.findMany({
+          where,
+          include: { profile: true },
+          orderBy: { employeeCode: 'asc' },
+          skip: (page - 1) * limit,
+          take: limit
+        })
+      ]);
+
+      return {
+        employees: employees.map(employee => this.mapEmployee(employee)),
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit) || 1
+        }
+      };
+    } catch (err) {
+      console.error('Failed to query employees from database:', err);
+      throw new AppError(503, 'DATABASE_UNAVAILABLE', 'Employee directory is temporarily unavailable.');
+    }
   }
 
-  async createEmployee(user: any, data: Partial<EmployeeRecord>): Promise<EmployeeRecord> {
-    const employeeCode = data.employeeCode || `EMP-${String(BASELINE_EMPLOYEES.length + 1).padStart(3, '0')}`;
-    
+  async createEmployee(user: any, data: Partial<EmployeeRecord> & { temporaryPassword?: string; emergencyContact?: any }): Promise<any> {
+    const fullName = (data.fullName || '').trim();
+    if (!fullName || fullName.length < 2) {
+      throw new AppError(422, 'VALIDATION_ERROR', 'Full Legal Name is required (minimum 2 characters).');
+    }
+
+    const employeeCode = (data.employeeCode || '').trim();
+    if (!employeeCode || employeeCode.length < 3) {
+      throw new AppError(422, 'VALIDATION_ERROR', 'Employee Code is required (e.g. EMP-062).');
+    }
+
+    const email = (data.email || '').trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      throw new AppError(422, 'VALIDATION_ERROR', 'A valid corporate or personal email address is required.');
+    }
+
+    const phone = (data.phone || '').trim();
+    if (!phone || phone.replace(/\D/g, '').length < 8) {
+      throw new AppError(422, 'VALIDATION_ERROR', 'A valid contact phone number is required (at least 8 digits).');
+    }
+
+    const department = (data.department || '').trim();
+    if (!department) {
+      throw new AppError(422, 'VALIDATION_ERROR', 'Department selection is mandatory.');
+    }
+
+    const designation = (data.designation || '').trim();
+    if (!designation) {
+      throw new AppError(422, 'VALIDATION_ERROR', 'Designation / job title is required.');
+    }
+
+    const roleId = (data.role || '').trim();
+    if (!roleId || !VALID_ROLES.includes(roleId)) {
+      throw new AppError(422, 'VALIDATION_ERROR', `Invalid role '${roleId}'. Must be one of canonical roles: ${VALID_ROLES.join(', ')}`);
+    }
+
+    const hourlyRate = Number(data.hourlyRate) || 0;
+    if (hourlyRate < 0) {
+      throw new AppError(422, 'VALIDATION_ERROR', 'Hourly billing rate cannot be negative.');
+    }
+
+    const nameParts = fullName.split(/\s+/);
+    const firstName = nameParts.shift() || fullName;
+    const lastName = nameParts.join(' ') || firstName;
+
+    const rawSkills: any = (data as any).skills;
+    const skills: string[] = Array.isArray(rawSkills)
+      ? rawSkills.map((skill: any) => String(skill).trim()).filter(Boolean)
+      : typeof rawSkills === 'string'
+        ? rawSkills.split(',').map((skill: string) => skill.trim()).filter(Boolean)
+        : [];
+
+    const hireDate = data.joiningDate ? new Date(data.joiningDate) : new Date();
+    if (Number.isNaN(hireDate.getTime())) {
+      throw new AppError(422, 'VALIDATION_ERROR', 'Joining date is invalid.');
+    }
+
+    const temporaryPassword = data.temporaryPassword || crypto.randomBytes(6).toString('base64url') + 'A1!';
+    const passwordHash = await hashPassword(temporaryPassword);
+
+    const client = await dbPool.connect();
     try {
-      const created = await prisma.employee.create({
-        data: {
-          employeeCode,
-          firstName: data.fullName?.split(' ')[0] || '',
-          lastName: data.fullName?.split(' ').slice(1).join(' ') || '',
-          email: data.email,
-          phone: data.phone,
-          department: data.department,
-          designation: data.designation,
-          roleId: data.role,
-          hourlyRate: data.hourlyRate || 0,
-          skills: data.skills || [],
-          isAvailable: data.isAvailable ?? true,
-          currentAssignedJobs: data.activeJobs || 0,
-          hireDate: data.joiningDate ? new Date(data.joiningDate) : new Date(),
-          profile: data.avatarUrl ? {
-            create: {
-              fullName: data.fullName || '',
-              email: data.email,
-              roleId: data.role,
-              department: data.department,
-              avatarUrl: data.avatarUrl,
-              isActive: true
-            }
-          } : undefined
-        },
-        include: { profile: true }
-      });
+      await client.query('BEGIN');
+
+      const KNOWN_DEPARTMENTS = [
+        'Operations & Installations',
+        'Field Engineering & Surveys',
+        'Engineering & Approvals',
+        'Sales & Business Development',
+        'Supply Chain & Inventory',
+        'Finance & Compliance',
+        'After-Sales & Customer Service',
+        'Executive Management',
+        'Installation'
+      ];
+      const isKnown = KNOWN_DEPARTMENTS.some(d => d.toLowerCase() === department.toLowerCase());
+      if (!isKnown) {
+        const departmentCheck = await client.query(
+          'SELECT 1 FROM employees WHERE LOWER(TRIM(department)) = LOWER(TRIM($1)) LIMIT 1',
+          [department]
+        );
+        if (!departmentCheck.rowCount) {
+          throw new AppError(422, 'VALIDATION_ERROR', `Unknown department '${department}'.`);
+        }
+      }
+
+      const codeCheck = await client.query(
+        'SELECT id FROM employees WHERE LOWER(employee_code) = LOWER($1)',
+        [employeeCode]
+      );
+      if (codeCheck.rowCount && codeCheck.rowCount > 0) {
+        throw new AppError(409, 'DUPLICATE_EMPLOYEE_CODE', `Employee code '${employeeCode}' is already registered to another employee.`);
+      }
+
+      const emailCheck = await client.query(
+        'SELECT id FROM employees WHERE LOWER(email) = $1 UNION SELECT id FROM profiles WHERE LOWER(email) = $1',
+        [email]
+      );
+      if (emailCheck.rowCount && emailCheck.rowCount > 0) {
+        throw new AppError(409, 'DUPLICATE_EMAIL', `Email address '${email}' is already registered to an existing account.`);
+      }
+
+      const profileResult = await client.query(
+        `INSERT INTO profiles (
+          auth_user_id, full_name, email, phone, role_id, role_title, department,
+          password_hash, is_active, email_verified, created_at, updated_at
+        ) VALUES (
+          NULL, $1, $2, $3, $4, $5, $6, $7, true, false, NOW(), NOW()
+        ) RETURNING id`,
+        [fullName, email, phone, roleId, designation, department, passwordHash]
+      );
+      const profileId = profileResult.rows[0].id;
+
+      const employeeResult = await client.query(
+        `INSERT INTO employees (
+          profile_id, employee_code, first_name, last_name, email, phone,
+          department, designation, role_id, hourly_rate, skills, is_available,
+          current_assigned_jobs, hire_date, created_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, 0, $12, NOW()
+        ) RETURNING id, employee_code, first_name, last_name, email, phone,
+          department, designation, role_id, hourly_rate, skills, is_available,
+          current_assigned_jobs, hire_date, created_at`,
+        [
+          profileId, employeeCode, firstName, lastName, email, phone,
+          department, designation, roleId, hourlyRate, skills, hireDate
+        ]
+      );
+
+      await client.query('COMMIT');
+
+      const created = employeeResult.rows[0];
+
+      try {
+        await auditService.record({
+          actorId: user?.id || 'usr-1',
+          actorName: user?.name || 'Managing Director',
+          actorRole: user?.role || 'owner_admin',
+          action: 'EMPLOYEE_CREATED',
+          entity: 'Employee',
+          entityId: created.id,
+          reason: `Registered new employee ${fullName} (${employeeCode}) into ${department}`
+        });
+      } catch (auditError) {
+        console.warn('Employee created but audit log failed:', auditError);
+      }
 
       return {
         id: created.id,
-        employeeCode: created.employeeCode,
-        fullName: `${created.firstName} ${created.lastName}`.trim(),
-        email: created.email,
-        phone: created.phone,
-        department: created.department,
-        designation: created.designation,
-        role: created.roleId,
-        hourlyRate: Number(created.hourlyRate) || 0,
-        skills: created.skills || [],
-        isAvailable: created.isAvailable,
-        activeJobs: created.currentAssignedJobs,
-        rating: 4.8,
+        employeeCode: created.employee_code,
+        employee_code: created.employee_code,
+        fullName,
+        full_name: fullName,
+        firstName,
+        lastName,
+        email,
+        phone,
+        department,
+        designation,
+        role: roleId,
+        role_id: roleId,
+        hourlyRate,
+        skills: created.skills || skills,
         status: 'active' as const,
-        avatarUrl: created.profile?.avatarUrl
+        isAvailable: true,
+        activeJobs: 0,
+        rating: 5.0,
+        temporaryPassword
       };
-    } catch (err) {
-      console.error('Failed to create employee in DB:', err);
-      // Fallback to in-memory
-      const newEmp: EmployeeRecord = {
-        id: `emp-${Date.now()}`,
-        employeeCode,
-        fullName: data.fullName || '',
-        email: data.email || '',
-        phone: data.phone || '',
-        department: data.department || 'Installation & Commissioning',
-        designation: data.designation || '',
-        role: data.role || 'install_tech',
-        hourlyRate: data.hourlyRate || 250,
-        skills: data.skills || [],
-        isAvailable: data.isAvailable ?? true,
-        activeJobs: data.activeJobs || 0,
-        rating: 4.8,
-        status: 'active',
-        joiningDate: new Date().toISOString().split('T')[0],
-        reportingManagerId: 'usr-1',
-        reportingManagerName: 'Vikramaditya Rao'
-      };
-      BASELINE_EMPLOYEES.push(newEmp);
-      return newEmp;
+    } catch (err: any) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // ignore rollback errors
+      }
+      if (err instanceof AppError) throw err;
+      if (err?.code === '23505') {
+        throw new AppError(409, 'DUPLICATE_RECORD', 'An employee with this code or email already exists.');
+      }
+      console.error('Error inserting employee in PostgreSQL:', err);
+      throw new AppError(500, 'DATABASE_ERROR', 'Employee registration could not be completed.');
+    } finally {
+      client.release();
     }
   }
 
   async updateEmployee(id: string, data: Partial<EmployeeRecord>): Promise<EmployeeRecord | null> {
+    const existing = await prisma.employee.findUnique({
+      where: { id },
+      include: { profile: true }
+    });
+    if (!existing) return null;
+
+    const incomingStatus = (data as any).status as EmployeeRecord['status'] | undefined;
+    const isActive = incomingStatus
+      ? incomingStatus !== 'inactive'
+      : existing.profile?.isActive ?? true;
+
+    let isAvailable = existing.isAvailable;
+    if (data.isAvailable !== undefined) isAvailable = data.isAvailable;
+    else if (incomingStatus === 'active') isAvailable = true;
+    else if (incomingStatus === 'on_leave' || incomingStatus === 'inactive') isAvailable = false;
+
+    const employeeData: any = { isAvailable };
+    if (data.employeeCode !== undefined) employeeData.employeeCode = data.employeeCode.trim();
+    if (data.fullName !== undefined) {
+      const parts = data.fullName.trim().split(/\s+/);
+      employeeData.firstName = parts.shift() || existing.firstName;
+      employeeData.lastName = parts.join(' ') || existing.lastName;
+    }
+    if (data.email !== undefined) employeeData.email = data.email.trim().toLowerCase();
+    if (data.phone !== undefined) employeeData.phone = data.phone;
+    if (data.department !== undefined) employeeData.department = data.department;
+    if (data.designation !== undefined) employeeData.designation = data.designation;
+    if (data.role !== undefined) employeeData.roleId = data.role;
+    if (data.hourlyRate !== undefined) employeeData.hourlyRate = Number(data.hourlyRate);
+    if (data.skills !== undefined) {
+      employeeData.skills = Array.isArray(data.skills)
+        ? data.skills.map(skill => String(skill).trim()).filter(Boolean)
+        : [];
+    }
+    if (data.activeJobs !== undefined) employeeData.currentAssignedJobs = data.activeJobs;
+
     try {
-      const updated = await prisma.employee.update({
-        where: { id },
-        data: {
-          employeeCode: data.employeeCode,
-          firstName: data.fullName?.split(' ')[0],
-          lastName: data.fullName?.split(' ').slice(1).join(' '),
-          email: data.email,
-          phone: data.phone,
-          department: data.department,
-          designation: data.designation,
-          roleId: data.role,
-          hourlyRate: data.hourlyRate,
-          skills: data.skills,
-          isAvailable: data.isAvailable,
-          currentAssignedJobs: data.activeJobs,
-        },
-        include: { profile: true }
+      const updated = await prisma.$transaction(async tx => {
+        const employee = await tx.employee.update({
+          where: { id },
+          data: employeeData,
+          include: { profile: true }
+        });
+
+        if (existing.profileId) {
+          const profileData: any = { isActive };
+          if (data.fullName !== undefined) {
+            profileData.fullName = data.fullName.trim();
+          }
+          if (data.email !== undefined) profileData.email = employeeData.email;
+          if (data.phone !== undefined) profileData.phone = data.phone;
+          if (data.role !== undefined) profileData.roleId = data.role;
+          if (data.department !== undefined) profileData.department = data.department;
+          if (data.designation !== undefined) profileData.roleTitle = data.designation;
+
+          await tx.profile.update({
+            where: { id: existing.profileId },
+            data: profileData
+          });
+        }
+
+        return employee;
       });
 
-      return {
-        id: updated.id,
-        employeeCode: updated.employeeCode,
-        fullName: `${updated.firstName} ${updated.lastName}`.trim(),
-        email: updated.email,
-        phone: updated.phone,
-        department: updated.department,
-        designation: updated.designation,
-        role: updated.roleId,
-        hourlyRate: Number(updated.hourlyRate) || 0,
-        skills: updated.skills || [],
-        isAvailable: updated.isAvailable,
-        activeJobs: updated.currentAssignedJobs,
-        rating: 4.8,
-        status: 'active' as const,
-        avatarUrl: updated.profile?.avatarUrl
-      };
-    } catch (err) {
-      console.error('Failed to update employee in DB:', err);
-      // Fallback to in-memory
-      const idx = BASELINE_EMPLOYEES.findIndex(e => e.id === id);
-      if (idx >= 0) {
-        BASELINE_EMPLOYEES[idx] = { ...BASELINE_EMPLOYEES[idx], ...data };
-        return BASELINE_EMPLOYEES[idx];
+      return this.mapEmployee(updated);
+    } catch (err: any) {
+      if (err?.code === 'P2025') return null;
+      if (err?.code === 'P2002') {
+        throw new AppError(409, 'DUPLICATE_RECORD', 'An employee with this code or email already exists.');
       }
-      return null;
+      if (err?.code === 'P2003') {
+        throw new AppError(422, 'VALIDATION_ERROR', 'The selected role or department is invalid.');
+      }
+      console.error('Failed to update employee in database:', err);
+      throw new AppError(500, 'DATABASE_ERROR', 'Employee could not be updated.');
     }
   }
 
   async deleteEmployee(id: string): Promise<boolean> {
+    const existing = await prisma.employee.findUnique({
+      where: { id },
+      select: { id: true, profileId: true }
+    });
+    if (!existing) return false;
+
     try {
-      await prisma.employee.delete({ where: { id } });
+      await prisma.$transaction(async tx => {
+        await tx.employee.delete({ where: { id } });
+        if (existing.profileId) {
+          await tx.profile.delete({ where: { id: existing.profileId } });
+        }
+      });
       return true;
-    } catch (err) {
-      console.error('Failed to delete employee from DB:', err);
-      // Fallback to in-memory
-      const idx = BASELINE_EMPLOYEES.findIndex(e => e.id === id);
-      if (idx >= 0) {
-        BASELINE_EMPLOYEES.splice(idx, 1);
-        return true;
-      }
-      return false;
+    } catch (err: any) {
+      if (err?.code === 'P2025') return false;
+      console.error('Failed to delete employee from database:', err);
+      throw new AppError(500, 'DATABASE_ERROR', 'Employee could not be deleted.');
     }
   }
 }

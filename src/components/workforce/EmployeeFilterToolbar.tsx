@@ -171,8 +171,10 @@ export const EmployeeFilterToolbar: React.FC<EmployeeFilterToolbarProps> = ({
         // Discard response if a newer request was dispatched
         if (currentRequestId !== requestCounterRef.current) return;
 
-        if (res.success && Array.isArray(res.data)) {
-          setSuggestions(res.data as any);
+        const payload: any = res.data;
+        const list = Array.isArray(payload) ? payload : payload?.employees;
+        if (res.success && Array.isArray(list)) {
+          setSuggestions(list as Employee[]);
         } else {
           fallbackLocalSearch(trimmed);
         }

@@ -10,9 +10,10 @@ declare global {
   var __pgPool: pg.Pool | undefined;
 }
 
-const pool = global.__pgPool || new pg.Pool({
+export const pool = global.__pgPool || new pg.Pool({
   connectionString: env.DATABASE_URL,
-  connectionTimeoutMillis: 2000
+  connectionTimeoutMillis: 10000,
+  ssl: { rejectUnauthorized: false }
 });
 
 if (env.NODE_ENV !== 'production') {

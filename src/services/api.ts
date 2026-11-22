@@ -6,6 +6,8 @@
 export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
+  message?: string;
+  code?: string;
   error?: {
     code: string;
     message: string;
@@ -43,25 +45,74 @@ async function request<T>(
 
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, config);
-    const result: ApiResponse<T> = await response.json();
 
-    if (!response.ok || !result.success) {
-      const errorMsg = result.error?.message || `Request failed with status ${response.status}`;
+    // Safe handling: avoid response.json() on empty, HTML, or proxy error response
+    const contentType = response.headers.get('content-type') || '';
+    const rawText = await response.text();
+    let result: any = null;
+
+    if (rawText && rawText.trim().length > 0) {
+      if (contentType.includes('application/json') || rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
+        try {
+          result = JSON.parse(rawText);
+        } catch {
+          // not valid JSON
+        }
+      }
+    }
+
+    if (!response.ok || (result && result.success === false)) {
+      const isGatewayError = response.status === 502 || response.status === 503 || response.status === 504;
+      const errorMsg = 
+        result?.error?.message || 
+        result?.message || 
+        (isGatewayError 
+          ? 'SolarOS backend server is not responding. Please verify the backend service is running on port 5000.'
+          : response.status === 404
+          ? `API route '${endpoint}' not found.`
+          : rawText.length > 0 && rawText.length < 200 && !rawText.includes('<')
+          ? rawText
+          : `Request failed with HTTP status ${response.status}`);
+
       const error = new Error(errorMsg) as any;
-      error.code = result.error?.code || 'API_ERROR';
-      error.details = result.error?.details;
+      error.code = result?.error?.code || result?.code || (isGatewayError ? 'SERVER_UNREACHABLE' : `HTTP_${response.status}`);
+      error.details = result?.error?.details || result?.details;
       error.statusCode = response.status;
       throw error;
     }
 
-    return result;
+    // Handle 204 No Content
+    if (!result && response.status === 204) {
+      return { success: true, meta: { requestId: '204', timestamp: new Date().toISOString() } } as any;
+    }
+
+    if (!result) {
+      throw new Error(`Empty or invalid response from server (HTTP ${response.status})`);
+    }
+
+    return result as ApiResponse<T>;
   } catch (err: any) {
     if (!err.code) {
       err.code = 'NETWORK_ERROR';
-      err.message = err.message || 'Unable to connect to SolarOS server.';
+      const isNetworkFailure =
+        err.name === 'TypeError' ||
+        /failed to fetch|networkerror|load failed|fetch failed/i.test(err.message || '');
+      err.message = isNetworkFailure
+        ? 'Unable to connect to the SolarOS backend server. Please ensure it is running on port 5000.'
+        : err.message || 'Unable to connect to SolarOS server.';
     }
     throw err;
   }
+}
+
+export interface EmployeeSearchResult {
+  employees: any[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 export const authApi = {
@@ -220,12 +271,12 @@ export const employeeApi = {
     if (params.search) query.set('search', params.search);
     if (params.status && params.status !== 'all') query.set('status', params.status);
     if (params.page) query.set('page', String(params.page));
-    if (params.limit) query.set('limit', String(params.limit));
+    query.set('limit', String(params.limit || 20));
 
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
     const qs = query.toString();
-    return request<any[]>(`/employees${qs ? `?${qs}` : ''}`, { method: 'GET', headers, signal });
+    return request<EmployeeSearchResult>(`/employees${qs ? `?${qs}` : ''}`, { method: 'GET', headers, signal });
   },
 
   createEmployee: async (data: any, token?: string) => {
@@ -252,6 +303,43 @@ export const employeeApi = {
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
     return request<any>(`/employees/${id}`, {
+      method: 'DELETE',
+      headers
+    });
+  }
+};
+
+export const customerApi = {
+  getCustomers: async (token?: string, signal?: AbortSignal) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any[]>('/customers', { method: 'GET', headers, signal });
+  },
+
+  createCustomer: async (data: any, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>('/customers', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data)
+    });
+  },
+
+  updateCustomer: async (id: string, data: any, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/customers/${id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(data)
+    });
+  },
+
+  deleteCustomer: async (id: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/customers/${id}`, {
       method: 'DELETE',
       headers
     });

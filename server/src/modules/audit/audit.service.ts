@@ -200,10 +200,14 @@ export class AuditService {
     // Always record to in-memory store for instant visibility
     inMemoryAuditLogs.unshift(logItem);
 
+    // Check if actorId is a valid UUID before passing to Prisma
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const actorUuid = params.actorId && uuidRegex.test(params.actorId) ? params.actorId : undefined;
+
     try {
       await prisma.auditLog.create({
         data: {
-          actorId: params.actorId,
+          actorId: actorUuid,
           actorName: params.actorName,
           actorRole: params.actorRole,
           permissionUsed: params.permissionUsed,

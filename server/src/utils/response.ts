@@ -13,6 +13,8 @@ export interface ApiResponseMeta {
 
 export interface ApiResponse<T = any> {
   success: boolean;
+  message?: string;
+  code?: string;
   data?: T;
   error?: {
     code: string;
@@ -26,7 +28,8 @@ export function sendSuccess<T>(
   res: Response,
   data: T,
   statusCode = 200,
-  pagination?: ApiResponseMeta['pagination']
+  pagination?: ApiResponseMeta['pagination'],
+  message?: string
 ): void {
   const requestId = (res.req as any)?.id || 'unknown';
   const meta: ApiResponseMeta = {
@@ -37,6 +40,7 @@ export function sendSuccess<T>(
 
   res.status(statusCode).json({
     success: true,
+    ...(message ? { message } : {}),
     data,
     meta
   });
@@ -57,6 +61,8 @@ export function sendError(
 
   res.status(statusCode).json({
     success: false,
+    code,
+    message,
     error: {
       code,
       message,

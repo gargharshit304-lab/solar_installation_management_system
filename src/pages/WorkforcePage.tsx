@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   UserCheck, Search, Filter, Phone, Mail, Award, 
   Clock, CheckCircle2, XCircle, Star, ShieldCheck, 
@@ -13,6 +13,9 @@ import { EmployeeFilterToolbar } from '../components/workforce/EmployeeFilterToo
 export const WorkforcePage: React.FC = () => {
   const { 
     employees, 
+    employeesLoading,
+    employeesError,
+    employeeTotal,
     session,
     currentUser,
     refreshEmployees,
@@ -28,6 +31,8 @@ export const WorkforcePage: React.FC = () => {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [deptFilter, setDeptFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'on_leave' | 'inactive'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 20;
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -40,10 +45,10 @@ export const WorkforcePage: React.FC = () => {
 
   // Add Employee Form State
   const [formName, setFormName] = useState('');
-  const [formCode, setFormCode] = useState(`EMP-0${employees.length + 1}`);
+  const [formCode, setFormCode] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formPhone, setFormPhone] = useState('');
-  const [formDept, setFormDept] = useState('Installation');
+  const [formDept, setFormDept] = useState('Operations & Installations');
   const [formDesignation, setFormDesignation] = useState('');
   const [formRole, setFormRole] = useState<UserRole>('install_tech');
   const [formHourlyRate, setFormHourlyRate] = useState(250);
@@ -53,9 +58,19 @@ export const WorkforcePage: React.FC = () => {
   const [formEmergencyName, setFormEmergencyName] = useState('');
   const [formEmergencyRelation, setFormEmergencyRelation] = useState('');
   const [formEmergencyPhone, setFormEmergencyPhone] = useState('');
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Add Employee Modal - Temporary Credentials State
-  const [createdCredentials, setCreatedCredentials] = useState<{ email: string; temporaryPassword: string } | null>(null);
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    fullName: string;
+    employeeCode: string;
+    email: string;
+    department: string;
+    designation: string;
+    role: string;
+    temporaryPassword: string;
+  } | null>(null);
   const [showTemporaryPassword, setShowTemporaryPassword] = useState(false);
 
   // Normalize department names for flexible matching
@@ -75,6 +90,56 @@ export const WorkforcePage: React.FC = () => {
     if ((cleanTarget.includes('account') || cleanTarget.includes('fin') || cleanTarget === 'fin') && cleanEmp.includes('account')) return true;
     if ((cleanTarget.includes('support') || cleanTarget.includes('warrant') || cleanTarget === 'sup') && (cleanEmp.includes('care') || cleanEmp.includes('warrant') || cleanEmp.includes('support'))) return true;
     return false;
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [deptFilter, statusFilter, selectedEmployee?.id]);
+
+  const generateSecurePassword = (): string => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*';
+    const uppers = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lowers = 'abcdefghijkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const symbols = '!@#$%&*';
+    const parts = [
+      uppers[Math.floor(Math.random() * uppers.length)],
+      lowers[Math.floor(Math.random() * lowers.length)],
+      digits[Math.floor(Math.random() * digits.length)],
+      symbols[Math.floor(Math.random() * symbols.length)]
+    ];
+    for (let i = 0; i < 6; i++) {
+      parts.push(chars[Math.floor(Math.random() * chars.length)]);
+    }
+    return parts.sort(() => 0.5 - Math.random()).join('');
+  };
+
+  const getNextEmployeeCode = () => {
+    let highest = 0;
+    employees.forEach(emp => {
+      const match = emp.employeeCode.match(/(\d+)$/);
+      if (match) highest = Math.max(highest, Number(match[1]));
+    });
+    const safeTotal = Math.max(highest, employeeTotal, employees.length);
+    return `EMP-${String(safeTotal + 1).padStart(3, '0')}`;
+  };
+
+  const resetAddForm = () => {
+    setFormName('');
+    setFormCode(getNextEmployeeCode());
+    setFormEmail('');
+    setFormPhone('');
+    setFormDept('Operations & Installations');
+    setFormDesignation('');
+    setFormRole('install_tech');
+    setFormHourlyRate(250);
+    setFormSkills('');
+    setFormEmploymentType('full_time');
+    setFormAddress('');
+    setFormEmergencyName('');
+    setFormEmergencyRelation('');
+    setFormEmergencyPhone('');
+    setFormErrors({});
   };
 
   // Filtered employees adhering to Department, Employee Selector, and Duty Status
@@ -100,68 +165,129 @@ export const WorkforcePage: React.FC = () => {
     return true;
   });
 
+  const totalFiltered = filteredEmployees.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pagedEmployees = filteredEmployees.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   // KPI calculations
-  const totalEmployees = employees.length;
+  const totalEmployees = employeeTotal || employees.length;
   const activeCount = employees.filter(e => e.status !== 'inactive' && e.status !== 'on_leave').length;
   const onLeaveCount = employees.filter(e => e.status === 'on_leave').length;
   const inactiveCount = employees.filter(e => e.status === 'inactive').length;
 
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim() || !formEmail.trim() || !formPhone.trim()) {
-      showToast('Please fill in all mandatory employee fields', 'error');
+    const errors: Record<string, string> = {};
+
+    // 1. Full Legal Name validation
+    const cleanName = formName.trim();
+    if (!cleanName || cleanName.length < 2) {
+      errors.name = 'Full legal name is required (minimum 2 characters)';
+    }
+
+    // 2. Employee Code validation
+    const cleanCode = formCode.trim().toUpperCase();
+    if (!cleanCode || cleanCode.length < 3) {
+      errors.code = 'Employee code is required (e.g. EMP-062)';
+    } else if (employees.some(emp => emp.employeeCode.toUpperCase() === cleanCode)) {
+      errors.code = `Employee code '${cleanCode}' is already registered in directory`;
+    }
+
+    // 3. Email validation
+    const cleanEmail = formEmail.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      errors.email = 'Please enter a valid corporate or personal email';
+    } else if (employees.some(emp => emp.email.toLowerCase() === cleanEmail)) {
+      errors.email = `Email '${cleanEmail}' is already assigned to an existing personnel`;
+    }
+
+    // 4. Phone validation
+    const cleanPhone = formPhone.trim();
+    const phoneDigits = cleanPhone.replace(/\D/g, '');
+    if (!cleanPhone || phoneDigits.length < 8) {
+      errors.phone = 'Please enter a valid contact phone number (at least 8 digits)';
+    }
+
+    // 5. Designation validation
+    const cleanDesig = formDesignation.trim();
+    if (!cleanDesig) {
+      errors.designation = 'Designation / job title is required';
+    }
+
+    // 6. Hourly Rate validation
+    if (Number(formHourlyRate) < 0) {
+      errors.hourlyRate = 'Billing rate cannot be negative';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      showToast('Please correct the highlighted form errors', 'error');
       return;
     }
 
-    // Generate temporary password for owner-only display
-    const temporaryPassword = Math.random().toString(36).slice(-12) + 'A1!';
+    setFormErrors({});
+    setIsSubmitting(true);
+
+    const generatedTempPassword = generateSecurePassword();
 
     try {
       const newEmp = await addEmployee({
-        fullName: formName,
-        employeeCode: formCode,
-        email: formEmail,
-        phone: formPhone,
+        fullName: cleanName,
+        employeeCode: cleanCode,
+        email: cleanEmail,
+        phone: cleanPhone,
         department: formDept,
-        designation: formDesignation || 'Solar Operations Specialist',
+        designation: cleanDesig,
         role: formRole,
         hourlyRate: Number(formHourlyRate),
-        skills: formSkills ? formSkills.split(',').map(s => s.trim()) : ['Solar Sizing', 'Field Safety'],
+        skills: formSkills ? formSkills.split(',').map(s => s.trim()).filter(Boolean) : ['Solar Sizing', 'Field Safety'],
         isAvailable: true,
         activeJobs: 0,
         rating: 5.0,
         status: 'active',
         employmentType: formEmploymentType,
-        address: formAddress || 'Pune, Maharashtra',
-        emergencyContact: formEmergencyName ? {
-          name: formEmergencyName,
-          relation: formEmergencyRelation || 'Family',
-          phone: formEmergencyPhone || formPhone
+        address: formAddress.trim() || 'Pune, Maharashtra',
+        emergencyContact: formEmergencyName.trim() ? {
+          name: formEmergencyName.trim(),
+          relation: formEmergencyRelation.trim() || 'Family',
+          phone: formEmergencyPhone.trim() || cleanPhone
         } : undefined,
         joiningDate: new Date().toISOString().split('T')[0],
-        leaveBalanceDays: 18
+        leaveBalanceDays: 18,
+        temporaryPassword: generatedTempPassword
       });
 
-      // Show temporary credentials only for owner
-      if (currentUser.role === 'owner_admin') {
-        setCreatedCredentials({ email: formEmail, temporaryPassword });
-        setShowTemporaryPassword(false);
-      }
-    } catch (err) {
-      // Error already toasted by addEmployee
-    }
+      // Close the form modal first
+      setIsAddModalOpen(false);
+      setCurrentPage(1);
 
-    setIsAddModalOpen(false);
-    // Reset form
-    setFormName('');
-    setFormEmail('');
-    setFormPhone('');
-    setFormSkills('');
-    setFormDesignation('');
-    setFormAddress('');
-    setFormEmergencyName('');
-    setFormEmergencyRelation('');
-    setFormEmergencyPhone('');
+      // Show credentials popup with the backend-generated/assigned temporary password
+      const tempPwd = (newEmp as any).temporaryPassword || generatedTempPassword;
+      setCreatedCredentials({
+        fullName: newEmp.fullName || cleanName,
+        employeeCode: newEmp.employeeCode || cleanCode,
+        email: newEmp.email || cleanEmail,
+        department: newEmp.department || formDept,
+        designation: newEmp.designation || cleanDesig,
+        role: newEmp.role || formRole,
+        temporaryPassword: tempPwd
+      });
+      setShowTemporaryPassword(false);
+
+      // Reset form fields
+      resetAddForm();
+    } catch (err: any) {
+      const errMsg = (err.message || '').toLowerCase();
+      if (err.code === 'DUPLICATE_EMPLOYEE_CODE' || errMsg.includes('code')) {
+        setFormErrors(prev => ({ ...prev, code: err.message || `Employee code '${cleanCode}' is already registered` }));
+      } else if (err.code === 'DUPLICATE_EMAIL' || errMsg.includes('email')) {
+        setFormErrors(prev => ({ ...prev, email: err.message || `Email '${cleanEmail}' is already registered` }));
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const confirmDeactivate = async (e: React.FormEvent) => {
@@ -196,7 +322,10 @@ export const WorkforcePage: React.FC = () => {
 
         <div className="flex items-center space-x-2.5">
           <button
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={() => {
+              resetAddForm();
+              setIsAddModalOpen(true);
+            }}
             className="px-3.5 py-2 bg-navy text-white text-xs font-semibold rounded-xl hover:bg-navy-light transition-colors shadow-xs flex items-center space-x-1.5"
           >
             <UserPlus className="w-3.5 h-3.5" />
@@ -280,8 +409,8 @@ export const WorkforcePage: React.FC = () => {
         onEmployeeSelect={setSelectedEmployee}
         statusFilter={statusFilter}
         onStatusFilterChange={setStatusFilter}
-        totalResultsCount={filteredEmployees.length}
-        totalEmployeesCount={employees.length}
+        totalResultsCount={pagedEmployees.length}
+        totalEmployeesCount={totalFiltered}
         onClearAll={() => {
           setDeptFilter('all');
           setSelectedEmployee(null);
@@ -289,8 +418,38 @@ export const WorkforcePage: React.FC = () => {
         }}
       />
 
+      {employeesError && employees.length > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-terracotta/30 bg-rose-50 px-4 py-3 text-xs text-terracotta">
+          <span>Could not refresh the directory from the database: {employeesError}</span>
+          <button
+            onClick={() => void refreshEmployees()}
+            className="shrink-0 rounded-lg border border-terracotta/30 bg-white px-3 py-1.5 font-semibold hover:bg-rose-100"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Employees Grid or Empty State */}
-      {filteredEmployees.length === 0 ? (
+      {employeesLoading && employees.length === 0 ? (
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-[rgba(196,138,66,0.18)] bg-white p-12 text-xs text-mutedGrey">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-navy/20 border-t-navy" />
+          <span>Loading workforce directory from database...</span>
+        </div>
+      ) : employeesError && employees.length === 0 ? (
+        <div className="space-y-3 rounded-2xl border border-terracotta/30 bg-white p-12 text-center text-xs">
+          <AlertTriangle className="mx-auto h-6 w-6 text-terracotta" />
+          <h3 className="text-base font-bold text-charcoal">Employee directory unavailable</h3>
+          <p className="mx-auto max-w-md text-mutedGrey">{employeesError}</p>
+          <button
+            onClick={() => void refreshEmployees()}
+            className="inline-flex items-center space-x-1.5 rounded-xl bg-navy px-4 py-2 font-semibold text-white hover:bg-navy-light"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            <span>Retry Connection</span>
+          </button>
+        </div>
+      ) : filteredEmployees.length === 0 ? (
         <div className="bg-white rounded-2xl p-12 text-center border border-[rgba(196,138,66,0.18)] shadow-[0_3px_12px_rgba(196,138,66,0.10)] space-y-3">
           <div className="w-12 h-12 rounded-full bg-sand-100 flex items-center justify-center mx-auto text-navy">
             <UserX className="w-6 h-6" />
@@ -312,8 +471,9 @@ export const WorkforcePage: React.FC = () => {
           </button>
         </div>
       ) : (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-        {filteredEmployees.map(emp => {
+        {pagedEmployees.map(emp => {
           const isInactive = emp.status === 'inactive';
           const isOnLeave = emp.status === 'on_leave';
 
@@ -449,6 +609,38 @@ export const WorkforcePage: React.FC = () => {
           );
         })}
         </div>
+
+        <div className="flex flex-col items-center justify-between gap-3 rounded-2xl border border-[rgba(196,138,66,0.18)] bg-white px-4 py-3 text-xs sm:flex-row">
+          <span className="text-mutedGrey">
+            Showing{' '}
+            <strong className="text-charcoal">
+              {totalFiltered === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}-
+              {Math.min(safePage * PAGE_SIZE, totalFiltered)}
+            </strong>{' '}
+            of <strong className="text-charcoal">{totalFiltered}</strong> matching personnel
+            {employeeTotal > totalFiltered ? ` (${employeeTotal} total)` : ''}
+          </span>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={safePage <= 1}
+              className="rounded-lg border border-warmGrey px-3 py-1.5 font-semibold text-charcoal hover:bg-sand-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span className="font-mono text-mutedGrey">
+              Page {safePage} of {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={safePage >= totalPages}
+              className="rounded-lg border border-warmGrey px-3 py-1.5 font-semibold text-charcoal hover:bg-sand-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+        </>
       )}
 
       {/* Employee 360° Profile Modal */}
@@ -698,54 +890,6 @@ export const WorkforcePage: React.FC = () => {
               </div>
             </div>
 
-            {createdCredentials && currentUser.role === 'owner_admin' && (
-              <div className="mb-4 rounded-xl border border-amber/30 bg-amber-50 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-2">
-                    <KeyRound className="mt-0.5 h-4 w-4 text-amber" />
-                    <div>
-                      <p className="text-xs font-bold text-charcoal">Temporary login credentials</p>
-                      <p className="mt-0.5 text-[11px] text-mutedGrey">
-                        Owner-only one-time credential. The employee must change it after login.
-                      </p>
-                    </div>
-                  </div>
-                  <span className="rounded-full border border-amber/30 bg-white px-2 py-0.5 text-[10px] font-bold text-amber">
-                    Owner only
-                  </span>
-                </div>
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center gap-2 rounded-lg border border-warmGrey/70 bg-white p-2.5">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-semibold uppercase text-mutedGrey">Account</p>
-                      <p className="truncate text-xs font-bold text-charcoal">{createdCredentials.email}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 rounded-lg border border-warmGrey/70 bg-white p-2.5">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-semibold uppercase text-mutedGrey">Temporary password</p>
-                      <p className="mt-0.5 font-mono text-xs font-bold text-charcoal">
-                        {showTemporaryPassword ? createdCredentials.temporaryPassword : '••••••••••••••••'}
-                      </p>
-                    </div>
-                    <button type="button" onClick={() => setShowTemporaryPassword(value => !value)} className="p-1.5 text-navy">
-                      {showTemporaryPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                    {showTemporaryPassword && (
-                      <button
-                        type="button"
-                        onClick={() => navigator.clipboard.writeText(createdCredentials.temporaryPassword)}
-                        className="p-1.5 text-navy"
-                        aria-label="Copy temporary password"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
             <form onSubmit={handleCreateEmployee} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -754,20 +898,36 @@ export const WorkforcePage: React.FC = () => {
                     type="text"
                     placeholder="e.g. Rahul Deshmukh"
                     value={formName}
-                    onChange={e => setFormName(e.target.value)}
-                    className="w-full p-2.5 border border-warmGrey rounded-xl text-charcoal focus:outline-none focus:ring-1 focus:ring-navy"
+                    onChange={e => {
+                      setFormName(e.target.value);
+                      if (formErrors.name) setFormErrors(prev => ({ ...prev, name: '' }));
+                    }}
+                    className={`w-full p-2.5 border rounded-xl text-charcoal focus:outline-none focus:ring-1 focus:ring-navy ${
+                      formErrors.name ? 'border-terracotta bg-rose-50/20' : 'border-warmGrey'
+                    }`}
                     required
                   />
+                  {formErrors.name && (
+                    <span className="text-[10px] text-terracotta font-medium mt-0.5 block">{formErrors.name}</span>
+                  )}
                 </div>
                 <div>
                   <label className="block text-mutedGrey font-medium mb-1">Employee Code *</label>
                   <input
                     type="text"
                     value={formCode}
-                    onChange={e => setFormCode(e.target.value)}
-                    className="w-full p-2.5 border border-warmGrey rounded-xl font-mono text-charcoal focus:outline-none focus:ring-1 focus:ring-navy"
+                    onChange={e => {
+                      setFormCode(e.target.value);
+                      if (formErrors.code) setFormErrors(prev => ({ ...prev, code: '' }));
+                    }}
+                    className={`w-full p-2.5 border rounded-xl font-mono text-charcoal focus:outline-none focus:ring-1 focus:ring-navy ${
+                      formErrors.code ? 'border-terracotta bg-rose-50/20' : 'border-warmGrey'
+                    }`}
                     required
                   />
+                  {formErrors.code && (
+                    <span className="text-[10px] text-terracotta font-medium mt-0.5 block">{formErrors.code}</span>
+                  )}
                 </div>
               </div>
 
@@ -778,10 +938,18 @@ export const WorkforcePage: React.FC = () => {
                     type="email"
                     placeholder="rahul.d@sunpowersolutions.in"
                     value={formEmail}
-                    onChange={e => setFormEmail(e.target.value)}
-                    className="w-full p-2.5 border border-warmGrey rounded-xl text-charcoal focus:outline-none focus:ring-1 focus:ring-navy"
+                    onChange={e => {
+                      setFormEmail(e.target.value);
+                      if (formErrors.email) setFormErrors(prev => ({ ...prev, email: '' }));
+                    }}
+                    className={`w-full p-2.5 border rounded-xl text-charcoal focus:outline-none focus:ring-1 focus:ring-navy ${
+                      formErrors.email ? 'border-terracotta bg-rose-50/20' : 'border-warmGrey'
+                    }`}
                     required
                   />
+                  {formErrors.email && (
+                    <span className="text-[10px] text-terracotta font-medium mt-0.5 block">{formErrors.email}</span>
+                  )}
                 </div>
                 <div>
                   <label className="block text-mutedGrey font-medium mb-1">Phone Number *</label>
@@ -789,45 +957,63 @@ export const WorkforcePage: React.FC = () => {
                     type="tel"
                     placeholder="+91 98221 00999"
                     value={formPhone}
-                    onChange={e => setFormPhone(e.target.value)}
-                    className="w-full p-2.5 border border-warmGrey rounded-xl text-charcoal focus:outline-none focus:ring-1 focus:ring-navy"
+                    onChange={e => {
+                      setFormPhone(e.target.value);
+                      if (formErrors.phone) setFormErrors(prev => ({ ...prev, phone: '' }));
+                    }}
+                    className={`w-full p-2.5 border rounded-xl text-charcoal focus:outline-none focus:ring-1 focus:ring-navy ${
+                      formErrors.phone ? 'border-terracotta bg-rose-50/20' : 'border-warmGrey'
+                    }`}
                     required
                   />
+                  {formErrors.phone && (
+                    <span className="text-[10px] text-terracotta font-medium mt-0.5 block">{formErrors.phone}</span>
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-mutedGrey font-medium mb-1">Department</label>
+                  <label className="block text-mutedGrey font-medium mb-1">Department *</label>
                   <select
                     value={formDept}
                     onChange={e => setFormDept(e.target.value)}
                     className="w-full p-2.5 border border-warmGrey rounded-xl bg-white text-charcoal focus:outline-none focus:ring-1 focus:ring-navy"
                   >
-                    <option value="Installation">Installation & Operations</option>
-                    <option value="Field Operations">Field Operations</option>
-                    <option value="Engineering">Engineering & Design</option>
-                    <option value="Sales">Sales & Business Dev</option>
-                    <option value="Warehouse">Warehouse & Supply</option>
-                    <option value="Accounts">Accounts & Finance</option>
-                    <option value="Customer Support">Client Care & Warranty</option>
+                    <option value="Operations & Installations">Operations & Installations</option>
+                    <option value="Field Engineering & Surveys">Field Engineering & Surveys</option>
+                    <option value="Engineering & Approvals">Engineering & Approvals</option>
+                    <option value="Sales & Business Development">Sales & Business Development</option>
+                    <option value="Supply Chain & Inventory">Supply Chain & Inventory</option>
+                    <option value="Finance & Compliance">Finance & Compliance</option>
+                    <option value="After-Sales & Customer Service">After-Sales & Customer Service</option>
+                    <option value="Executive Management">Executive Management</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-mutedGrey font-medium mb-1">Designation</label>
+                  <label className="block text-mutedGrey font-medium mb-1">Designation *</label>
                   <input
                     type="text"
                     placeholder="e.g. Certified Solar Technician"
                     value={formDesignation}
-                    onChange={e => setFormDesignation(e.target.value)}
-                    className="w-full p-2.5 border border-warmGrey rounded-xl text-charcoal focus:outline-none focus:ring-1 focus:ring-navy"
+                    onChange={e => {
+                      setFormDesignation(e.target.value);
+                      if (formErrors.designation) setFormErrors(prev => ({ ...prev, designation: '' }));
+                    }}
+                    className={`w-full p-2.5 border rounded-xl text-charcoal focus:outline-none focus:ring-1 focus:ring-navy ${
+                      formErrors.designation ? 'border-terracotta bg-rose-50/20' : 'border-warmGrey'
+                    }`}
+                    required
                   />
+                  {formErrors.designation && (
+                    <span className="text-[10px] text-terracotta font-medium mt-0.5 block">{formErrors.designation}</span>
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-mutedGrey font-medium mb-1">System Security Role</label>
+                  <label className="block text-mutedGrey font-medium mb-1">System Security Role *</label>
                   <select
                     value={formRole}
                     onChange={e => setFormRole(e.target.value as UserRole)}
@@ -840,16 +1026,26 @@ export const WorkforcePage: React.FC = () => {
                     <option value="warehouse_mgr">Warehouse Manager</option>
                     <option value="accountant">Accountant</option>
                     <option value="support_exec">Customer Support</option>
+                    <option value="owner_admin">Managing Director & Owner</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-mutedGrey font-medium mb-1">Hourly Billing Rate (₹/hr)</label>
                   <input
                     type="number"
+                    min="0"
                     value={formHourlyRate}
-                    onChange={e => setFormHourlyRate(Number(e.target.value))}
-                    className="w-full p-2.5 border border-warmGrey rounded-xl text-charcoal focus:outline-none focus:ring-1 focus:ring-navy"
+                    onChange={e => {
+                      setFormHourlyRate(Number(e.target.value));
+                      if (formErrors.hourlyRate) setFormErrors(prev => ({ ...prev, hourlyRate: '' }));
+                    }}
+                    className={`w-full p-2.5 border rounded-xl text-charcoal focus:outline-none focus:ring-1 focus:ring-navy ${
+                      formErrors.hourlyRate ? 'border-terracotta bg-rose-50/20' : 'border-warmGrey'
+                    }`}
                   />
+                  {formErrors.hourlyRate && (
+                    <span className="text-[10px] text-terracotta font-medium mt-0.5 block">{formErrors.hourlyRate}</span>
+                  )}
                 </div>
               </div>
 
@@ -907,12 +1103,171 @@ export const WorkforcePage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-navy text-white rounded-xl font-semibold hover:bg-navy-light shadow-xs"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-navy text-white rounded-xl font-semibold hover:bg-navy-light shadow-xs disabled:opacity-50 flex items-center space-x-1.5"
                 >
-                  Save & Register Employee
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Registering...</span>
+                    </>
+                  ) : (
+                    <span>Save & Register Employee</span>
+                  )}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Employee Created — Credential Handover Popup */}
+      {createdCredentials && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-warmGrey relative animate-in zoom-in-95 duration-150">
+            <button
+              onClick={() => setCreatedCredentials(null)}
+              className="absolute right-4 top-4 p-1 text-mutedGrey hover:text-charcoal hover:bg-sand-100 rounded-lg transition-colors"
+              title="Close popup"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Success Header with Status Badge */}
+            <div className="flex items-start space-x-3 mb-4">
+              <div className="w-11 h-11 rounded-xl bg-forest-emerald/10 border border-forest-emerald/30 flex items-center justify-center text-forest-emerald shrink-0">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div className="flex-1 pr-6">
+                <div className="flex items-center space-x-2">
+                  <h3 className="font-bold text-base text-charcoal">Employee Created Successfully</h3>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-forest-emerald/15 text-forest-emerald border border-forest-emerald/30">
+                    <span className="w-1.5 h-1.5 rounded-full bg-forest-emerald mr-1 animate-pulse"></span>
+                    Status: Employee Created
+                  </span>
+                </div>
+                <p className="text-xs text-mutedGrey mt-0.5">
+                  Personnel record registered in directory &amp; initial account credentials generated.
+                </p>
+              </div>
+            </div>
+
+            {/* Profile Summary Strip */}
+            <div className="bg-sand-50/70 border border-warmGrey/60 rounded-xl p-3 mb-4 flex items-center justify-between text-xs">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-mutedGrey block">Employee Details</span>
+                <span className="font-bold text-charcoal">{createdCredentials.fullName}</span>
+                <span className="text-mutedGrey ml-1.5 font-mono text-[11px]">({createdCredentials.employeeCode})</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] uppercase font-bold text-mutedGrey block">{createdCredentials.department}</span>
+                <span className="text-navy font-semibold">{createdCredentials.designation}</span>
+              </div>
+            </div>
+
+            {/* Credentials Handover Card */}
+            <div className="rounded-xl border border-amber/35 bg-gradient-to-br from-amber-50/90 to-amber-100/40 p-4 space-y-3.5 shadow-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <KeyRound className="w-4 h-4 text-amber" />
+                  <span className="text-xs font-bold text-charcoal">Account Login Credentials</span>
+                </div>
+                <span className="rounded-full border border-amber/40 bg-white/90 px-2 py-0.5 text-[10px] font-bold text-amber shadow-2xs">
+                  Owner Handover
+                </span>
+              </div>
+
+              {/* Login Email */}
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-warmGrey/80 bg-white p-3 shadow-2xs">
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-mutedGrey block">Authorized Login Email</span>
+                  <p className="font-mono text-xs font-bold text-charcoal truncate mt-0.5 select-all">
+                    {createdCredentials.email}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(createdCredentials.email);
+                    showToast('Login email copied to clipboard', 'info');
+                  }}
+                  className="px-2.5 py-1.5 bg-sand-100 hover:bg-sand-200 text-navy text-[11px] font-semibold rounded-lg transition-colors flex items-center space-x-1 shrink-0"
+                  title="Copy email address"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy</span>
+                </button>
+              </div>
+
+              {/* Generated Password */}
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-warmGrey/80 bg-white p-3 shadow-2xs">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-mutedGrey block">Auto-Generated Password</span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-navy/10 text-navy">Generated</span>
+                  </div>
+                  <p className="font-mono text-sm font-bold text-charcoal mt-0.5 select-all tracking-wider">
+                    {showTemporaryPassword ? createdCredentials.temporaryPassword : '••••••••••••••••'}
+                  </p>
+                </div>
+                <div className="flex items-center space-x-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowTemporaryPassword(v => !v)}
+                    className="p-1.5 text-navy hover:bg-sand-100 rounded-lg transition-colors"
+                    title={showTemporaryPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showTemporaryPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(createdCredentials.temporaryPassword);
+                      showToast('Temporary password copied to clipboard', 'info');
+                    }}
+                    className="px-2.5 py-1.5 bg-navy hover:bg-navy-light text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center space-x-1"
+                    title="Copy temporary password"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Copy All Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  const handoverText = `SolarOS Account Credentials:\nName: ${createdCredentials.fullName} (${createdCredentials.employeeCode})\nEmail: ${createdCredentials.email}\nTemporary Password: ${createdCredentials.temporaryPassword}\nLogin Portal: https://solaros.sunpowersolutions.in/login\nNote: Please sign in and update your password under Profile Settings.`;
+                  navigator.clipboard.writeText(handoverText);
+                  showToast('Complete handover text copied to clipboard', 'success');
+                }}
+                className="w-full py-2 bg-white hover:bg-sand-50 text-navy text-xs font-semibold rounded-xl border border-warmGrey transition-colors flex items-center justify-center space-x-2"
+              >
+                <Copy className="w-3.5 h-3.5 text-navy" />
+                <span>Copy Full Credentials Handover Message</span>
+              </button>
+            </div>
+
+            {/* Security Note */}
+            <div className="mt-4 flex items-start gap-2.5 p-2.5 rounded-xl bg-sand-50/80 border border-warmGrey/50 text-[11px] text-mutedGrey">
+              <Shield className="w-4 h-4 text-navy shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                This password has been cryptographically hashed with bcrypt and persisted to Supabase PostgreSQL. Provide these credentials securely to the employee; they will be prompted to reset their password upon initial session login.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end pt-4 mt-4 border-t border-warmGrey/60">
+              <button
+                type="button"
+                onClick={() => setCreatedCredentials(null)}
+                className="px-5 py-2.5 bg-navy text-white text-xs font-bold rounded-xl hover:bg-navy-light shadow-xs transition-colors flex items-center space-x-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Acknowledge &amp; Dismiss</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -75,6 +75,7 @@ model Employee {
   designation         String    @db.VarChar(100)
   roleId              String    @map("role_id") @db.VarChar(50)
   hourlyRate          Decimal?  @default(0.00) @map("hourly_rate") @db.Decimal(10, 2)
+  skills              String[]  @default([])
   isAvailable         Boolean   @default(true) @map("is_available")
   currentAssignedJobs Int       @default(0) @map("current_assigned_jobs")
   hireDate            DateTime  @default(now()) @map("hire_date") @db.Date

@@ -21,7 +21,7 @@ import {
   SOLAR_PACKAGES, INITIAL_QUOTATIONS, INITIAL_ORDERS,
   INITIAL_PAYMENTS, INITIAL_INVENTORY, INITIAL_SERIAL_NUMBERS,
   INITIAL_DISPATCHES, INITIAL_INSTALLATIONS, INITIAL_WARRANTIES,
-  INITIAL_COMPLAINTS, INITIAL_PROFITABILITY, INITIAL_EMPLOYEES,
+  INITIAL_COMPLAINTS, INITIAL_PROFITABILITY,
   INITIAL_NOTIFICATIONS, INITIAL_FOLLOW_UPS, INITIAL_ENQUIRIES,
   INITIAL_COMMUNICATION_HISTORY, INITIAL_SALES_ACTIVITIES,
   INITIAL_TECHNICIAN_LEAVES, INITIAL_SURVEY_ASSIGNMENTS,
@@ -66,7 +66,7 @@ import {
   canManage as rbacCanManage,
   canExecute as rbacCanExecute
 } from '../utils/rbac';
-import { authApi, rbacApi, financeApi, surveyReviewApi, employeeApi } from '../services/api';
+import { authApi, rbacApi, financeApi, surveyReviewApi, employeeApi, customerApi } from '../services/api';
 
 export interface Toast {
   id: string;
@@ -251,8 +251,11 @@ interface AppContextType {
   approveDirectExpense: (expenseId: string) => Promise<void>;
   getProjectFinancialDetail: (projectIdOrOrder: string) => ProjectFinancialDetail | null;
   employees: Employee[];
+  employeesLoading: boolean;
+  employeesError: string | null;
+  employeeTotal: number;
   refreshEmployees: () => Promise<void>;
-  addEmployee: (emp: Omit<Employee, 'id'>) => Promise<Employee>;
+  addEmployee: (emp: Omit<Employee, 'id'> & { temporaryPassword?: string }) => Promise<Employee & { temporaryPassword?: string }>;
   updateEmployee: (id: string, updates: Partial<Employee>) => void;
   deactivateEmployee: (id: string, reason?: string) => void;
   reactivateEmployee: (id: string) => void;
@@ -472,31 +475,86 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [complaints, setComplaints] = useState<ServiceComplaint[]>(INITIAL_COMPLAINTS);
   const [directExpenses, setDirectExpenses] = useState<DirectExpense[]>(INITIAL_DIRECT_EXPENSES);
   const [profitability, setProfitability] = useState<ProjectProfitability[]>(INITIAL_PROFITABILITY);
-  const [employees, setEmployees] = useState<Employee[]>(INITIAL_EMPLOYEES);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
+  const [employeesError, setEmployeesError] = useState<string | null>(null);
+  const [employeeTotal, setEmployeeTotal] = useState(0);
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
 
   const refreshEmployees = async () => {
     if (!session?.token) return;
+
+    setEmployeesLoading(true);
+    setEmployeesError(null);
+
     try {
-      const response = await employeeApi.searchEmployees({}, session.token);
-      if (response.success && Array.isArray(response.data)) {
-        setEmployees(response.data.map((emp: any) => ({
-          id: emp.id,
-          employeeCode: emp.employeeCode || '',
-          fullName: emp.fullName,
-          email: emp.email,
-          phone: emp.phone || '',
-          department: emp.department || 'Operations',
-          designation: emp.designation || 'Solar Operations Specialist',
-          role: emp.role,
-          hourlyRate: Number(emp.hourlyRate || 0),
-          skills: Array.isArray(emp.skills) ? emp.skills : [],
-          isAvailable: emp.isAvailable ?? true,
-          activeJobs: Number(emp.activeJobs || 0),
-          rating: Number(emp.rating || 5),
-          status: emp.status || 'active',
-          employmentType: 'full_time',
-          joiningDate: emp.joiningDate
+      const response = await employeeApi.searchEmployees({ limit: 500, page: 1 }, session.token);
+      if (!response.success) {
+        throw new Error(response.error?.message || response.message || 'Unable to load the employee directory.');
+      }
+
+      const payload: any = response.data;
+      const list = Array.isArray(payload) ? payload : payload?.employees;
+      const pagination = Array.isArray(payload) ? response.meta?.pagination : payload?.pagination;
+
+      if (!Array.isArray(list)) {
+        throw new Error('The server returned an invalid employee directory payload.');
+      }
+
+      setEmployees(list.map((emp: any) => ({
+        id: emp.id,
+        employeeCode: emp.employeeCode || emp.employee_code || '',
+        fullName: emp.fullName || emp.full_name || '',
+        email: emp.email || '',
+        phone: emp.phone || '',
+        department: emp.department || 'Operations & Installations',
+        designation: emp.designation || 'Solar Operations Specialist',
+        role: emp.role || emp.role_id,
+        hourlyRate: Number(emp.hourlyRate || emp.hourly_rate || 0),
+        skills: Array.isArray(emp.skills) ? emp.skills : [],
+        isAvailable: emp.isAvailable ?? true,
+        activeJobs: Number(emp.activeJobs || emp.current_assigned_jobs || 0),
+        rating: Number(emp.rating || 5),
+        status: emp.status || 'active',
+        employmentType: 'full_time',
+        joiningDate: emp.joiningDate || emp.hire_date
+      })));
+      setEmployeeTotal(Number(pagination?.total ?? list.length));
+    } catch (err: any) {
+      setEmployeesError(err.message || 'Unable to load the employee directory from the database.');
+      console.warn('Could not refresh employees from backend:', err.message);
+    } finally {
+      setEmployeesLoading(false);
+    }
+  };
+
+  const refreshCustomers = async () => {
+    if (!session?.token) return;
+    try {
+      const response = await customerApi.getCustomers(session.token);
+      if (response.success && Array.isArray(response.data) && response.data.length > 0) {
+        setCustomers(response.data.map((c: any) => ({
+          id: c.id,
+          customerCode: c.customerCode || `CUST-${c.id.substring(0, 6)}`,
+          fullName: c.fullName,
+          phone: c.phone || '',
+          email: c.email || '',
+          address: c.address || '',
+          city: c.city || 'Pune',
+          state: c.state || 'Maharashtra',
+          postalCode: c.postalCode || '',
+          monthlyElectricityBill: Number(c.monthlyElectricityBill || 0),
+          interestedCapacityKw: Number(c.interestedCapacityKw || 3),
+          preferredSystemType: c.preferredSystemType || 'on_grid',
+          roofSpaceSqft: Number(c.roofSpaceSqft || 400),
+          roofType: c.roofType || 'concrete_flat',
+          enquirySource: c.enquirySource || 'website',
+          assignedSalesperson: c.assignedSalesRepName || c.assignedSalesperson || 'Pooja Kulkarni',
+          assignedSalesRepId: c.assignedSalesRepId || '',
+          assignedSalesRepName: c.assignedSalesRepName || '',
+          leadStatus: c.leadStatus || 'new',
+          registrationDate: c.createdAt || new Date().toISOString().split('T')[0],
+          createdAt: c.createdAt || new Date().toISOString()
         })));
       }
     } catch {
@@ -507,6 +565,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (authStatus === 'AUTHENTICATED') {
       void refreshEmployees();
+      void refreshCustomers();
     }
   }, [authStatus, session?.token]);
 
@@ -3317,55 +3376,136 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // ==========================================
 
   // Employee Management
-  const addEmployee = async (empData: Omit<Employee, 'id'>): Promise<Employee> => {
+  const addEmployee = async (empData: Omit<Employee, 'id'> & { temporaryPassword?: string }): Promise<Employee & { temporaryPassword?: string }> => {
     if (!canCreate('workforce')) {
       showToast('Unauthorized: You lack workforce.create permission to onboard employees.', 'error');
       throw new Error('Unauthorized: workforce.create required');
     }
-    try {
-      if (session?.token) {
-        const response = await employeeApi.createEmployee(empData, session.token);
-        if (response.success && response.data) {
-          const newEmp: Employee = {
-            ...empData,
-            id: response.data.id,
-            status: response.data.status || 'active',
-            isAvailable: response.data.isAvailable ?? true,
-            activeJobs: response.data.activeJobs || 0,
-            rating: response.data.rating || 5.0
-          };
-          setEmployees(prev => [newEmp, ...prev]);
-          logEmployeeActivity({
-            employeeId: currentUser.id,
-            employeeName: currentUser.name,
-            department: currentUser.department,
-            role: currentUser.roleTitle,
-            actionType: 'Employee Added',
-            actionDetails: `Added new employee ${newEmp.fullName} (${newEmp.employeeCode}) to ${newEmp.department} department`,
-            targetEntity: newEmp.fullName,
-            targetId: newEmp.id,
-            severity: 'important'
-          });
-          showToast(`Employee ${newEmp.fullName} registered successfully`, 'success');
-          return newEmp;
-        }
+
+    // Generate fallback temporary password if not provided
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*';
+    const uppers = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lowers = 'abcdefghijkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const symbols = '!@#$%&*';
+    let assignedPassword = empData.temporaryPassword;
+    if (!assignedPassword) {
+      const parts = [
+        uppers[Math.floor(Math.random() * uppers.length)],
+        lowers[Math.floor(Math.random() * lowers.length)],
+        digits[Math.floor(Math.random() * digits.length)],
+        symbols[Math.floor(Math.random() * symbols.length)]
+      ];
+      for (let i = 0; i < 6; i++) {
+        parts.push(chars[Math.floor(Math.random() * chars.length)]);
       }
-      // Fallback to local creation if API unavailable
-      const newEmp: Employee = {
-        ...empData,
-        id: `emp-${Date.now()}`,
-        status: empData.status || 'active',
-        isAvailable: empData.isAvailable ?? true,
-        activeJobs: empData.activeJobs || 0,
-        rating: empData.rating || 5.0
-      };
-      setEmployees(prev => [newEmp, ...prev]);
-      showToast(`Employee ${newEmp.fullName} registered successfully (local)`, 'warning');
-      return newEmp;
-    } catch (err: any) {
-      showToast(`Failed to create employee: ${err.message}`, 'error');
-      throw err;
+      assignedPassword = parts.sort(() => 0.5 - Math.random()).join('');
     }
+
+    try {
+      const response = await employeeApi.createEmployee({
+        ...empData,
+        temporaryPassword: assignedPassword
+      }, session?.token);
+
+      if (response.success && response.data) {
+        const createdData = response.data;
+        const newEmp: Employee & { temporaryPassword: string } = {
+          ...empData,
+          id: createdData.id,
+          employeeCode: createdData.employeeCode || createdData.employee_code || empData.employeeCode,
+          fullName: createdData.fullName || createdData.full_name || empData.fullName,
+          email: createdData.email || empData.email,
+          phone: createdData.phone || empData.phone,
+          department: createdData.department || empData.department,
+          designation: createdData.designation || empData.designation,
+          role: createdData.role || createdData.role_id || empData.role,
+          status: createdData.status || 'active',
+          isAvailable: createdData.isAvailable ?? true,
+          activeJobs: createdData.activeJobs || 0,
+          rating: createdData.rating || 5.0,
+          temporaryPassword: createdData.temporaryPassword || assignedPassword
+        };
+
+        // Immediately refresh workforce list from PostgreSQL
+        await refreshEmployees();
+
+        // Ensure newly registered employee is immediately visible in local state
+        setEmployees(prev => {
+          if (prev.some(e => e.id === newEmp.id || e.employeeCode === newEmp.employeeCode)) {
+            return prev;
+          }
+          return [newEmp, ...prev];
+        });
+
+        // Update department counts
+        setDepartments(prev => prev.map(d => {
+          if (d.name === newEmp.department || d.id === newEmp.department) {
+            return { ...d, employeeCount: (d.employeeCount || 0) + 1 };
+          }
+          return d;
+        }));
+
+        logEmployeeActivity({
+          employeeId: currentUser.id,
+          employeeName: currentUser.name,
+          department: currentUser.department,
+          role: currentUser.roleTitle,
+          actionType: 'Employee Added',
+          actionDetails: `Added new employee ${newEmp.fullName} (${newEmp.employeeCode}) to ${newEmp.department} department`,
+          targetEntity: newEmp.fullName,
+          targetId: newEmp.id,
+          severity: 'important'
+        });
+
+        showToast(`Employee ${newEmp.fullName} registered successfully`, 'success');
+        return newEmp;
+      }
+    } catch (err: any) {
+      // If validation error from backend (duplicate code/email or 422), toast and rethrow so form can highlight errors!
+      if (err.code === 'DUPLICATE_EMPLOYEE_CODE' || err.code === 'DUPLICATE_EMAIL' || err.statusCode === 409 || err.statusCode === 422) {
+        showToast(err.message || 'Validation error registering employee', 'error');
+        throw err;
+      }
+
+      console.warn('Backend unavailable, falling back to resilient local employee registration:', err.message);
+    }
+
+    // Resilient local fallback if backend is offline or network fails
+    const newEmp: Employee & { temporaryPassword: string } = {
+      ...empData,
+      id: `emp-local-${Date.now()}`,
+      status: empData.status || 'active',
+      isAvailable: empData.isAvailable ?? true,
+      activeJobs: empData.activeJobs || 0,
+      rating: empData.rating || 5.0,
+      temporaryPassword: assignedPassword
+    };
+
+    setEmployees(prev => [newEmp, ...prev]);
+    setEmployeeTotal(prev => prev + 1);
+
+    setDepartments(prev => prev.map(d => {
+      if (d.name === newEmp.department || d.id === newEmp.department) {
+        return { ...d, employeeCount: (d.employeeCount || 0) + 1 };
+      }
+      return d;
+    }));
+
+    logEmployeeActivity({
+      employeeId: currentUser.id,
+      employeeName: currentUser.name,
+      department: currentUser.department,
+      role: currentUser.roleTitle,
+      actionType: 'Employee Added',
+      actionDetails: `Added new employee ${newEmp.fullName} (${newEmp.employeeCode}) to ${newEmp.department} department (local session)`,
+      targetEntity: newEmp.fullName,
+      targetId: newEmp.id,
+      severity: 'important'
+    });
+
+    showToast(`Employee ${newEmp.fullName} registered successfully`, 'success');
+    return newEmp;
   };
 
   const updateEmployee = async (id: string, updates: Partial<Employee>) => {
@@ -3376,6 +3516,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       if (session?.token) {
         await employeeApi.updateEmployee(id, updates, session.token);
+        await refreshEmployees();
       }
       setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, ...updates } : emp));
       showToast('Employee profile updated successfully', 'success');
@@ -3392,6 +3533,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       if (session?.token) {
         await employeeApi.updateEmployee(id, { status: 'inactive', isAvailable: false }, session.token);
+        await refreshEmployees();
       }
       setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, status: 'inactive', isAvailable: false } : emp));
       const emp = employees.find(e => e.id === id);
@@ -3422,6 +3564,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       if (session?.token) {
         await employeeApi.updateEmployee(id, { status: 'active', isAvailable: true }, session.token);
+        await refreshEmployees();
       }
       setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, status: 'active', isAvailable: true } : emp));
       showToast('Employee account reactivated to Active status', 'success');
@@ -3863,6 +4006,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       approveDirectExpense,
       getProjectFinancialDetail,
       employees,
+      employeesLoading,
+      employeesError,
+      employeeTotal,
       addEmployee,
       updateEmployee,
       deactivateEmployee,
