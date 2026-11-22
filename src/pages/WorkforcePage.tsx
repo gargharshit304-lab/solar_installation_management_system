@@ -3,7 +3,8 @@ import {
   UserCheck, Search, Filter, Phone, Mail, Award, 
   Clock, CheckCircle2, XCircle, Star, ShieldCheck, 
   Plus, Edit2, UserX, UserPlus, X, Calendar, MapPin, 
-  AlertTriangle, Briefcase, ChevronRight, Activity, Shield, RotateCcw
+  AlertTriangle, Briefcase, ChevronRight, Activity, Shield, RotateCcw,
+  KeyRound, EyeOff, Eye, Copy
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Employee, UserRole } from '../types';
@@ -12,6 +13,9 @@ import { EmployeeFilterToolbar } from '../components/workforce/EmployeeFilterToo
 export const WorkforcePage: React.FC = () => {
   const { 
     employees, 
+    session,
+    currentUser,
+    refreshEmployees,
     addEmployee, 
     updateEmployee, 
     deactivateEmployee, 
@@ -49,6 +53,10 @@ export const WorkforcePage: React.FC = () => {
   const [formEmergencyName, setFormEmergencyName] = useState('');
   const [formEmergencyRelation, setFormEmergencyRelation] = useState('');
   const [formEmergencyPhone, setFormEmergencyPhone] = useState('');
+
+  // Add Employee Modal - Temporary Credentials State
+  const [createdCredentials, setCreatedCredentials] = useState<{ email: string; temporaryPassword: string } | null>(null);
+  const [showTemporaryPassword, setShowTemporaryPassword] = useState(false);
 
   // Normalize department names for flexible matching
   const normalizeDept = (dept: string) => dept.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
@@ -98,37 +106,50 @@ export const WorkforcePage: React.FC = () => {
   const onLeaveCount = employees.filter(e => e.status === 'on_leave').length;
   const inactiveCount = employees.filter(e => e.status === 'inactive').length;
 
-  const handleCreateEmployee = (e: React.FormEvent) => {
+  const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim() || !formEmail.trim() || !formPhone.trim()) {
       showToast('Please fill in all mandatory employee fields', 'error');
       return;
     }
 
-    addEmployee({
-      fullName: formName,
-      employeeCode: formCode,
-      email: formEmail,
-      phone: formPhone,
-      department: formDept,
-      designation: formDesignation || 'Solar Operations Specialist',
-      role: formRole,
-      hourlyRate: Number(formHourlyRate),
-      skills: formSkills ? formSkills.split(',').map(s => s.trim()) : ['Solar Sizing', 'Field Safety'],
-      isAvailable: true,
-      activeJobs: 0,
-      rating: 5.0,
-      status: 'active',
-      employmentType: formEmploymentType,
-      address: formAddress || 'Pune, Maharashtra',
-      emergencyContact: formEmergencyName ? {
-        name: formEmergencyName,
-        relation: formEmergencyRelation || 'Family',
-        phone: formEmergencyPhone || formPhone
-      } : undefined,
-      joiningDate: new Date().toISOString().split('T')[0],
-      leaveBalanceDays: 18
-    });
+    // Generate temporary password for owner-only display
+    const temporaryPassword = Math.random().toString(36).slice(-12) + 'A1!';
+
+    try {
+      const newEmp = await addEmployee({
+        fullName: formName,
+        employeeCode: formCode,
+        email: formEmail,
+        phone: formPhone,
+        department: formDept,
+        designation: formDesignation || 'Solar Operations Specialist',
+        role: formRole,
+        hourlyRate: Number(formHourlyRate),
+        skills: formSkills ? formSkills.split(',').map(s => s.trim()) : ['Solar Sizing', 'Field Safety'],
+        isAvailable: true,
+        activeJobs: 0,
+        rating: 5.0,
+        status: 'active',
+        employmentType: formEmploymentType,
+        address: formAddress || 'Pune, Maharashtra',
+        emergencyContact: formEmergencyName ? {
+          name: formEmergencyName,
+          relation: formEmergencyRelation || 'Family',
+          phone: formEmergencyPhone || formPhone
+        } : undefined,
+        joiningDate: new Date().toISOString().split('T')[0],
+        leaveBalanceDays: 18
+      });
+
+      // Show temporary credentials only for owner
+      if (currentUser.role === 'owner_admin') {
+        setCreatedCredentials({ email: formEmail, temporaryPassword });
+        setShowTemporaryPassword(false);
+      }
+    } catch (err) {
+      // Error already toasted by addEmployee
+    }
 
     setIsAddModalOpen(false);
     // Reset form
@@ -137,14 +158,23 @@ export const WorkforcePage: React.FC = () => {
     setFormPhone('');
     setFormSkills('');
     setFormDesignation('');
+    setFormAddress('');
+    setFormEmergencyName('');
+    setFormEmergencyRelation('');
+    setFormEmergencyPhone('');
   };
 
-  const confirmDeactivate = (e: React.FormEvent) => {
+  const confirmDeactivate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!empToDeactivate) return;
-    deactivateEmployee(empToDeactivate.id, deactivationReason || 'Administrative suspension');
-    setEmpToDeactivate(null);
-    setDeactivationReason('');
+    try {
+      await deactivateEmployee(empToDeactivate.id, deactivationReason || 'Administrative suspension');
+      setEmpToDeactivate(null);
+      setDeactivationReason('');
+      showToast('Employee account deactivated.', 'success');
+    } catch (error: any) {
+      showToast(error.message || 'Unable to deactivate employee.', 'error');
+    }
   };
 
   return (
@@ -392,7 +422,14 @@ export const WorkforcePage: React.FC = () => {
 
                   {isInactive ? (
                     <button
-                      onClick={() => reactivateEmployee(emp.id)}
+                      onClick={async () => {
+                        try {
+                          await reactivateEmployee(emp.id);
+                          showToast('Employee account reactivated.', 'success');
+                        } catch (error: any) {
+                          showToast(error.message || 'Unable to reactivate employee.', 'error');
+                        }
+                      }}
                       className="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-semibold transition-colors"
                     >
                       Reactivate
@@ -660,6 +697,54 @@ export const WorkforcePage: React.FC = () => {
                 <p className="text-xs text-mutedGrey">Onboard technicians, engineers, or office executives</p>
               </div>
             </div>
+
+            {createdCredentials && currentUser.role === 'owner_admin' && (
+              <div className="mb-4 rounded-xl border border-amber/30 bg-amber-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2">
+                    <KeyRound className="mt-0.5 h-4 w-4 text-amber" />
+                    <div>
+                      <p className="text-xs font-bold text-charcoal">Temporary login credentials</p>
+                      <p className="mt-0.5 text-[11px] text-mutedGrey">
+                        Owner-only one-time credential. The employee must change it after login.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="rounded-full border border-amber/30 bg-white px-2 py-0.5 text-[10px] font-bold text-amber">
+                    Owner only
+                  </span>
+                </div>
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center gap-2 rounded-lg border border-warmGrey/70 bg-white p-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-semibold uppercase text-mutedGrey">Account</p>
+                      <p className="truncate text-xs font-bold text-charcoal">{createdCredentials.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-lg border border-warmGrey/70 bg-white p-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-semibold uppercase text-mutedGrey">Temporary password</p>
+                      <p className="mt-0.5 font-mono text-xs font-bold text-charcoal">
+                        {showTemporaryPassword ? createdCredentials.temporaryPassword : '••••••••••••••••'}
+                      </p>
+                    </div>
+                    <button type="button" onClick={() => setShowTemporaryPassword(value => !value)} className="p-1.5 text-navy">
+                      {showTemporaryPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                    {showTemporaryPassword && (
+                      <button
+                        type="button"
+                        onClick={() => navigator.clipboard.writeText(createdCredentials.temporaryPassword)}
+                        className="p-1.5 text-navy"
+                        aria-label="Copy temporary password"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleCreateEmployee} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">

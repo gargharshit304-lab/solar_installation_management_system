@@ -226,6 +226,35 @@ export const employeeApi = {
     if (token) headers['Authorization'] = `Bearer ${token}`;
     const qs = query.toString();
     return request<any[]>(`/employees${qs ? `?${qs}` : ''}`, { method: 'GET', headers, signal });
+  },
+
+  createEmployee: async (data: any, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>('/employees', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data)
+    });
+  },
+
+  updateEmployee: async (id: string, data: any, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/employees/${id}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(data)
+    });
+  },
+
+  deleteEmployee: async (id: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/employees/${id}`, {
+      method: 'DELETE',
+      headers
+    });
   }
 };
 

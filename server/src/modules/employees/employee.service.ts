@@ -534,7 +534,7 @@ export class EmployeeService {
         pool = dbEmployees.map(e => ({
           id: e.id,
           employeeCode: e.employeeCode,
-          fullName: `${e.firstName} ${e.lastName}`,
+          fullName: `${e.firstName} ${e.lastName}`.trim(),
           email: e.email,
           phone: e.phone,
           department: e.department,
@@ -596,6 +596,149 @@ export class EmployeeService {
         totalPages
       }
     };
+  }
+
+  async createEmployee(user: any, data: Partial<EmployeeRecord>): Promise<EmployeeRecord> {
+    const employeeCode = data.employeeCode || `EMP-${String(BASELINE_EMPLOYEES.length + 1).padStart(3, '0')}`;
+    
+    try {
+      const created = await prisma.employee.create({
+        data: {
+          employeeCode,
+          firstName: data.fullName?.split(' ')[0] || '',
+          lastName: data.fullName?.split(' ').slice(1).join(' ') || '',
+          email: data.email,
+          phone: data.phone,
+          department: data.department,
+          designation: data.designation,
+          roleId: data.role,
+          hourlyRate: data.hourlyRate || 0,
+          skills: data.skills || [],
+          isAvailable: data.isAvailable ?? true,
+          currentAssignedJobs: data.activeJobs || 0,
+          hireDate: data.joiningDate ? new Date(data.joiningDate) : new Date(),
+          profile: data.avatarUrl ? {
+            create: {
+              fullName: data.fullName || '',
+              email: data.email,
+              roleId: data.role,
+              department: data.department,
+              avatarUrl: data.avatarUrl,
+              isActive: true
+            }
+          } : undefined
+        },
+        include: { profile: true }
+      });
+
+      return {
+        id: created.id,
+        employeeCode: created.employeeCode,
+        fullName: `${created.firstName} ${created.lastName}`.trim(),
+        email: created.email,
+        phone: created.phone,
+        department: created.department,
+        designation: created.designation,
+        role: created.roleId,
+        hourlyRate: Number(created.hourlyRate) || 0,
+        skills: created.skills || [],
+        isAvailable: created.isAvailable,
+        activeJobs: created.currentAssignedJobs,
+        rating: 4.8,
+        status: 'active' as const,
+        avatarUrl: created.profile?.avatarUrl
+      };
+    } catch (err) {
+      console.error('Failed to create employee in DB:', err);
+      // Fallback to in-memory
+      const newEmp: EmployeeRecord = {
+        id: `emp-${Date.now()}`,
+        employeeCode,
+        fullName: data.fullName || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        department: data.department || 'Installation & Commissioning',
+        designation: data.designation || '',
+        role: data.role || 'install_tech',
+        hourlyRate: data.hourlyRate || 250,
+        skills: data.skills || [],
+        isAvailable: data.isAvailable ?? true,
+        activeJobs: data.activeJobs || 0,
+        rating: 4.8,
+        status: 'active',
+        joiningDate: new Date().toISOString().split('T')[0],
+        reportingManagerId: 'usr-1',
+        reportingManagerName: 'Vikramaditya Rao'
+      };
+      BASELINE_EMPLOYEES.push(newEmp);
+      return newEmp;
+    }
+  }
+
+  async updateEmployee(id: string, data: Partial<EmployeeRecord>): Promise<EmployeeRecord | null> {
+    try {
+      const updated = await prisma.employee.update({
+        where: { id },
+        data: {
+          employeeCode: data.employeeCode,
+          firstName: data.fullName?.split(' ')[0],
+          lastName: data.fullName?.split(' ').slice(1).join(' '),
+          email: data.email,
+          phone: data.phone,
+          department: data.department,
+          designation: data.designation,
+          roleId: data.role,
+          hourlyRate: data.hourlyRate,
+          skills: data.skills,
+          isAvailable: data.isAvailable,
+          currentAssignedJobs: data.activeJobs,
+        },
+        include: { profile: true }
+      });
+
+      return {
+        id: updated.id,
+        employeeCode: updated.employeeCode,
+        fullName: `${updated.firstName} ${updated.lastName}`.trim(),
+        email: updated.email,
+        phone: updated.phone,
+        department: updated.department,
+        designation: updated.designation,
+        role: updated.roleId,
+        hourlyRate: Number(updated.hourlyRate) || 0,
+        skills: updated.skills || [],
+        isAvailable: updated.isAvailable,
+        activeJobs: updated.currentAssignedJobs,
+        rating: 4.8,
+        status: 'active' as const,
+        avatarUrl: updated.profile?.avatarUrl
+      };
+    } catch (err) {
+      console.error('Failed to update employee in DB:', err);
+      // Fallback to in-memory
+      const idx = BASELINE_EMPLOYEES.findIndex(e => e.id === id);
+      if (idx >= 0) {
+        BASELINE_EMPLOYEES[idx] = { ...BASELINE_EMPLOYEES[idx], ...data };
+        return BASELINE_EMPLOYEES[idx];
+      }
+      return null;
+    }
+  }
+
+  async deleteEmployee(id: string): Promise<boolean> {
+    try {
+      await prisma.employee.delete({ where: { id } });
+      return true;
+    } catch (err) {
+      console.error('Failed to delete employee from DB:', err);
+      // Fallback to in-memory
+      const idx = BASELINE_EMPLOYEES.findIndex(e => e.id === id);
+      if (idx >= 0) {
+        BASELINE_EMPLOYEES.splice(idx, 1);
+        return true;
+      }
+      return false;
+    }
   }
 }
 

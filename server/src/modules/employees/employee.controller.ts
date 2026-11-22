@@ -27,6 +27,43 @@ export class EmployeeController {
       next(err);
     }
   }
+
+  async createEmployee(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const employee = await employeeService.createEmployee(req.user, req.body);
+      sendSuccess(res, employee, 201, undefined);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async updateEmployee(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const employee = await employeeService.updateEmployee(id, req.body);
+      if (!employee) {
+        res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Employee not found' } });
+        return;
+      }
+      sendSuccess(res, employee, 200, undefined);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async deleteEmployee(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const deleted = await employeeService.deleteEmployee(id);
+      if (!deleted) {
+        res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Employee not found' } });
+        return;
+      }
+      sendSuccess(res, { id }, 200, undefined);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const employeeController = new EmployeeController();

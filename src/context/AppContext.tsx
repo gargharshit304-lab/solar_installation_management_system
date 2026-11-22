@@ -66,7 +66,7 @@ import {
   canManage as rbacCanManage,
   canExecute as rbacCanExecute
 } from '../utils/rbac';
-import { authApi, rbacApi, financeApi, surveyReviewApi } from '../services/api';
+import { authApi, rbacApi, financeApi, surveyReviewApi, employeeApi } from '../services/api';
 
 export interface Toast {
   id: string;
@@ -251,7 +251,8 @@ interface AppContextType {
   approveDirectExpense: (expenseId: string) => Promise<void>;
   getProjectFinancialDetail: (projectIdOrOrder: string) => ProjectFinancialDetail | null;
   employees: Employee[];
-  addEmployee: (emp: Omit<Employee, 'id'>) => Employee;
+  refreshEmployees: () => Promise<void>;
+  addEmployee: (emp: Omit<Employee, 'id'>) => Promise<Employee>;
   updateEmployee: (id: string, updates: Partial<Employee>) => void;
   deactivateEmployee: (id: string, reason?: string) => void;
   reactivateEmployee: (id: string) => void;
@@ -473,6 +474,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [profitability, setProfitability] = useState<ProjectProfitability[]>(INITIAL_PROFITABILITY);
   const [employees, setEmployees] = useState<Employee[]>(INITIAL_EMPLOYEES);
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+
+  const refreshEmployees = async () => {
+    if (!session?.token) return;
+    try {
+      const response = await employeeApi.searchEmployees({}, session.token);
+      if (response.success && Array.isArray(response.data)) {
+        setEmployees(response.data.map((emp: any) => ({
+          id: emp.id,
+          employeeCode: emp.employeeCode || '',
+          fullName: emp.fullName,
+          email: emp.email,
+          phone: emp.phone || '',
+          department: emp.department || 'Operations',
+          designation: emp.designation || 'Solar Operations Specialist',
+          role: emp.role,
+          hourlyRate: Number(emp.hourlyRate || 0),
+          skills: Array.isArray(emp.skills) ? emp.skills : [],
+          isAvailable: emp.isAvailable ?? true,
+          activeJobs: Number(emp.activeJobs || 0),
+          rating: Number(emp.rating || 5),
+          status: emp.status || 'active',
+          employmentType: 'full_time',
+          joiningDate: emp.joiningDate
+        })));
+      }
+    } catch {
+      // Keep mock data if API is temporarily unavailable.
+    }
+  };
+
+  useEffect(() => {
+    if (authStatus === 'AUTHENTICATED') {
+      void refreshEmployees();
+    }
+  }, [authStatus, session?.token]);
 
   // Sales Workspace State
   const [followUps, setFollowUps] = useState<FollowUpItem[]>(INITIAL_FOLLOW_UPS);
@@ -3281,76 +3317,117 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // ==========================================
 
   // Employee Management
-  const addEmployee = (empData: Omit<Employee, 'id'>): Employee => {
+  const addEmployee = async (empData: Omit<Employee, 'id'>): Promise<Employee> => {
     if (!canCreate('workforce')) {
       showToast('Unauthorized: You lack workforce.create permission to onboard employees.', 'error');
       throw new Error('Unauthorized: workforce.create required');
     }
-    const newEmp: Employee = {
-      ...empData,
-      id: `emp-${Date.now()}`,
-      status: empData.status || 'active',
-      isAvailable: empData.isAvailable ?? true,
-      activeJobs: empData.activeJobs || 0,
-      rating: empData.rating || 5.0
-    };
-    setEmployees(prev => [newEmp, ...prev]);
-
-    logEmployeeActivity({
-      employeeId: currentUser.id,
-      employeeName: currentUser.name,
-      department: 'Sales',
-      role: currentUser.roleTitle,
-      actionType: 'Employee Added',
-      actionDetails: `Added new employee ${newEmp.fullName} (${newEmp.employeeCode}) to ${newEmp.department} department`,
-      targetEntity: newEmp.fullName,
-      targetId: newEmp.id,
-      severity: 'important'
-    });
-
-    showToast(`Employee ${newEmp.fullName} registered successfully`, 'success');
-    return newEmp;
+    try {
+      if (session?.token) {
+        const response = await employeeApi.createEmployee(empData, session.token);
+        if (response.success && response.data) {
+          const newEmp: Employee = {
+            ...empData,
+            id: response.data.id,
+            status: response.data.status || 'active',
+            isAvailable: response.data.isAvailable ?? true,
+            activeJobs: response.data.activeJobs || 0,
+            rating: response.data.rating || 5.0
+          };
+          setEmployees(prev => [newEmp, ...prev]);
+          logEmployeeActivity({
+            employeeId: currentUser.id,
+            employeeName: currentUser.name,
+            department: currentUser.department,
+            role: currentUser.roleTitle,
+            actionType: 'Employee Added',
+            actionDetails: `Added new employee ${newEmp.fullName} (${newEmp.employeeCode}) to ${newEmp.department} department`,
+            targetEntity: newEmp.fullName,
+            targetId: newEmp.id,
+            severity: 'important'
+          });
+          showToast(`Employee ${newEmp.fullName} registered successfully`, 'success');
+          return newEmp;
+        }
+      }
+      // Fallback to local creation if API unavailable
+      const newEmp: Employee = {
+        ...empData,
+        id: `emp-${Date.now()}`,
+        status: empData.status || 'active',
+        isAvailable: empData.isAvailable ?? true,
+        activeJobs: empData.activeJobs || 0,
+        rating: empData.rating || 5.0
+      };
+      setEmployees(prev => [newEmp, ...prev]);
+      showToast(`Employee ${newEmp.fullName} registered successfully (local)`, 'warning');
+      return newEmp;
+    } catch (err: any) {
+      showToast(`Failed to create employee: ${err.message}`, 'error');
+      throw err;
+    }
   };
 
-  const updateEmployee = (id: string, updates: Partial<Employee>) => {
+  const updateEmployee = async (id: string, updates: Partial<Employee>) => {
     if (!canEdit('workforce')) {
       showToast('Unauthorized: You lack workforce.edit permission to modify employee profiles.', 'error');
       return;
     }
-    setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, ...updates } : emp));
-    showToast('Employee profile updated successfully', 'success');
+    try {
+      if (session?.token) {
+        await employeeApi.updateEmployee(id, updates, session.token);
+      }
+      setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, ...updates } : emp));
+      showToast('Employee profile updated successfully', 'success');
+    } catch (err: any) {
+      showToast(`Failed to update employee: ${err.message}`, 'error');
+    }
   };
 
-  const deactivateEmployee = (id: string, reason?: string) => {
+  const deactivateEmployee = async (id: string, reason?: string) => {
     if (!canDelete('workforce')) {
       showToast('Unauthorized: You lack workforce.delete permission to deactivate employees.', 'error');
       return;
     }
-    setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, status: 'inactive', isAvailable: false } : emp));
-    const emp = employees.find(e => e.id === id);
-    if (emp) {
-      logEmployeeActivity({
-        employeeId: currentUser.id,
-        employeeName: currentUser.name,
-        department: 'Sales',
-        role: currentUser.roleTitle,
-        actionType: 'Employee Deactivated',
-        actionDetails: `Deactivated employee account for ${emp.fullName}. Reason: ${reason || 'Administrative action by Owner'}`,
-        targetEntity: emp.fullName,
-        targetId: emp.id,
-        severity: 'critical'
-      });
+    try {
+      if (session?.token) {
+        await employeeApi.updateEmployee(id, { status: 'inactive', isAvailable: false }, session.token);
+      }
+      setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, status: 'inactive', isAvailable: false } : emp));
+      const emp = employees.find(e => e.id === id);
+      if (emp) {
+        logEmployeeActivity({
+          employeeId: currentUser.id,
+          employeeName: currentUser.name,
+          department: currentUser.department,
+          role: currentUser.roleTitle,
+          actionType: 'Employee Deactivated',
+          actionDetails: `Deactivated employee account for ${emp.fullName}. Reason: ${reason || 'Administrative action by Owner'}`,
+          targetEntity: emp.fullName,
+          targetId: emp.id,
+          severity: 'critical'
+        });
+      }
+      showToast('Employee account marked as inactive', 'info');
+    } catch (err: any) {
+      showToast(`Failed to deactivate employee: ${err.message}`, 'error');
     }
-    showToast('Employee account marked as inactive', 'info');
   };
 
-  const reactivateEmployee = (id: string) => {
+  const reactivateEmployee = async (id: string) => {
     if (!canEdit('workforce')) {
       showToast('Unauthorized: You lack workforce.edit permission to reactivate employees.', 'error');
       return;
     }
-    setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, status: 'active', isAvailable: true } : emp));
-    showToast('Employee account reactivated to Active status', 'success');
+    try {
+      if (session?.token) {
+        await employeeApi.updateEmployee(id, { status: 'active', isAvailable: true }, session.token);
+      }
+      setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, status: 'active', isAvailable: true } : emp));
+      showToast('Employee account reactivated to Active status', 'success');
+    } catch (err: any) {
+      showToast(`Failed to reactivate employee: ${err.message}`, 'error');
+    }
   };
 
   // Departments & Teams
@@ -3790,6 +3867,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateEmployee,
       deactivateEmployee,
       reactivateEmployee,
+      refreshEmployees,
       departments,
       updateDepartment,
       teams,
