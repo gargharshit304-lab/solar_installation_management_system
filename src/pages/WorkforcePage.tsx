@@ -4,11 +4,16 @@ import {
   Clock, CheckCircle2, XCircle, Star, ShieldCheck, 
   Plus, Edit2, UserX, UserPlus, X, Calendar, MapPin, 
   AlertTriangle, Briefcase, ChevronRight, Activity, Shield, RotateCcw,
-  KeyRound, EyeOff, Eye, Copy
+  KeyRound, EyeOff, Eye, Copy, ArrowRightLeft, Sparkles
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Employee, UserRole } from '../types';
 import { EmployeeFilterToolbar } from '../components/workforce/EmployeeFilterToolbar';
+import { Pagination } from '../components/common/Pagination';
+import { EditEmployeeModal } from '../components/workforce/EditEmployeeModal';
+import { PromoteEmployeeModal } from '../components/workforce/PromoteEmployeeModal';
+import { TransferEmployeeModal } from '../components/workforce/TransferEmployeeModal';
+import { EmployeeCareerTimeline } from '../components/workforce/EmployeeCareerTimeline';
 
 export const WorkforcePage: React.FC = () => {
   const { 
@@ -21,10 +26,13 @@ export const WorkforcePage: React.FC = () => {
     refreshEmployees,
     addEmployee, 
     updateEmployee, 
+    promoteEmployee,
+    executeDepartmentTransfer,
     deactivateEmployee, 
     reactivateEmployee, 
     employeeActivities,
     departments,
+    rolesPermissions,
     showToast 
   } = useApp();
 
@@ -32,12 +40,21 @@ export const WorkforcePage: React.FC = () => {
   const [deptFilter, setDeptFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'on_leave' | 'inactive'>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const PAGE_SIZE = 20;
+  const [pageSize, setPageSize] = useState(20);
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedProfileEmp, setSelectedProfileEmp] = useState<Employee | null>(null);
-  const [profileTab, setProfileTab] = useState<'overview' | 'work' | 'attendance' | 'permissions' | 'activity'>('overview');
+  const [profileTab, setProfileTab] = useState<'overview' | 'work' | 'attendance' | 'permissions' | 'activity' | 'career'>('overview');
+
+  const [isEditEmpModalOpen, setIsEditEmpModalOpen] = useState(false);
+  const [empToEdit, setEmpToEdit] = useState<Employee | null>(null);
+
+  const [isPromoteEmpModalOpen, setIsPromoteEmpModalOpen] = useState(false);
+  const [empToPromote, setEmpToPromote] = useState<Employee | null>(null);
+
+  const [isTransferEmpModalOpen, setIsTransferEmpModalOpen] = useState(false);
+  const [empToTransfer, setEmpToTransfer] = useState<Employee | null>(null);
   
   // Deactivate confirmation modal
   const [empToDeactivate, setEmpToDeactivate] = useState<Employee | null>(null);
@@ -166,9 +183,9 @@ export const WorkforcePage: React.FC = () => {
   });
 
   const totalFiltered = filteredEmployees.length;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const pagedEmployees = filteredEmployees.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pagedEmployees = filteredEmployees.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   // KPI calculations
   const totalEmployees = employeeTotal || employees.length;
@@ -571,6 +588,37 @@ export const WorkforcePage: React.FC = () => {
                 <div className="flex items-center space-x-1.5">
                   <button
                     onClick={() => {
+                      setEmpToEdit(emp);
+                      setIsEditEmpModalOpen(true);
+                    }}
+                    className="p-1.5 text-mutedGrey hover:text-navy hover:bg-sand-100 rounded-lg transition-colors"
+                    title="Edit Employee Details"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEmpToPromote(emp);
+                      setIsPromoteEmpModalOpen(true);
+                    }}
+                    className="p-1.5 text-mutedGrey hover:text-amber hover:bg-amber-50 rounded-lg transition-colors"
+                    title="Promote Employee"
+                  >
+                    <Award className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEmpToTransfer(emp);
+                      setIsTransferEmpModalOpen(true);
+                    }}
+                    className="p-1.5 text-mutedGrey hover:text-navy hover:bg-navy/10 rounded-lg transition-colors"
+                    title="Transfer Department"
+                  >
+                    <ArrowRightLeft className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    onClick={() => {
                       setSelectedProfileEmp(emp);
                       setProfileTab('overview');
                     }}
@@ -610,36 +658,15 @@ export const WorkforcePage: React.FC = () => {
         })}
         </div>
 
-        <div className="flex flex-col items-center justify-between gap-3 rounded-2xl border border-[rgba(196,138,66,0.18)] bg-white px-4 py-3 text-xs sm:flex-row">
-          <span className="text-mutedGrey">
-            Showing{' '}
-            <strong className="text-charcoal">
-              {totalFiltered === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}-
-              {Math.min(safePage * PAGE_SIZE, totalFiltered)}
-            </strong>{' '}
-            of <strong className="text-charcoal">{totalFiltered}</strong> matching personnel
-            {employeeTotal > totalFiltered ? ` (${employeeTotal} total)` : ''}
-          </span>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={safePage <= 1}
-              className="rounded-lg border border-warmGrey px-3 py-1.5 font-semibold text-charcoal hover:bg-sand-100 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Previous
-            </button>
-            <span className="font-mono text-mutedGrey">
-              Page {safePage} of {totalPages}
-            </span>
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={safePage >= totalPages}
-              className="rounded-lg border border-warmGrey px-3 py-1.5 font-semibold text-charcoal hover:bg-sand-100 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={safePage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          totalRecords={totalFiltered}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+          itemLabel="personnel"
+        />
         </>
       )}
 
@@ -655,27 +682,66 @@ export const WorkforcePage: React.FC = () => {
             </button>
 
             {/* Profile Header */}
-            <div className="flex items-start space-x-4 mb-5 pb-4 border-b border-warmGrey/60">
-              <div className="w-14 h-14 rounded-2xl bg-navy text-white font-bold text-lg flex items-center justify-center shadow-xs">
-                {selectedProfileEmp.fullName.split(' ').map(n => n[0]).join('').slice(0, 2)}
-              </div>
-              <div>
-                <h3 className="font-bold text-lg text-charcoal flex items-center space-x-2">
-                  <span>{selectedProfileEmp.fullName}</span>
-                  <span className="font-mono text-xs px-2 py-0.5 rounded bg-sand-100 text-charcoal font-semibold">
-                    {selectedProfileEmp.employeeCode}
-                  </span>
-                </h3>
-                <p className="text-xs text-mutedGrey mt-0.5">
-                  {selectedProfileEmp.designation} • {selectedProfileEmp.department}
-                </p>
-                <div className="flex items-center space-x-2 mt-1.5 text-xs text-mutedGrey">
-                  <span>Rating: <strong className="text-amber">★ {selectedProfileEmp.rating}</strong></span>
-                  <span>•</span>
-                  <span>Hourly Rate: <strong className="text-charcoal">₹{selectedProfileEmp.hourlyRate}/hr</strong></span>
-                  <span>•</span>
-                  <span>Status: <strong className="text-emerald-700 capitalize">{selectedProfileEmp.status || 'Active'}</strong></span>
+            <div className="flex items-start justify-between mb-4 pb-4 border-b border-warmGrey/60">
+              <div className="flex items-start space-x-4">
+                <div className="w-14 h-14 rounded-2xl bg-navy text-white font-bold text-lg flex items-center justify-center shadow-xs">
+                  {selectedProfileEmp.fullName.split(' ').map(n => n[0]).join('').slice(0, 2)}
                 </div>
+                <div>
+                  <h3 className="font-bold text-lg text-charcoal flex items-center space-x-2">
+                    <span>{selectedProfileEmp.fullName}</span>
+                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-sand-100 text-charcoal font-semibold">
+                      {selectedProfileEmp.employeeCode}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-mutedGrey mt-0.5">
+                    {selectedProfileEmp.designation} • {selectedProfileEmp.department}
+                  </p>
+                  <div className="flex items-center space-x-2 mt-1.5 text-xs text-mutedGrey">
+                    <span>Rating: <strong className="text-amber">★ {selectedProfileEmp.rating}</strong></span>
+                    <span>•</span>
+                    <span>Hourly Rate: <strong className="text-charcoal">₹{selectedProfileEmp.hourlyRate}/hr</strong></span>
+                    <span>•</span>
+                    <span>Status: <strong className="text-emerald-700 capitalize">{selectedProfileEmp.status || 'Active'}</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center space-x-1.5 pt-1">
+                <button
+                  onClick={() => {
+                    setEmpToEdit(selectedProfileEmp);
+                    setIsEditEmpModalOpen(true);
+                  }}
+                  className="px-2.5 py-1 bg-sand-100 hover:bg-sand-200 text-charcoal rounded-lg text-xs font-semibold flex items-center space-x-1 border border-warmGrey/60 transition-colors"
+                  title="Edit Profile"
+                >
+                  <Edit2 className="w-3 h-3 text-navy" />
+                  <span>Edit</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setEmpToPromote(selectedProfileEmp);
+                    setIsPromoteEmpModalOpen(true);
+                  }}
+                  className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber font-bold rounded-lg text-xs flex items-center space-x-1 border border-amber/30 transition-colors"
+                  title="Promote Employee"
+                >
+                  <Award className="w-3 h-3 text-amber" />
+                  <span>Promote</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setEmpToTransfer(selectedProfileEmp);
+                    setIsTransferEmpModalOpen(true);
+                  }}
+                  className="px-2.5 py-1 bg-navy/10 hover:bg-navy/20 text-navy font-semibold rounded-lg text-xs flex items-center space-x-1 border border-navy/20 transition-colors"
+                  title="Transfer Department"
+                >
+                  <ArrowRightLeft className="w-3 h-3 text-navy" />
+                  <span>Transfer</span>
+                </button>
               </div>
             </div>
 
@@ -720,6 +786,15 @@ export const WorkforcePage: React.FC = () => {
                 }`}
               >
                 Audit History
+              </button>
+              <button
+                onClick={() => setProfileTab('career')}
+                className={`py-2 px-3 font-semibold border-b-2 transition-colors whitespace-nowrap flex items-center space-x-1 ${
+                  profileTab === 'career' ? 'border-navy text-navy' : 'border-transparent text-mutedGrey hover:text-charcoal'
+                }`}
+              >
+                <Award className="w-3.5 h-3.5" />
+                <span>Career Timeline</span>
               </button>
             </div>
 
@@ -853,6 +928,14 @@ export const WorkforcePage: React.FC = () => {
                     ))
                   )}
                 </div>
+              )}
+
+              {/* Tab 6: Career Progression Timeline */}
+              {profileTab === 'career' && (
+                <EmployeeCareerTimeline
+                  employeeId={selectedProfileEmp.id}
+                  employeeName={selectedProfileEmp.fullName}
+                />
               )}
 
             </div>
@@ -1324,6 +1407,52 @@ export const WorkforcePage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Edit Employee Modal */}
+      <EditEmployeeModal
+        isOpen={isEditEmpModalOpen}
+        onClose={() => {
+          setIsEditEmpModalOpen(false);
+          setEmpToEdit(null);
+        }}
+        employee={empToEdit}
+        onSave={async (id, updates) => {
+          await updateEmployee(id, updates);
+        }}
+        departments={departments}
+        allRoles={(rolesPermissions || []).map(r => ({ roleKey: r.roleKey, name: r.name }))}
+      />
+
+      {/* Promote Employee Modal */}
+      <PromoteEmployeeModal
+        isOpen={isPromoteEmpModalOpen}
+        onClose={() => {
+          setIsPromoteEmpModalOpen(false);
+          setEmpToPromote(null);
+        }}
+        employee={empToPromote}
+        onPromote={async (id, data) => {
+          return await promoteEmployee(id, data);
+        }}
+        departments={departments}
+        allRoles={(rolesPermissions || []).map(r => ({ roleKey: r.roleKey, name: r.name }))}
+        allEmployees={employees}
+      />
+
+      {/* Transfer Employee Modal */}
+      <TransferEmployeeModal
+        isOpen={isTransferEmpModalOpen}
+        onClose={() => {
+          setIsTransferEmpModalOpen(false);
+          setEmpToTransfer(null);
+        }}
+        employee={empToTransfer}
+        onTransfer={async (id, data) => {
+          return await executeDepartmentTransfer(id, data);
+        }}
+        departments={departments}
+        allEmployees={employees}
+      />
 
     </div>
   );

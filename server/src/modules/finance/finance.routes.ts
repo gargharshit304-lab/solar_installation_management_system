@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { requireAuth } from '../../middleware/auth.middleware';
 import { requireAction } from '../../middleware/rbac.middleware';
 import { financeService } from './finance.service';
-import { AppError } from '../../utils/response';
+import { AppError, sendSuccess } from '../../utils/response';
+import { parsePaginationParams, buildPaginationMeta } from '../../utils/pagination';
 
 const router = Router();
 
@@ -11,13 +12,9 @@ router.get(['/', '/summary'], requireAuth, requireAction('finance', 'view'), asy
   try {
     const summary = await financeService.getFinancialSummary();
     const payments = await financeService.getPayments();
-    res.json({
-      success: true,
-      data: {
-        ...summary,
-        payments
-      },
-      meta: { requestId: req.headers['x-request-id'] || 'req-fin-summary', timestamp: new Date().toISOString() }
+    sendSuccess(res, {
+      ...summary,
+      payments
     });
   } catch (err) {
     next(err);
@@ -27,12 +24,26 @@ router.get(['/', '/summary'], requireAuth, requireAction('finance', 'view'), asy
 // 2. Project Profitability List
 router.get('/projects', requireAuth, requireAction('finance', 'view'), async (req, res, next) => {
   try {
+    const params = parsePaginationParams(req.query, 20);
+    const { all } = req.query as Record<string, string>;
     const projects = await financeService.getProjectsProfitability();
-    res.json({
-      success: true,
-      data: projects,
-      meta: { requestId: req.headers['x-request-id'] || 'req-fin-projects', timestamp: new Date().toISOString() }
-    });
+
+    let filtered = projects;
+    if (params.search) {
+      const q = params.search.toLowerCase();
+      filtered = filtered.filter(p =>
+        p.projectCode.toLowerCase().includes(q) ||
+        p.customerName.toLowerCase().includes(q) ||
+        p.orderNumber.toLowerCase().includes(q)
+      );
+    }
+
+    const totalRecords = filtered.length;
+    const isAll = all === 'true' || req.query.pageSize === 'all';
+    const paged = isAll ? filtered : filtered.slice(params.offset, params.offset + params.limit);
+    const pagination = buildPaginationMeta(params.page, isAll ? totalRecords : params.pageSize, totalRecords);
+
+    sendSuccess(res, paged, 200, pagination);
   } catch (err) {
     next(err);
   }
@@ -41,12 +52,8 @@ router.get('/projects', requireAuth, requireAction('finance', 'view'), async (re
 // 3. Project Financial Detail Workspace Drilldown (7 sections)
 router.get('/projects/:projectId', requireAuth, requireAction('finance', 'view'), async (req, res, next) => {
   try {
-    const detail = await financeService.getProjectDetail(req.params.projectId);
-    res.json({
-      success: true,
-      data: detail,
-      meta: { requestId: req.headers['x-request-id'] || 'req-fin-proj-detail', timestamp: new Date().toISOString() }
-    });
+    const detail = await financeService.getProjectDetail(String(req.params.projectId));
+    sendSuccess(res, detail);
   } catch (err) {
     next(err);
   }
@@ -55,21 +62,24 @@ router.get('/projects/:projectId', requireAuth, requireAction('finance', 'view')
 // 4. Financial Transaction Ledger History
 router.get('/transactions', requireAuth, requireAction('finance', 'view'), async (req, res, next) => {
   try {
-    const { projectId, type, category, status, search, startDate, endDate } = req.query as Record<string, string>;
+    const params = parsePaginationParams(req.query, 20);
+    const { projectId, type, category, status, search, startDate, endDate, all } = req.query as Record<string, string>;
     const transactions = await financeService.getTransactions({
       projectId,
       type,
       category,
       status,
-      search,
+      search: search || params.search,
       startDate,
       endDate
     });
-    res.json({
-      success: true,
-      data: transactions,
-      meta: { requestId: req.headers['x-request-id'] || 'req-fin-txns', timestamp: new Date().toISOString() }
-    });
+
+    const totalRecords = transactions.length;
+    const isAll = all === 'true' || req.query.pageSize === 'all';
+    const paged = isAll ? transactions : transactions.slice(params.offset, params.offset + params.limit);
+    const pagination = buildPaginationMeta(params.page, isAll ? totalRecords : params.pageSize, totalRecords);
+
+    sendSuccess(res, paged, 200, pagination);
   } catch (err) {
     next(err);
   }
@@ -78,13 +88,27 @@ router.get('/transactions', requireAuth, requireAction('finance', 'view'), async
 // 5. Direct Expenses List
 router.get('/expenses', requireAuth, requireAction('finance', 'view'), async (req, res, next) => {
   try {
-    const { projectId, orderId } = req.query as Record<string, string>;
+    const params = parsePaginationParams(req.query, 20);
+    const { projectId, orderId, all } = req.query as Record<string, string>;
     const expenses = await financeService.getExpenses({ projectId, orderId });
-    res.json({
-      success: true,
-      data: expenses,
-      meta: { requestId: req.headers['x-request-id'] || 'req-fin-exp-list', timestamp: new Date().toISOString() }
-    });
+
+    let filtered = expenses;
+    if (params.search) {
+      const q = params.search.toLowerCase();
+      filtered = filtered.filter(e =>
+        e.expenseNumber.toLowerCase().includes(q) ||
+        (e.vendor && e.vendor.toLowerCase().includes(q)) ||
+        (e.category && e.category.toLowerCase().includes(q)) ||
+        (e.description && e.description.toLowerCase().includes(q))
+      );
+    }
+
+    const totalRecords = filtered.length;
+    const isAll = all === 'true' || req.query.pageSize === 'all';
+    const paged = isAll ? filtered : filtered.slice(params.offset, params.offset + params.limit);
+    const pagination = buildPaginationMeta(params.page, isAll ? totalRecords : params.pageSize, totalRecords);
+
+    sendSuccess(res, paged, 200, pagination);
   } catch (err) {
     next(err);
   }
@@ -99,30 +123,22 @@ router.post('/expenses', requireAuth, requireAction('finance', 'create'), async 
       role: req.user!.role
     };
     const newExpense = await financeService.recordExpense(req.body, user);
-    res.status(201).json({
-      success: true,
-      data: newExpense,
-      meta: { requestId: req.headers['x-request-id'] || 'req-fin-exp-create', timestamp: new Date().toISOString() }
-    });
+    sendSuccess(res, newExpense, 201, undefined, 'Expense recorded successfully');
   } catch (err) {
     next(err);
   }
 });
 
-// 7. Approve Direct Expense
-router.post('/expenses/:id/approve', requireAuth, requireAction('finance', 'approve'), async (req, res, next) => {
+// 7. Approve Direct Expense (RBAC Action: edit)
+router.post('/expenses/:id/approve', requireAuth, requireAction('finance', 'edit'), async (req, res, next) => {
   try {
     const user = {
       id: req.user!.id,
       name: req.user!.name,
       role: req.user!.role
     };
-    const approvedExpense = await financeService.approveExpense(req.params.id, user);
-    res.json({
-      success: true,
-      data: approvedExpense,
-      meta: { requestId: req.headers['x-request-id'] || 'req-fin-exp-approve', timestamp: new Date().toISOString() }
-    });
+    const approvedExpense = await financeService.approveExpense(String(req.params.id), user);
+    sendSuccess(res, approvedExpense, 200, undefined, 'Expense approved successfully');
   } catch (err) {
     next(err);
   }
@@ -131,19 +147,33 @@ router.post('/expenses/:id/approve', requireAuth, requireAction('finance', 'appr
 // 8. Payments List
 router.get('/payments', requireAuth, requireAction('finance', 'view'), async (req, res, next) => {
   try {
-    const { orderId } = req.query as Record<string, string>;
+    const params = parsePaginationParams(req.query, 20);
+    const { orderId, all } = req.query as Record<string, string>;
     const payments = await financeService.getPayments({ orderId });
-    res.json({
-      success: true,
-      data: payments,
-      meta: { requestId: req.headers['x-request-id'] || 'req-fin-payments', timestamp: new Date().toISOString() }
-    });
+
+    let filtered = payments;
+    if (params.search) {
+      const q = params.search.toLowerCase();
+      filtered = filtered.filter(p =>
+        p.paymentNumber.toLowerCase().includes(q) ||
+        p.orderNumber.toLowerCase().includes(q) ||
+        p.customerName.toLowerCase().includes(q) ||
+        (p.transactionReference && p.transactionReference.toLowerCase().includes(q))
+      );
+    }
+
+    const totalRecords = filtered.length;
+    const isAll = all === 'true' || req.query.pageSize === 'all';
+    const paged = isAll ? filtered : filtered.slice(params.offset, params.offset + params.limit);
+    const pagination = buildPaginationMeta(params.page, isAll ? totalRecords : params.pageSize, totalRecords);
+
+    sendSuccess(res, paged, 200, pagination);
   } catch (err) {
     next(err);
   }
 });
 
-// 9. Record Payment Receipt
+// 9. Record Milestone Payment
 router.post('/payments', requireAuth, requireAction('finance', 'create'), async (req, res, next) => {
   try {
     const user = {
@@ -151,51 +181,48 @@ router.post('/payments', requireAuth, requireAction('finance', 'create'), async 
       name: req.user!.name,
       role: req.user!.role
     };
-    const newPayment = await financeService.recordPayment(req.body, user);
-    res.status(201).json({
-      success: true,
-      data: newPayment,
-      meta: { requestId: req.headers['x-request-id'] || 'req-fin-pay-create', timestamp: new Date().toISOString() }
-    });
+    const payment = await financeService.recordPayment(req.body, user);
+    sendSuccess(res, payment, 201, undefined, 'Payment recorded successfully');
   } catch (err) {
     next(err);
   }
 });
 
-// 10. Verify Payment (Bank Reconciliation)
-router.post('/verify', requireAuth, requireAction('finance', 'approve'), async (req, res, next) => {
+// 10. Verify / Reconcile Payment (RBAC Action: edit)
+router.post('/verify', requireAuth, requireAction('finance', 'edit'), async (req, res, next) => {
   try {
     const { paymentId } = req.body;
-    if (!paymentId) throw new AppError(422, 'VALIDATION_FAILED', 'paymentId is required');
+    if (!paymentId) {
+      throw new AppError(400, 'BAD_REQUEST', 'Payment ID is required');
+    }
     const user = {
       id: req.user!.id,
       name: req.user!.name,
       role: req.user!.role
     };
-    const verifiedPayment = await financeService.verifyPayment(paymentId, user);
-    res.json({
-      success: true,
-      data: verifiedPayment,
-      meta: { requestId: req.headers['x-request-id'] || 'req-fin-pay-verify', timestamp: new Date().toISOString() }
-    });
+    const verified = await financeService.verifyPayment(paymentId, user);
+    sendSuccess(res, verified, 200, undefined, 'Payment verified successfully');
   } catch (err) {
     next(err);
   }
 });
 
-// 11. Export Ledger CSV
-router.get('/export', requireAuth, requireAction('finance', 'export'), (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      exportUrl: '/downloads/financial_ledger_2026.csv',
-      format: 'CSV',
-      exportedAt: new Date().toISOString(),
-      rowCount: 14
-    },
-    meta: { requestId: req.headers['x-request-id'] || 'req-fin-export', timestamp: new Date().toISOString() }
-  });
+// 11. Export Financial Ledger (RBAC Action: view)
+router.get('/export', requireAuth, requireAction('finance', 'view'), async (req, res, next) => {
+  try {
+    const transactions = await financeService.getTransactions();
+    const csvRows = [
+      'Transaction ID,Date,Type,Category,Project,Customer,Amount,Status,Reference,Recorded By'
+    ];
+    for (const t of transactions) {
+      csvRows.push(`"${t.transactionNumber}","${t.date}","${t.type}","${t.category}","${t.projectCode || ''}","${t.customerName || ''}",${t.amount},"${t.status}","${t.referenceNumber || ''}","${t.recordedBy || ''}"`);
+    }
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="solaros-financial-ledger.csv"');
+    res.send(csvRows.join('\n'));
+  } catch (err) {
+    next(err);
+  }
 });
 
-export { router as financeRoutes };
-export default router;
+export const financeRoutes = router;

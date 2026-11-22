@@ -28,20 +28,40 @@ export function sendSuccess<T>(
   res: Response,
   data: T,
   statusCode = 200,
-  pagination?: ApiResponseMeta['pagination'],
+  pagination?: any,
   message?: string
 ): void {
   const requestId = (res.req as any)?.id || 'unknown';
+
+  let paginationObj: any = undefined;
+  if (pagination) {
+    const page = pagination.page || 1;
+    const pageSize = pagination.pageSize || pagination.limit || 20;
+    const totalRecords = pagination.totalRecords ?? pagination.total ?? 0;
+    const totalPages = pagination.totalPages || Math.max(1, Math.ceil(totalRecords / pageSize));
+    paginationObj = {
+      page,
+      pageSize,
+      totalRecords,
+      totalPages,
+      hasNextPage: pagination.hasNextPage ?? (page < totalPages),
+      hasPreviousPage: pagination.hasPreviousPage ?? (page > 1),
+      limit: pageSize,
+      total: totalRecords
+    };
+  }
+
   const meta: ApiResponseMeta = {
     requestId,
     timestamp: new Date().toISOString(),
-    ...(pagination && { pagination })
+    ...(paginationObj && { pagination: paginationObj })
   };
 
   res.status(statusCode).json({
     success: true,
     ...(message ? { message } : {}),
     data,
+    ...(paginationObj ? { pagination: paginationObj } : {}),
     meta
   });
 }

@@ -13,14 +13,28 @@ export interface ApiResponse<T = any> {
     message: string;
     details?: any;
   };
+  pagination?: {
+    page: number;
+    pageSize?: number;
+    limit: number;
+    total: number;
+    totalRecords?: number;
+    totalPages: number;
+    hasNextPage?: boolean;
+    hasPreviousPage?: boolean;
+  };
   meta: {
     requestId: string;
     timestamp: string;
     pagination?: {
       page: number;
+      pageSize?: number;
       limit: number;
       total: number;
+      totalRecords?: number;
       totalPages: number;
+      hasNextPage?: boolean;
+      hasPreviousPage?: boolean;
     };
   };
 }
@@ -201,6 +215,11 @@ export const rbacApi = {
     if (token) headers['Authorization'] = `Bearer ${token}`;
     return request<any[]>('/rbac/roles', { method: 'GET', headers });
   },
+  getVersion: async (token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<{ version: number; lastModified: string }>('/rbac/version', { method: 'GET', headers });
+  },
   updateRolePermissions: async (roleKey: string, permissions: Record<string, string[]>, token?: string) => {
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -314,6 +333,38 @@ export const employeeApi = {
     });
   },
 
+  getEmployeeById: async (id: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/employees/${id}`, { method: 'GET', headers });
+  },
+
+  promoteEmployee: async (id: string, data: any, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/employees/${id}/promote`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data)
+    });
+  },
+
+  transferEmployee: async (id: string, data: any, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/employees/${id}/transfer`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data)
+    });
+  },
+
+  getCareerHistory: async (id: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any[]>(`/employees/${id}/career-history`, { method: 'GET', headers });
+  },
+
   deleteEmployee: async (id: string, token?: string) => {
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -324,11 +375,43 @@ export const employeeApi = {
   }
 };
 
+export interface CustomerQueryParams {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  status?: string;
+  city?: string;
+  source?: string;
+  all?: boolean;
+}
+
 export const customerApi = {
-  getCustomers: async (token?: string, signal?: AbortSignal) => {
+  getCustomers: async (
+    paramsOrToken?: CustomerQueryParams | string,
+    token?: string,
+    signal?: AbortSignal
+  ) => {
+    let params: CustomerQueryParams = {};
+    let authToken = token;
+    if (typeof paramsOrToken === 'string') {
+      authToken = paramsOrToken;
+    } else if (paramsOrToken) {
+      params = paramsOrToken;
+    }
+
+    const query = new URLSearchParams();
+    if (params.page) query.set('page', String(params.page));
+    if (params.pageSize) query.set('pageSize', String(params.pageSize));
+    if (params.search) query.set('search', params.search);
+    if (params.status && params.status !== 'all') query.set('status', params.status);
+    if (params.city && params.city !== 'all') query.set('city', params.city);
+    if (params.source && params.source !== 'all') query.set('source', params.source);
+    if (params.all) query.set('all', 'true');
+
+    const qs = query.toString();
     const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    return request<any[]>('/customers', { method: 'GET', headers, signal });
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    return request<any[]>(`/customers${qs ? `?${qs}` : ''}`, { method: 'GET', headers, signal });
   },
 
   createCustomer: async (data: any, token?: string) => {
@@ -361,6 +444,201 @@ export const customerApi = {
   }
 };
 
+export const orderApi = {
+  getOrders: async (
+    paramsOrToken?: {
+      page?: number;
+      pageSize?: number;
+      search?: string;
+      status?: string;
+      paymentStatus?: string;
+      all?: boolean;
+    } | string,
+    token?: string
+  ) => {
+    let params: any = {};
+    let authToken = token;
+    if (typeof paramsOrToken === 'string') {
+      authToken = paramsOrToken;
+    } else if (paramsOrToken) {
+      params = paramsOrToken;
+    }
+
+    const query = new URLSearchParams();
+    if (params.page) query.set('page', String(params.page));
+    if (params.pageSize) query.set('pageSize', String(params.pageSize));
+    if (params.search) query.set('search', params.search);
+    if (params.status && params.status !== 'all') query.set('status', params.status);
+    if (params.paymentStatus && params.paymentStatus !== 'all') query.set('paymentStatus', params.paymentStatus);
+    if (params.all) query.set('all', 'true');
+
+    const qs = query.toString();
+    const headers: Record<string, string> = {};
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    return request<any[]>(`/orders${qs ? `?${qs}` : ''}`, { method: 'GET', headers });
+  },
+
+  updateOrderStatus: async (id: string, status: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/orders/${id}/status`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ status })
+    });
+  }
+};
+
+export const inventoryApi = {
+  getProducts: async (
+    paramsOrToken?: {
+      page?: number;
+      pageSize?: number;
+      search?: string;
+      category?: string;
+      all?: boolean;
+    } | string,
+    token?: string
+  ) => {
+    let params: any = {};
+    let authToken = token;
+    if (typeof paramsOrToken === 'string') {
+      authToken = paramsOrToken;
+    } else if (paramsOrToken) {
+      params = paramsOrToken;
+    }
+
+    const query = new URLSearchParams();
+    if (params.page) query.set('page', String(params.page));
+    if (params.pageSize) query.set('pageSize', String(params.pageSize));
+    if (params.search) query.set('search', params.search);
+    if (params.category && params.category !== 'all') query.set('category', params.category);
+    if (params.all) query.set('all', 'true');
+
+    const qs = query.toString();
+    const headers: Record<string, string> = {};
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    return request<any[]>(`/inventory${qs ? `?${qs}` : ''}`, { method: 'GET', headers });
+  },
+
+  createProduct: async (data: any, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>('/inventory', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data)
+    });
+  },
+
+  updateProduct: async (id: string, data: any, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/inventory/${id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(data)
+    });
+  },
+
+  getProductById: async (id: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/inventory/${id}`, { method: 'GET', headers });
+  },
+
+  getPriceHistory: async (id: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any[]>(`/inventory/${id}/price-history`, { method: 'GET', headers });
+  },
+
+  deleteProduct: async (id: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/inventory/${id}`, {
+      method: 'DELETE',
+      headers
+    });
+  },
+
+  adjustStock: async (id: string, delta: number, reason?: string, notes?: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return request<any>(`/inventory/${id}/adjust`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ delta, reason, notes })
+    });
+  }
+};
+
+export const installationApi = {
+  getInstallations: async (
+    paramsOrToken?: {
+      page?: number;
+      pageSize?: number;
+      search?: string;
+      status?: string;
+      all?: boolean;
+    } | string,
+    token?: string
+  ) => {
+    let params: any = {};
+    let authToken = token;
+    if (typeof paramsOrToken === 'string') {
+      authToken = paramsOrToken;
+    } else if (paramsOrToken) {
+      params = paramsOrToken;
+    }
+
+    const query = new URLSearchParams();
+    if (params.page) query.set('page', String(params.page));
+    if (params.pageSize) query.set('pageSize', String(params.pageSize));
+    if (params.search) query.set('search', params.search);
+    if (params.status && params.status !== 'all') query.set('status', params.status);
+    if (params.all) query.set('all', 'true');
+
+    const qs = query.toString();
+    const headers: Record<string, string> = {};
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    return request<any[]>(`/installations${qs ? `?${qs}` : ''}`, { method: 'GET', headers });
+  }
+};
+
+export const dispatchApi = {
+  getDispatches: async (
+    paramsOrToken?: {
+      page?: number;
+      pageSize?: number;
+      search?: string;
+      status?: string;
+      all?: boolean;
+    } | string,
+    token?: string
+  ) => {
+    let params: any = {};
+    let authToken = token;
+    if (typeof paramsOrToken === 'string') {
+      authToken = paramsOrToken;
+    } else if (paramsOrToken) {
+      params = paramsOrToken;
+    }
+
+    const query = new URLSearchParams();
+    if (params.page) query.set('page', String(params.page));
+    if (params.pageSize) query.set('pageSize', String(params.pageSize));
+    if (params.search) query.set('search', params.search);
+    if (params.status && params.status !== 'all') query.set('status', params.status);
+    if (params.all) query.set('all', 'true');
+
+    const qs = query.toString();
+    const headers: Record<string, string> = {};
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    return request<any[]>(`/dispatch${qs ? `?${qs}` : ''}`, { method: 'GET', headers });
+  }
+};
+
 export const financeApi = {
   getSummary: async (token?: string) => {
     const headers: Record<string, string> = {};
@@ -389,6 +667,9 @@ export const financeApi = {
       search?: string;
       startDate?: string;
       endDate?: string;
+      page?: number;
+      pageSize?: number;
+      all?: boolean;
     } = {},
     token?: string
   ) => {
@@ -400,6 +681,9 @@ export const financeApi = {
     if (params.search) query.set('search', params.search);
     if (params.startDate) query.set('startDate', params.startDate);
     if (params.endDate) query.set('endDate', params.endDate);
+    if (params.page) query.set('page', String(params.page));
+    if (params.pageSize) query.set('pageSize', String(params.pageSize));
+    if (params.all) query.set('all', 'true');
 
     const qs = query.toString();
     const headers: Record<string, string> = {};
@@ -407,10 +691,25 @@ export const financeApi = {
     return request<any[]>(`/finance/transactions${qs ? `?${qs}` : ''}`, { method: 'GET', headers });
   },
 
-  getExpenses: async (params: { projectId?: string; orderId?: string } = {}, token?: string) => {
+  getExpenses: async (
+    params: {
+      projectId?: string;
+      orderId?: string;
+      page?: number;
+      pageSize?: number;
+      search?: string;
+      all?: boolean;
+    } = {},
+    token?: string
+  ) => {
     const query = new URLSearchParams();
     if (params.projectId) query.set('projectId', params.projectId);
     if (params.orderId) query.set('orderId', params.orderId);
+    if (params.page) query.set('page', String(params.page));
+    if (params.pageSize) query.set('pageSize', String(params.pageSize));
+    if (params.search) query.set('search', params.search);
+    if (params.all) query.set('all', 'true');
+
     const qs = query.toString();
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -465,7 +764,16 @@ export const financeApi = {
 
 export const surveyReviewApi = {
   getSurveys: async (
-    params: { queue?: string; status?: string; reviewerId?: string; technicianId?: string; search?: string } = {},
+    params: {
+      queue?: string;
+      status?: string;
+      reviewerId?: string;
+      technicianId?: string;
+      search?: string;
+      page?: number;
+      pageSize?: number;
+      all?: boolean;
+    } = {},
     token?: string
   ) => {
     const query = new URLSearchParams();
@@ -474,6 +782,9 @@ export const surveyReviewApi = {
     if (params.reviewerId) query.set('reviewerId', params.reviewerId);
     if (params.technicianId) query.set('technicianId', params.technicianId);
     if (params.search) query.set('search', params.search);
+    if (params.page) query.set('page', String(params.page));
+    if (params.pageSize) query.set('pageSize', String(params.pageSize));
+    if (params.all) query.set('all', 'true');
 
     const qs = query.toString();
     const headers: Record<string, string> = {};

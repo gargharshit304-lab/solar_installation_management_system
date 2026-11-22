@@ -16,7 +16,7 @@ export class UserController {
     try {
       const { userId } = req.params;
       const { active } = req.body;
-      const updated = await userService.setUserStatus(userId, active, req.user);
+      const updated = await userService.setUserStatus(String(userId), active, req.user);
       sendSuccess(res, updated);
     } catch (err) {
       next(err);

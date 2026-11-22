@@ -5,9 +5,10 @@ import {
   Truck, ArrowRight, ArrowLeftRight, ClipboardCheck, ListTodo,
   FileText, BarChart3, Warehouse as WarehouseIcon, Eye,
   Check, X, AlertCircle, Calendar, MapPin, UserCheck,
-  Download, Layers, Hash, ShieldAlert, Sparkles, Building2
+  Download, Layers, Hash, ShieldAlert, Sparkles, Building2, Edit2
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { EditProductModal } from '../components/inventory/EditProductModal';
 import { 
   InventoryItem, ProductCategory, SerialNumberRecord, 
   GoodsReceiptNote, StockMovementRecord, WarehouseTransfer, 
@@ -16,6 +17,7 @@ import {
 import { StatusBadge } from '../components/common/StatusBadge';
 import { Modal } from '../components/common/Modal';
 import { QrScannerModal } from '../components/common/QrScannerModal';
+import { Pagination } from '../components/common/Pagination';
 
 export const InventoryPage: React.FC = () => {
   const { 
@@ -34,6 +36,7 @@ export const InventoryPage: React.FC = () => {
     warehouseTasks,
     orders,
     addInventoryItem,
+    updateInventoryItem,
     adjustStockQuantity,
     registerGoodsReceipt,
     registerSerialNumber,
@@ -85,6 +88,8 @@ export const InventoryPage: React.FC = () => {
   // Modals
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
+  const [isEditProductModalOpen, setIsEditProductModalOpen] = useState(false);
+  const [selectedProductForEdit, setSelectedProductForEdit] = useState<InventoryItem | null>(null);
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
   const [isGrnModalOpen, setIsGrnModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -211,6 +216,9 @@ export const InventoryPage: React.FC = () => {
   const activeTransfersCount = warehouseTransfers.filter(t => t.status === 'in_transit').length;
 
   // Filtered Products
+  const [productsPage, setProductsPage] = useState(1);
+  const [productsPageSize, setProductsPageSize] = useState(10);
+
   const filteredInventory = inventory.filter(item => {
     const matchesCategory = selectedCategoryFilter === 'all' || item.category === selectedCategoryFilter;
     const matchesWarehouse = selectedWarehouseFilter === 'all' || item.preferredWarehouseId === selectedWarehouseFilter;
@@ -221,6 +229,9 @@ export const InventoryPage: React.FC = () => {
                           item.locationBin.toLowerCase().includes(term);
     return matchesCategory && matchesWarehouse && matchesSearch;
   });
+
+  const productsTotalPages = Math.max(1, Math.ceil(filteredInventory.length / productsPageSize));
+  const pagedInventory = filteredInventory.slice((productsPage - 1) * productsPageSize, productsPage * productsPageSize);
 
   // Filtered Serials
   const filteredSerials = serialNumbers.filter(s => {
@@ -278,6 +289,15 @@ export const InventoryPage: React.FC = () => {
     });
 
     setIsAddProductModalOpen(false);
+  };
+
+  const handleOpenEditProduct = (item: InventoryItem) => {
+    if (!canEdit('inventory')) {
+      showToast('Unauthorized: You lack inventory.edit permission to modify products.', 'error');
+      return;
+    }
+    setSelectedProductForEdit(item);
+    setIsEditProductModalOpen(true);
   };
 
   const handleOpenAdjust = (item: InventoryItem) => {
@@ -984,7 +1004,7 @@ export const InventoryPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-warmGrey/40 text-charcoal">
-                  {filteredInventory.map(item => (
+                  {pagedInventory.map(item => (
                     <tr key={item.id} className="hover:bg-sand-50/70 transition-colors">
                       <td className="py-3.5 px-4">
                         <div className="font-bold text-charcoal">{item.name}</div>
@@ -1022,7 +1042,15 @@ export const InventoryPage: React.FC = () => {
                         <StatusBadge status={item.stockStatus} />
                       </td>
                       {canEdit('inventory') && (
-                        <td className="py-3.5 px-4 text-right">
+                        <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
+                          <button
+                            onClick={() => handleOpenEditProduct(item)}
+                            className="px-2.5 py-1 bg-navy/10 hover:bg-navy/20 text-navy font-semibold rounded-lg text-xs inline-flex items-center space-x-1 border border-navy/20 transition-colors"
+                            title="Edit Product Details & Pricing"
+                          >
+                            <Edit2 className="w-3 h-3 text-navy" />
+                            <span>Edit</span>
+                          </button>
                           <button
                             onClick={() => handleOpenAdjust(item)}
                             className="px-2.5 py-1 bg-sand-100 hover:bg-sand-200 text-charcoal font-semibold rounded-lg text-xs inline-flex items-center space-x-1 border border-warmGrey"
@@ -1036,6 +1064,18 @@ export const InventoryPage: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            <div className="p-3 border-t border-warmGrey/60 bg-sand-50/40">
+              <Pagination
+                currentPage={productsPage}
+                totalPages={productsTotalPages}
+                pageSize={productsPageSize}
+                totalRecords={filteredInventory.length}
+                onPageChange={setProductsPage}
+                onPageSizeChange={setProductsPageSize}
+                itemLabel="products"
+              />
             </div>
           </div>
         </div>
@@ -1609,6 +1649,21 @@ export const InventoryPage: React.FC = () => {
       {/* =========================================================================
           MODALS SECTION
           ========================================================================= */}
+
+      {/* 0. Edit Product SKU Modal */}
+      <EditProductModal
+        isOpen={isEditProductModalOpen}
+        onClose={() => {
+          setIsEditProductModalOpen(false);
+          setSelectedProductForEdit(null);
+        }}
+        product={selectedProductForEdit}
+        onSave={async (prodId, updates) => {
+          await updateInventoryItem(prodId, updates);
+        }}
+        allProducts={inventory}
+        warehouses={warehouses}
+      />
 
       {/* 1. Adjust Stock Modal */}
       {isAdjustModalOpen && selectedProductForAdjust && (

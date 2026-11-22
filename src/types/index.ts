@@ -437,6 +437,11 @@ export interface InventoryItem {
   reorderLevel?: number;
   unitCost: number;
   sellingPrice: number;
+  standardCost?: number;
+  taxRate?: number;
+  maxThreshold?: number;
+  reorderThreshold?: number;
+  status?: 'active' | 'inactive';
   supplier: string;
   supplierId?: string;
   hasSerialTracking: boolean;
@@ -1055,7 +1060,51 @@ export interface Employee {
   customPermissions?: string[];
   teamId?: string;
   teamName?: string;
+  team?: string;
+  workLocation?: string;
   leaveBalanceDays?: number;
+}
+
+export interface EmployeeCareerHistoryEvent {
+  id: string;
+  employeeId: string;
+  eventType: 'hire' | 'promotion' | 'department_transfer' | 'role_change' | 'compensation_change';
+  previousDesignation?: string;
+  newDesignation?: string;
+  previousDepartment?: string;
+  newDepartment?: string;
+  previousTeam?: string;
+  newTeam?: string;
+  previousRoleId?: string;
+  newRoleId?: string;
+  previousHourlyRate?: number;
+  newHourlyRate?: number;
+  reportingManagerId?: string;
+  reportingManagerName?: string;
+  effectiveDate: string;
+  authorizedById?: string;
+  authorizedByName?: string;
+  reason?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface ProductPriceHistoryRecord {
+  id: string;
+  productId: string;
+  productSku: string;
+  productName: string;
+  previousUnitCost: number;
+  newUnitCost: number;
+  previousSellingPrice: number;
+  newSellingPrice: number;
+  previousStandardCost: number;
+  newStandardCost: number;
+  changedById?: string;
+  changedByName?: string;
+  reason?: string;
+  effectiveDate: string;
+  createdAt: string;
 }
 
 export interface NotificationItem {
@@ -1223,7 +1272,7 @@ export interface Team {
   currentObjective?: string;
 }
 
-export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'assign' | 'approve' | 'export' | 'manage' | 'view_company_wide';
+export type PermissionAction = 'view' | 'create' | 'edit' | 'delete';
 
 export type CapabilityPermission =
   // Administrative Capabilities (Governance, oversight, delegation)
@@ -1356,6 +1405,8 @@ export interface RoleDefinition {
   description: string;
   userCount: number;
   permissions: Record<string, PermissionAction[]>;
+  version?: number;
+  updatedAt?: string;
 }
 
 export type ApprovalCategory =

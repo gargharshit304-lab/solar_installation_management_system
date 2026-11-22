@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { sendError } from '../utils/response';
-import { CSRF_COOKIE, CSRF_HEADER, verifySignedCsrfToken } from '../utils/cookies';
+import { ACCESS_COOKIE, CSRF_COOKIE, CSRF_HEADER, verifySignedCsrfToken } from '../utils/cookies';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -28,6 +28,14 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
   }
 
   if (EXEMPT_PATHS.has(req.path)) {
+    return next();
+  }
+
+  // Pure Bearer-authenticated API calls without ambient session cookies are
+  // immune to cross-site request forgery as custom headers cannot be forged cross-origin.
+  const hasBearerAuth = typeof req.headers.authorization === 'string' && req.headers.authorization.startsWith('Bearer ');
+  const hasSessionCookie = Boolean(req.cookies?.[ACCESS_COOKIE]);
+  if (hasBearerAuth && !hasSessionCookie) {
     return next();
   }
 

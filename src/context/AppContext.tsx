@@ -18,6 +18,7 @@ import {
 } from '../types';
 import {
   SYSTEM_USERS, INITIAL_CUSTOMERS, INITIAL_SURVEYS,
+  INITIAL_EMPLOYEES,
   SOLAR_PACKAGES, INITIAL_QUOTATIONS, INITIAL_ORDERS,
   INITIAL_PAYMENTS, INITIAL_INVENTORY, INITIAL_SERIAL_NUMBERS,
   INITIAL_DISPATCHES, INITIAL_INSTALLATIONS, INITIAL_WARRANTIES,
@@ -65,7 +66,7 @@ import {
   canManage as rbacCanManage,
   canExecute as rbacCanExecute
 } from '../utils/rbac';
-import { authApi, rbacApi, financeApi, surveyReviewApi, employeeApi, customerApi } from '../services/api';
+import { authApi, rbacApi, financeApi, surveyReviewApi, employeeApi, customerApi, inventoryApi } from '../services/api';
 
 export interface Toast {
   id: string;
@@ -173,7 +174,7 @@ interface AppContextType {
   suppliers: Supplier[];
   inventory: InventoryItem[];
   addInventoryItem: (item: Omit<InventoryItem, 'id' | 'sku'>) => InventoryItem;
-  updateInventoryItem: (id: string, updates: Partial<InventoryItem>) => void;
+  updateInventoryItem: (id: string, updates: Partial<InventoryItem> & { priceChangeReason?: string }) => Promise<void>;
   adjustStockQuantity: (productId: string, adjustment: number, reason?: StockAdjustment['adjustmentReason'], notes?: string, warehouseId?: string) => void;
   
   serialNumbers: SerialNumberRecord[];
@@ -257,6 +258,8 @@ interface AppContextType {
   updateEmployee: (id: string, updates: Partial<Employee>) => void;
   deactivateEmployee: (id: string, reason?: string) => void;
   reactivateEmployee: (id: string) => void;
+  promoteEmployee: (id: string, data: any) => Promise<boolean>;
+  executeDepartmentTransfer: (id: string, data: any) => Promise<boolean>;
 
   // Departments & Teams
   departments: Department[];
@@ -267,7 +270,9 @@ interface AppContextType {
 
   // Roles & Permissions
   rolesPermissions: RoleDefinition[];
-  updateRolePermissions: (roleId: string, permissions: Record<string, PermissionAction[]>) => void;
+  rolesVersion: number;
+  refreshRolesPermissions: (force?: boolean) => Promise<void>;
+  updateRolePermissions: (roleId: string, permissions: Record<string, PermissionAction[]>) => Promise<void>;
   createCustomRole: (role: Omit<RoleDefinition, 'id' | 'isCustom'>) => RoleDefinition;
 
   // Approvals & Requests
@@ -427,20 +432,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [complaints, setComplaints] = useState<ServiceComplaint[]>(INITIAL_COMPLAINTS);
   const [directExpenses, setDirectExpenses] = useState<DirectExpense[]>(INITIAL_DIRECT_EXPENSES);
   const [profitability, setProfitability] = useState<ProjectProfitability[]>(INITIAL_PROFITABILITY);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>(INITIAL_EMPLOYEES);
   const [employeesLoading, setEmployeesLoading] = useState(false);
   const [employeesError, setEmployeesError] = useState<string | null>(null);
   const [employeeTotal, setEmployeeTotal] = useState(0);
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
 
   const refreshEmployees = async () => {
-    if (!session?.token) return;
-
     setEmployeesLoading(true);
     setEmployeesError(null);
 
     try {
-      const response = await employeeApi.searchEmployees({ limit: 500, page: 1 }, session.token);
+      const response = await employeeApi.searchEmployees({ limit: 500, page: 1 }, session?.token);
       if (!response.success) {
         throw new Error(response.error?.message || response.message || 'Unable to load the employee directory.');
       }
@@ -481,9 +484,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const refreshCustomers = async () => {
-    if (!session?.token) return;
     try {
-      const response = await customerApi.getCustomers(session.token);
+      const response = await customerApi.getCustomers(session?.token);
       if (response.success && Array.isArray(response.data) && response.data.length > 0) {
         setCustomers(response.data.map((c: any) => ({
           id: c.id,
@@ -509,17 +511,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           createdAt: c.createdAt || new Date().toISOString()
         })));
       }
-    } catch {
-      // Keep mock data if API is temporarily unavailable.
+    } catch (err: any) {
+      console.warn('Could not refresh customers from backend:', err?.message);
     }
   };
-
-  useEffect(() => {
-    if (authStatus === 'AUTHENTICATED') {
-      void refreshEmployees();
-      void refreshCustomers();
-    }
-  }, [authStatus, session?.token]);
 
   // Sales Workspace State
   const [followUps, setFollowUps] = useState<FollowUpItem[]>(INITIAL_FOLLOW_UPS);
@@ -531,11 +526,80 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [departments, setDepartments] = useState<Department[]>(INITIAL_DEPARTMENTS);
   const [teams, setTeams] = useState<Team[]>(INITIAL_TEAMS);
   const [rolesPermissions, setRolesPermissions] = useState<RoleDefinition[]>(INITIAL_ROLES_PERMISSIONS);
+  const [rolesVersion, setRolesVersion] = useState<number>(1);
   const [approvals, setApprovals] = useState<ApprovalRequest[]>(INITIAL_APPROVALS);
   const [employeeActivities, setEmployeeActivities] = useState<EmployeeActivityLog[]>(INITIAL_EMPLOYEE_ACTIVITIES);
   const [aiAgents, setAiAgents] = useState<RetellAiAgent[]>(INITIAL_AI_AGENTS);
   const [smartAlerts, setSmartAlerts] = useState<SmartAlert[]>(INITIAL_SMART_ALERTS);
   const [subsidyApplications, setSubsidyApplications] = useState<import('../types').SubsidyApplication[]>(INITIAL_SUBSIDY_APPLICATIONS);
+
+  const refreshRolesPermissions = async (force: boolean = false): Promise<void> => {
+    try {
+      const response = await rbacApi.getRoles(session?.token);
+      if (response && response.success && Array.isArray(response.data) && response.data.length > 0) {
+        const mapped: RoleDefinition[] = response.data.map((r: any) => ({
+          id: r.id,
+          roleKey: r.roleKey || r.id,
+          name: r.name,
+          isCustom: Boolean(r.isCustom),
+          description: r.description || '',
+          userCount: Number(r.userCount || 0),
+          permissions: (r.permissions && typeof r.permissions === 'object' && !Array.isArray(r.permissions))
+            ? r.permissions
+            : {},
+          version: Number(r.version || 1),
+          updatedAt: r.updatedAt ? String(r.updatedAt) : undefined
+        }));
+
+        setRolesPermissions(mapped);
+        const maxV = Math.max(...mapped.map(m => m.version || 1), 1);
+        setRolesVersion(maxV);
+      }
+    } catch (err: any) {
+      console.warn('Could not refresh roles and permissions from PostgreSQL backend:', err?.message);
+    }
+  };
+
+  useEffect(() => {
+    if (authStatus === 'AUTHENTICATED') {
+      void refreshRolesPermissions(true);
+      void refreshEmployees();
+      void refreshCustomers();
+    }
+  }, [authStatus, session?.token]);
+
+  // Enterprise Multi-Session RBAC Synchronization: Window Focus, Tab Visibility, and Polling
+  useEffect(() => {
+    if (authStatus !== 'AUTHENTICATED') return;
+
+    // 1. Refresh permissions & customer visibility when window regains focus
+    const onFocus = () => {
+      void refreshRolesPermissions();
+      void refreshCustomers();
+    };
+
+    // 2. Refresh when browser tab switches from background to active
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        void refreshRolesPermissions();
+        void refreshCustomers();
+      }
+    };
+
+    // 3. Periodic cross-session polling every 8 seconds
+    const pollInterval = setInterval(() => {
+      void refreshRolesPermissions();
+    }, 8000);
+
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      clearInterval(pollInterval);
+    };
+  }, [authStatus, session?.token]);
   
   // AI Command Center state
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([
@@ -572,8 +636,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (response.success && response.data?.user) {
         const { user, expiresAt } = response.data;
         const newSession: AuthSession = {
-          token: '',
-          refreshToken: '',
+          token: (response.data as any).accessToken || (response.data as any).token || '',
+          refreshToken: (response.data as any).refreshToken || '',
           userId: user.id,
           email: user.email,
           role: user.role,
@@ -2078,13 +2142,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newItem;
   };
 
-  const updateInventoryItem = (id: string, updates: Partial<InventoryItem>) => {
+  const updateInventoryItem = async (id: string, updates: Partial<InventoryItem> & { priceChangeReason?: string }) => {
     if (!canEdit('inventory')) {
       showToast('Unauthorized: You lack inventory.edit permission to modify product specifications.', 'error');
       return;
     }
-    setInventory(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
-    showToast('Product specifications updated', 'info');
+    try {
+      if (session?.token) {
+        await inventoryApi.updateProduct(id, updates, session.token);
+      }
+      setInventory(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+      showToast('Product specifications and pricing updated successfully', 'success');
+    } catch (err: any) {
+      showToast(`Failed to update product: ${err.message}`, 'error');
+    }
   };
 
   const adjustStockQuantity = (
@@ -3554,30 +3625,133 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Transferred ${emp.fullName} to ${targetDept}`, 'success');
   };
 
+  const promoteEmployee = async (
+    id: string,
+    data: {
+      newDesignation: string;
+      newDepartment?: string;
+      newTeam?: string;
+      newRoleId: UserRole;
+      newHourlyRate: number;
+      reportingManagerId?: string;
+      reportingManagerName?: string;
+      effectiveDate: string;
+      reason: string;
+      notes?: string;
+    }
+  ): Promise<boolean> => {
+    if (!canEdit('workforce')) {
+      showToast('Unauthorized: You lack workforce.edit permission to promote employees.', 'error');
+      return false;
+    }
+    try {
+      if (session?.token) {
+        await employeeApi.promoteEmployee(id, data, session.token);
+        await refreshEmployees();
+      }
+      setEmployees(prev => prev.map(emp => {
+        if (emp.id === id) {
+          return {
+            ...emp,
+            designation: data.newDesignation,
+            role: data.newRoleId,
+            hourlyRate: data.newHourlyRate,
+            department: data.newDepartment || emp.department,
+            team: data.newTeam || emp.team,
+            teamName: data.newTeam || emp.teamName,
+            reportingManagerId: data.reportingManagerId || emp.reportingManagerId,
+            reportingManagerName: data.reportingManagerName || emp.reportingManagerName
+          };
+        }
+        return emp;
+      }));
+      showToast(`Employee promoted to ${data.newDesignation} successfully`, 'success');
+      return true;
+    } catch (err: any) {
+      showToast(`Promotion failed: ${err.message}`, 'error');
+      return false;
+    }
+  };
+
+  const executeDepartmentTransfer = async (
+    id: string,
+    data: {
+      newDepartment: string;
+      newTeam: string;
+      reportingManagerId?: string;
+      reportingManagerName?: string;
+      effectiveDate: string;
+      reason: string;
+      notes?: string;
+    }
+  ): Promise<boolean> => {
+    if (!canEdit('workforce')) {
+      showToast('Unauthorized: You lack workforce.edit permission to transfer employees.', 'error');
+      return false;
+    }
+    try {
+      if (session?.token) {
+        await employeeApi.transferEmployee(id, data, session.token);
+        await refreshEmployees();
+      }
+      setEmployees(prev => prev.map(emp => {
+        if (emp.id === id) {
+          return {
+            ...emp,
+            department: data.newDepartment,
+            team: data.newTeam,
+            teamName: data.newTeam,
+            reportingManagerId: data.reportingManagerId || emp.reportingManagerId,
+            reportingManagerName: data.reportingManagerName || emp.reportingManagerName
+          };
+        }
+        return emp;
+      }));
+      showToast(`Transferred employee to ${data.newDepartment} (${data.newTeam})`, 'success');
+      return true;
+    } catch (err: any) {
+      showToast(`Department transfer failed: ${err.message}`, 'error');
+      return false;
+    }
+  };
+
   // Roles & Permissions
   const updateRolePermissions = async (roleId: string, updatedPermissions: Record<string, PermissionAction[]>) => {
     if (!canManage('roles_permissions') && !canManage('roles') && !canEdit('roles_permissions') && !canEdit('roles')) {
       showToast('Unauthorized: You lack roles.manage permission to configure permissions.', 'error');
       return;
     }
-    // 1. Optimistic local React state update
-    setRolesPermissions(prev => prev.map(r => (r.id === roleId || r.roleKey === roleId) ? { ...r, permissions: updatedPermissions } : r));
 
-    // 2. Resolve target role key
     const targetRole = rolesPermissions.find(r => r.id === roleId || r.roleKey === roleId);
     const roleKey = targetRole?.roleKey || roleId;
 
     if (roleKey === 'owner_admin') {
-      updatedPermissions['activity_center'] = ['view', 'export'];
-      updatedPermissions['audit'] = ['view', 'view_company_wide', 'export'];
+      updatedPermissions['activity_center'] = ['view', 'create', 'edit', 'delete'];
+      updatedPermissions['audit'] = ['view'];
+      updatedPermissions['roles_permissions'] = ['view', 'create', 'edit', 'delete'];
+      updatedPermissions['roles'] = ['view', 'create', 'edit', 'delete'];
+      updatedPermissions['permissions'] = ['view', 'create', 'edit', 'delete'];
+      updatedPermissions['approvals'] = ['view', 'create', 'edit', 'delete'];
     }
 
+    const previousRoles = [...rolesPermissions];
+    // 1. Optimistic local React state update
+    setRolesPermissions(prev => prev.map(r => (r.id === roleId || r.roleKey === roleId) ? { ...r, permissions: updatedPermissions } : r));
+
     try {
-      await rbacApi.updateRolePermissions(roleKey, updatedPermissions as any, session?.token);
-      showToast(`Permissions for '${targetRole?.name || roleKey}' synchronized with database`, 'success');
+      const res = await rbacApi.updateRolePermissions(roleKey, updatedPermissions as any, session?.token);
+      if (!res.success) {
+        throw new Error(res.error?.message || 'Database rejected permission update');
+      }
+      // 2. Authoritative re-synchronization with Supabase PostgreSQL
+      await refreshRolesPermissions(true);
+      showToast(`Permissions for '${targetRole?.name || roleKey}' synchronized with PostgreSQL database`, 'success');
     } catch (err: any) {
-      console.warn('Backend RBAC sync offline, maintained locally:', err.message);
-      showToast('Role permissions updated locally', 'info');
+      // Rollback optimistic update
+      setRolesPermissions(previousRoles);
+      console.error('Backend RBAC database sync failed:', err.message);
+      showToast(`Database synchronization failed: ${err.message}`, 'error');
+      throw err;
     }
   };
 
@@ -3934,6 +4108,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       employeeTotal,
       addEmployee,
       updateEmployee,
+      promoteEmployee,
+      executeDepartmentTransfer,
       deactivateEmployee,
       reactivateEmployee,
       refreshEmployees,
@@ -3943,6 +4119,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateTeam,
       transferEmployee,
       rolesPermissions,
+      rolesVersion,
+      refreshRolesPermissions,
       updateRolePermissions,
       createCustomRole,
       approvals,

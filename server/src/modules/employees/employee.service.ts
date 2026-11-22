@@ -1,20 +1,9 @@
-<<<<<<< HEAD
+import crypto from 'crypto';
 import { prisma, pool as dbPool } from '../../db/prisma';
 import { hashPassword } from '../../utils/password';
 import { AppError } from '../../utils/response';
 import { auditService } from '../audit/audit.service';
-import crypto from 'crypto';
-=======
-import crypto from 'crypto';
-import { prisma } from '../../db/prisma';
-import { INITIAL_SYSTEM_USERS } from '../../db/seed';
-import { hashPassword } from '../../utils/password';
-import { AppError } from '../../utils/response';
-import { env } from '../../config/env';
 import { ROLE_DEFINITIONS, UserRole } from '../../config/constants';
-
-const allowDevFallback = env.NODE_ENV !== 'production' && env.DEV_AUTH_FALLBACK;
->>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
 
 export interface EmployeeRecord {
   id: string;
@@ -36,6 +25,21 @@ export interface EmployeeRecord {
   joiningDate?: string;
   address?: string;
   avatarUrl?: string;
+  temporaryPassword?: string;
+  team?: string;
+  teamName?: string;
+  workLocation?: string;
+  employmentType?: string;
+  emergencyContact?: {
+    name?: string;
+    relation?: string;
+    phone?: string;
+  };
+  employee_code?: string;
+  full_name?: string;
+  firstName?: string;
+  lastName?: string;
+  role_id?: string;
 }
 
 export interface DepartmentRecord {
@@ -45,7 +49,7 @@ export interface DepartmentRecord {
   employeeCount: number;
 }
 
-const DEPARTMENT_CODES: Record<string, string> = {
+export const DEPARTMENT_CODES: Record<string, string> = {
   'Executive Management': 'EXE',
   'Sales & Business Development': 'SLS',
   'Field Engineering & Surveys': 'FLD',
@@ -54,6 +58,17 @@ const DEPARTMENT_CODES: Record<string, string> = {
   'Supply Chain & Inventory': 'SCM',
   'Finance & Compliance': 'FIN',
   'After-Sales & Customer Service': 'SUP'
+};
+
+export const DEPARTMENT_TEAMS: Record<string, string[]> = {
+  'Executive Management': ['Executive Board', 'Corporate Strategy', 'Internal Audit'],
+  'Sales & Business Development': ['Residential Solar Sales', 'Commercial & Industrial Sales', 'Inside Sales & Pre-Sales', 'Government Tenders'],
+  'Field Engineering & Surveys': ['Technical Site Survey Crew 1', 'Technical Site Survey Crew 2', 'Shadow & Feasibility Analysis', 'Rapid Assessment Team'],
+  'Engineering & Approvals': ['Solar System Design & Simulation', 'CEIG & Electrical Approvals', 'DISCOM Net-Metering Liaison', 'Structural & Mounting Analysis'],
+  'Operations & Installations': ['Installation Crew Alpha (Rooftop)', 'Installation Crew Beta (Commercial)', 'Commissioning & Testing', 'Quality & Safety Inspection'],
+  'Supply Chain & Inventory': ['Central Warehouse Operations', 'Procurement & Vendor Relations', 'Fleet & Dispatch Logistics', 'Inventory Quality Control'],
+  'Finance & Compliance': ['Accounts Receivable & Billing', 'Accounts Payable & Expenses', 'Tax & GST Compliance', 'Financial Audit & Reporting'],
+  'After-Sales & Customer Service': ['Rooftop Maintenance & AMC', 'Warranty & RMA Support', 'Customer Care & Ticketing', 'Field Repair Dispatch']
 };
 
 const VALID_ROLES = [
@@ -117,30 +132,48 @@ export class EmployeeService {
     if (!isActive) status = 'inactive';
     else if (!employee.isAvailable) status = 'on_leave';
 
+    const emergencyContact = (employee.emergency_contact_name || employee.emergencyContactName) ? {
+      name: employee.emergency_contact_name || employee.emergencyContactName,
+      relation: employee.emergency_contact_relation || employee.emergencyContactRelation,
+      phone: employee.emergency_contact_phone || employee.emergencyContactPhone
+    } : undefined;
+
     return {
       id: employee.id,
-      employeeCode: employee.employeeCode,
-      fullName: `${employee.firstName} ${employee.lastName}`.trim(),
+      employeeCode: employee.employeeCode || employee.employee_code,
+      employee_code: employee.employeeCode || employee.employee_code,
+      fullName: `${employee.firstName || employee.first_name || ''} ${employee.lastName || employee.last_name || ''}`.trim(),
+      full_name: `${employee.firstName || employee.first_name || ''} ${employee.lastName || employee.last_name || ''}`.trim(),
+      firstName: employee.firstName || employee.first_name,
+      lastName: employee.lastName || employee.last_name,
       email: employee.email,
       phone: employee.phone,
       department: employee.department,
       designation: employee.designation,
-      role: employee.roleId,
-      hourlyRate: Number(employee.hourlyRate) || 0,
+      role: employee.roleId || employee.role_id,
+      role_id: employee.roleId || employee.role_id,
+      hourlyRate: Number(employee.hourlyRate ?? employee.hourly_rate ?? 0),
       skills: Array.isArray(employee.skills) ? employee.skills : [],
-      isAvailable: employee.isAvailable,
-      activeJobs: employee.currentAssignedJobs,
+      isAvailable: employee.isAvailable ?? employee.is_available ?? true,
+      activeJobs: employee.currentAssignedJobs ?? employee.current_assigned_jobs ?? 0,
       rating: 4.8,
       status,
+      team: employee.team,
+      teamName: employee.team,
+      reportingManagerId: employee.reporting_manager_id || employee.reportingManagerId,
+      reportingManagerName: employee.reporting_manager_name || employee.reportingManagerName,
+      address: employee.address,
+      workLocation: employee.work_location || employee.workLocation || 'Pune Central HQ',
+      employmentType: employee.employment_type || employee.employmentType || 'full_time',
+      emergencyContact,
       avatarUrl: employee.profile?.avatarUrl || undefined,
-      joiningDate: employee.hireDate ? employee.hireDate.toISOString().split('T')[0] : undefined
+      joiningDate: employee.hireDate ? (employee.hireDate instanceof Date ? employee.hireDate.toISOString().split('T')[0] : String(employee.hireDate).split('T')[0]) : (employee.hire_date ? String(employee.hire_date).split('T')[0] : undefined)
     };
   }
 
   async getAuthorizedDepartments(user: any): Promise<DepartmentRecord[]> {
     if (!user) return [];
 
-<<<<<<< HEAD
     let allDepartments: DepartmentRecord[];
     try {
       const result = await dbPool.query(
@@ -158,14 +191,6 @@ export class EmployeeService {
     } catch (err) {
       console.error('Failed to load departments from database:', err);
       throw new AppError(503, 'DATABASE_UNAVAILABLE', 'Department data is temporarily unavailable.');
-=======
-    // Only explicit administrative roles may view all departments. Never infer
-    // authorization from free-text role titles, which are user-influenced data.
-    const isCompanyWide = user.role === 'owner_admin';
-
-    if (isCompanyWide) {
-      return DEPARTMENTS_DATA;
->>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
     }
 
     if (this.isCompanyWide(user)) return allDepartments;
@@ -202,41 +227,10 @@ export class EmployeeService {
 
     const conditions: any[] = [];
 
-<<<<<<< HEAD
     if (!this.isCompanyWide(user)) {
       const authorized = await this.getAuthorizedDepartments(user);
       if (authorized.length === 0) {
         return { employees: [], pagination: { page, limit, total: 0, totalPages: 1 } };
-=======
-    // Check if user is restricted to a subset of departments
-    const isCompanyWide = user.role === 'owner_admin';
-
-    let pool: EmployeeRecord[] = [...BASELINE_EMPLOYEES];
-
-    // Try reading from Prisma PostgreSQL database first if available
-    try {
-      const dbEmployees = await prisma.employee.findMany({
-        include: { profile: true }
-      });
-      if (dbEmployees.length > 0) {
-        pool = dbEmployees.map(e => ({
-          id: e.id,
-          employeeCode: e.employeeCode,
-          fullName: `${e.firstName} ${e.lastName}`.trim(),
-          email: e.email,
-          phone: e.phone,
-          department: e.department,
-          designation: e.designation,
-          role: e.roleId,
-          hourlyRate: Number(e.hourlyRate) || 0,
-          skills: e.skills || [],
-          isAvailable: e.isAvailable,
-          activeJobs: e.currentAssignedJobs,
-          rating: 4.8,
-          status: 'active' as const,
-          avatarUrl: e.profile?.avatarUrl || undefined
-        }));
->>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
       }
       conditions.push({ department: { in: authorized.map(dept => dept.name) } });
     }
@@ -298,8 +292,24 @@ export class EmployeeService {
     }
   }
 
-<<<<<<< HEAD
-  async createEmployee(user: any, data: Partial<EmployeeRecord> & { temporaryPassword?: string; emergencyContact?: any }): Promise<any> {
+  async getEmployeeById(id: string): Promise<EmployeeRecord | null> {
+    try {
+      const res = await dbPool.query(`
+        SELECT e.*, p.is_active, p.avatar_url, p.role_title
+        FROM employees e
+        LEFT JOIN profiles p ON p.id = e.profile_id
+        WHERE e.id::text = $1 OR LOWER(e.employee_code) = LOWER($1)
+        LIMIT 1
+      `, [id]);
+      if (res.rows.length === 0) return null;
+      return this.mapEmployee(res.rows[0]);
+    } catch (err) {
+      console.warn('Failed to get employee by id from PostgreSQL:', err);
+      return null;
+    }
+  }
+
+  async createEmployee(user: any, data: Partial<EmployeeRecord> & { temporaryPassword?: string; emergencyContact?: any; team?: string; workLocation?: string; employmentType?: string; address?: string }): Promise<any> {
     const fullName = (data.fullName || '').trim();
     if (!fullName || fullName.length < 2) {
       throw new AppError(422, 'VALIDATION_ERROR', 'Full Legal Name is required (minimum 2 characters).');
@@ -364,28 +374,6 @@ export class EmployeeService {
     try {
       await client.query('BEGIN');
 
-      const KNOWN_DEPARTMENTS = [
-        'Operations & Installations',
-        'Field Engineering & Surveys',
-        'Engineering & Approvals',
-        'Sales & Business Development',
-        'Supply Chain & Inventory',
-        'Finance & Compliance',
-        'After-Sales & Customer Service',
-        'Executive Management',
-        'Installation'
-      ];
-      const isKnown = KNOWN_DEPARTMENTS.some(d => d.toLowerCase() === department.toLowerCase());
-      if (!isKnown) {
-        const departmentCheck = await client.query(
-          'SELECT 1 FROM employees WHERE LOWER(TRIM(department)) = LOWER(TRIM($1)) LIMIT 1',
-          [department]
-        );
-        if (!departmentCheck.rowCount) {
-          throw new AppError(422, 'VALIDATION_ERROR', `Unknown department '${department}'.`);
-        }
-      }
-
       const codeCheck = await client.query(
         'SELECT id FROM employees WHERE LOWER(employee_code) = LOWER($1)',
         [employeeCode]
@@ -417,21 +405,49 @@ export class EmployeeService {
         `INSERT INTO employees (
           profile_id, employee_code, first_name, last_name, email, phone,
           department, designation, role_id, hourly_rate, skills, is_available,
-          current_assigned_jobs, hire_date, created_at
+          current_assigned_jobs, hire_date, team, work_location, employment_type,
+          address, emergency_contact_name, emergency_contact_relation, emergency_contact_phone,
+          created_at
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, 0, $12, NOW()
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, 0, $12, $13, $14, $15, $16, $17, $18, $19, NOW()
         ) RETURNING id, employee_code, first_name, last_name, email, phone,
           department, designation, role_id, hourly_rate, skills, is_available,
           current_assigned_jobs, hire_date, created_at`,
         [
           profileId, employeeCode, firstName, lastName, email, phone,
-          department, designation, roleId, hourlyRate, skills, hireDate
+          department, designation, roleId, hourlyRate, skills, hireDate,
+          data.team || null,
+          data.workLocation || 'Pune Central HQ',
+          data.employmentType || 'full_time',
+          data.address || null,
+          data.emergencyContact?.name || null,
+          data.emergencyContact?.relation || null,
+          data.emergencyContact?.phone || null
         ]
       );
 
-      await client.query('COMMIT');
-
       const created = employeeResult.rows[0];
+
+      // Add baseline onboarding career record
+      await client.query(`
+        INSERT INTO employee_career_history (
+          employee_id, event_type, new_designation, new_department, new_team,
+          new_role_id, new_hourly_rate, effective_date, authorized_by_id, authorized_by_name,
+          reason, notes, created_at
+        ) VALUES ($1, 'hire', $2, $3, $4, $5, $6, $7, $8, $9, 'Initial Onboarding', 'Employee registration baseline', NOW())
+      `, [
+        created.id,
+        designation,
+        department,
+        data.team || null,
+        roleId,
+        hourlyRate,
+        hireDate,
+        user?.id || 'usr-1',
+        user?.name || 'Managing Director'
+      ]);
+
+      await client.query('COMMIT');
 
       try {
         await auditService.record({
@@ -446,57 +462,6 @@ export class EmployeeService {
       } catch (auditError) {
         console.warn('Employee created but audit log failed:', auditError);
       }
-=======
-  async createEmployee(
-    user: any,
-    data: Partial<EmployeeRecord> & { password?: string }
-  ): Promise<EmployeeRecord> {
-    const role = data.role as UserRole;
-    if (!ROLE_DEFINITIONS[role]) {
-      throw new AppError(400, 'INVALID_ROLE', 'The selected role is not valid.');
-    }
-
-    const employeeCode = data.employeeCode || `EMP-${String(BASELINE_EMPLOYEES.length + 1).padStart(3, '0')}`;
-    // A temporary password is required for the employee to sign in. If none is
-    // supplied, generate a strong random one; the caller must communicate it.
-    const passwordHash = await hashPassword(
-      data.password || crypto.randomBytes(24).toString('base64')
-    );
-    const roleTitle = ROLE_DEFINITIONS[role].title;
-
-    try {
-      const created = await prisma.employee.create({
-        data: {
-          employeeCode,
-          firstName: data.fullName?.split(' ')[0] || '',
-          lastName: data.fullName?.split(' ').slice(1).join(' ') || '',
-          email: data.email!,
-          phone: data.phone || '',
-          department: data.department!,
-          designation: data.designation!,
-          roleId: role,
-          hourlyRate: data.hourlyRate || 0,
-          skills: data.skills || [],
-          isAvailable: data.isAvailable ?? true,
-          currentAssignedJobs: data.activeJobs || 0,
-          hireDate: data.joiningDate ? new Date(data.joiningDate) : new Date(),
-          profile: {
-            create: {
-              fullName: data.fullName || '',
-              email: data.email!,
-              phone: data.phone,
-              passwordHash,
-              roleId: role,
-              roleTitle,
-              department: data.department,
-              avatarUrl: data.avatarUrl,
-              isActive: true
-            }
-          }
-        },
-        include: { profile: true }
-      });
->>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
 
       return {
         id: created.id,
@@ -509,6 +474,7 @@ export class EmployeeService {
         email,
         phone,
         department,
+        team: data.team,
         designation,
         role: roleId,
         role_id: roleId,
@@ -521,7 +487,6 @@ export class EmployeeService {
         temporaryPassword
       };
     } catch (err: any) {
-<<<<<<< HEAD
       try {
         await client.query('ROLLBACK');
       } catch {
@@ -538,7 +503,7 @@ export class EmployeeService {
     }
   }
 
-  async updateEmployee(id: string, data: Partial<EmployeeRecord>): Promise<EmployeeRecord | null> {
+  async updateEmployee(id: string, data: Partial<EmployeeRecord> & { password?: string; emergencyContact?: any; team?: string; workLocation?: string; employmentType?: string; address?: string }, actor?: any): Promise<EmployeeRecord | null> {
     const existing = await prisma.employee.findUnique({
       where: { id },
       include: { profile: true }
@@ -574,44 +539,6 @@ export class EmployeeService {
         : [];
     }
     if (data.activeJobs !== undefined) employeeData.currentAssignedJobs = data.activeJobs;
-=======
-      if (err?.code === 'P2002') {
-        throw new AppError(409, 'DUPLICATE_EMPLOYEE', 'An employee with this email or employee code already exists.');
-      }
-      if (!allowDevFallback) throw err;
-      // Development-only in-memory fallback
-      const newEmp: EmployeeRecord = {
-        id: `emp-${Date.now()}`,
-        employeeCode,
-        fullName: data.fullName || '',
-        email: data.email || '',
-        phone: data.phone || '',
-        department: data.department || 'Installation & Commissioning',
-        designation: data.designation || '',
-        role: data.role || 'install_tech',
-        hourlyRate: data.hourlyRate || 250,
-        skills: data.skills || [],
-        isAvailable: data.isAvailable ?? true,
-        activeJobs: data.activeJobs || 0,
-        rating: 4.8,
-        status: 'active',
-        joiningDate: new Date().toISOString().split('T')[0],
-        reportingManagerId: 'usr-1',
-        reportingManagerName: 'Vikramaditya Rao'
-      };
-      BASELINE_EMPLOYEES.push(newEmp);
-      return newEmp;
-    }
-  }
-
-  async updateEmployee(
-    id: string,
-    data: Partial<EmployeeRecord> & { password?: string }
-  ): Promise<EmployeeRecord | null> {
-    if (data.role && !ROLE_DEFINITIONS[data.role as UserRole]) {
-      throw new AppError(400, 'INVALID_ROLE', 'The selected role is not valid.');
-    }
->>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
 
     try {
       const updated = await prisma.$transaction(async tx => {
@@ -628,82 +555,75 @@ export class EmployeeService {
           }
           if (data.email !== undefined) profileData.email = employeeData.email;
           if (data.phone !== undefined) profileData.phone = data.phone;
-          if (data.role !== undefined) profileData.roleId = data.role;
+          if (data.role !== undefined) {
+            profileData.roleId = data.role;
+            if (ROLE_DEFINITIONS[data.role as UserRole]) {
+              profileData.roleTitle = ROLE_DEFINITIONS[data.role as UserRole].title;
+            }
+          }
           if (data.department !== undefined) profileData.department = data.department;
           if (data.designation !== undefined) profileData.roleTitle = data.designation;
+          if (data.password) {
+            profileData.passwordHash = await hashPassword(data.password);
+          }
 
           await tx.profile.update({
             where: { id: existing.profileId },
             data: profileData
           });
+
+          if (isActive === false) {
+            await tx.session.updateMany({
+              where: { profileId: existing.profileId },
+              data: { isRevoked: true }
+            });
+          }
         }
 
         return employee;
       });
 
-<<<<<<< HEAD
-      return this.mapEmployee(updated);
+      // Update enhanced fields in SQL directly
+      await dbPool.query(`
+        UPDATE employees SET
+          team = COALESCE($1, team),
+          work_location = COALESCE($2, work_location),
+          employment_type = COALESCE($3, employment_type),
+          address = COALESCE($4, address),
+          emergency_contact_name = COALESCE($5, emergency_contact_name),
+          emergency_contact_relation = COALESCE($6, emergency_contact_relation),
+          emergency_contact_phone = COALESCE($7, emergency_contact_phone),
+          updated_at = NOW()
+        WHERE id = $8
+      `, [
+        data.team,
+        data.workLocation,
+        data.employmentType,
+        data.address,
+        data.emergencyContact?.name,
+        data.emergencyContact?.relation,
+        data.emergencyContact?.phone,
+        id
+      ]);
+
+      if (actor) {
+        await auditService.record({
+          actorId: actor.id,
+          actorName: actor.name,
+          actorRole: actor.role,
+          permissionUsed: 'employees.update',
+          action: 'EMPLOYEE_UPDATED',
+          entity: 'Employee',
+          entityId: id,
+          reason: `Updated details for employee ${existing.firstName} ${existing.lastName}`
+        });
+      }
+
+      return await this.getEmployeeById(id);
     } catch (err: any) {
       if (err?.code === 'P2025') return null;
       if (err?.code === 'P2002') {
         throw new AppError(409, 'DUPLICATE_RECORD', 'An employee with this code or email already exists.');
-=======
-      // Keep the linked login profile in sync with workforce changes.
-      if (updated.profileId) {
-        const profileData: Record<string, any> = {};
-        if (data.fullName) profileData.fullName = data.fullName;
-        if (data.email) profileData.email = data.email;
-        if (data.phone) profileData.phone = data.phone;
-        if (data.department) profileData.department = data.department;
-        if (data.avatarUrl) profileData.avatarUrl = data.avatarUrl;
-        if (data.role) {
-          profileData.roleId = data.role;
-          profileData.roleTitle = ROLE_DEFINITIONS[data.role as UserRole].title;
-        }
-        if (data.password) profileData.passwordHash = await hashPassword(data.password);
-        if (data.status) profileData.isActive = data.status === 'active';
-
-        if (Object.keys(profileData).length > 0) {
-          await prisma.profile.update({ where: { id: updated.profileId }, data: profileData });
-        }
-
-        if (profileData.isActive === false) {
-          await prisma.session.updateMany({
-            where: { profileId: updated.profileId },
-            data: { isRevoked: true }
-          });
-        }
-      }
-
-      return {
-        id: updated.id,
-        employeeCode: updated.employeeCode,
-        fullName: `${updated.firstName} ${updated.lastName}`.trim(),
-        email: updated.email,
-        phone: updated.phone,
-        department: updated.department,
-        designation: updated.designation,
-        role: updated.roleId,
-        hourlyRate: Number(updated.hourlyRate) || 0,
-        skills: updated.skills || [],
-        isAvailable: updated.isAvailable,
-        activeJobs: updated.currentAssignedJobs,
-        rating: 4.8,
-        status: (data.status as EmployeeRecord['status']) || 'active',
-        avatarUrl: updated.profile?.avatarUrl
-      };
-    } catch (err: any) {
-      if (err instanceof AppError) throw err;
-      if (err?.code === 'P2002') {
-        throw new AppError(409, 'DUPLICATE_EMPLOYEE', 'An employee with this email or employee code already exists.');
-      }
-      if (!allowDevFallback) throw err;
-      // Development-only in-memory fallback
-      const idx = BASELINE_EMPLOYEES.findIndex(e => e.id === id);
-      if (idx >= 0) {
-        BASELINE_EMPLOYEES[idx] = { ...BASELINE_EMPLOYEES[idx], ...data };
-        return BASELINE_EMPLOYEES[idx];
->>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
       }
       if (err?.code === 'P2003') {
         throw new AppError(422, 'VALIDATION_ERROR', 'The selected role or department is invalid.');
@@ -713,10 +633,327 @@ export class EmployeeService {
     }
   }
 
-  /**
-   * Soft-deactivates an employee and revokes their login sessions instead of
-   * deleting the record, preserving audit history.
-   */
+  // 4. Promote Employee Workflow
+  async promoteEmployee(id: string, data: {
+    newDesignation: string;
+    newDepartment?: string;
+    newTeam?: string;
+    newRoleId: string;
+    newHourlyRate: number;
+    reportingManagerId?: string;
+    reportingManagerName?: string;
+    effectiveDate: string;
+    reason: string;
+    notes?: string;
+  }, actor: any): Promise<any> {
+    const existing = await this.getEmployeeById(id);
+    if (!existing) {
+      throw new AppError(404, 'NOT_FOUND', `Employee '${id}' not found.`);
+    }
+
+    if (!VALID_ROLES.includes(data.newRoleId)) {
+      throw new AppError(422, 'VALIDATION_ERROR', `Invalid target role '${data.newRoleId}'.`);
+    }
+
+    const newDept = data.newDepartment || existing.department;
+    const newTeam = data.newTeam || existing.team;
+
+    const client = await dbPool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Update employees table
+      await client.query(`
+        UPDATE employees SET
+          designation = $1,
+          role_id = $2,
+          hourly_rate = $3,
+          department = $4,
+          team = $5,
+          reporting_manager_id = $6,
+          reporting_manager_name = $7,
+          updated_at = NOW()
+        WHERE id = $8
+      `, [
+        data.newDesignation.trim(),
+        data.newRoleId,
+        data.newHourlyRate,
+        newDept,
+        newTeam || null,
+        data.reportingManagerId || null,
+        data.reportingManagerName || null,
+        id
+      ]);
+
+      // Update profiles table
+      const roleDef = ROLE_DEFINITIONS[data.newRoleId as UserRole];
+      await client.query(`
+        UPDATE profiles SET
+          role_id = $1,
+          role_title = $2,
+          department = $3,
+          updated_at = NOW()
+        WHERE id = (SELECT profile_id FROM employees WHERE id = $4)
+      `, [
+        data.newRoleId,
+        roleDef?.title || data.newDesignation.trim(),
+        newDept,
+        id
+      ]);
+
+      // Insert into employee_career_history
+      const historyRes = await client.query(`
+        INSERT INTO employee_career_history (
+          employee_id, event_type,
+          previous_designation, new_designation,
+          previous_department, new_department,
+          previous_team, new_team,
+          previous_role_id, new_role_id,
+          previous_hourly_rate, new_hourly_rate,
+          reporting_manager_id, reporting_manager_name,
+          effective_date, authorized_by_id, authorized_by_name,
+          reason, notes, created_at
+        ) VALUES (
+          $1, 'promotion',
+          $2, $3,
+          $4, $5,
+          $6, $7,
+          $8, $9,
+          $10, $11,
+          $12, $13,
+          $14, $15, $16,
+          $17, $18, NOW()
+        ) RETURNING *
+      `, [
+        id,
+        existing.designation,
+        data.newDesignation.trim(),
+        existing.department,
+        newDept,
+        existing.team || null,
+        newTeam || null,
+        existing.role,
+        data.newRoleId,
+        existing.hourlyRate,
+        data.newHourlyRate,
+        data.reportingManagerId || null,
+        data.reportingManagerName || null,
+        data.effectiveDate,
+        actor?.id || 'usr-1',
+        actor?.name || 'Administrator',
+        data.reason,
+        data.notes || null
+      ]);
+
+      await client.query('COMMIT');
+
+      await auditService.record({
+        actorId: actor?.id || 'usr-1',
+        actorName: actor?.name || 'Administrator',
+        actorRole: actor?.role || 'owner_admin',
+        permissionUsed: 'employees.update',
+        action: 'EMPLOYEE_PROMOTION',
+        entity: 'Employee',
+        entityId: id,
+        previousState: {
+          designation: existing.designation,
+          roleId: existing.role,
+          hourlyRate: existing.hourlyRate,
+          department: existing.department
+        },
+        newState: {
+          designation: data.newDesignation,
+          roleId: data.newRoleId,
+          hourlyRate: data.newHourlyRate,
+          department: newDept
+        },
+        reason: data.reason
+      });
+
+      const updated = await this.getEmployeeById(id);
+      return {
+        employee: updated,
+        careerEvent: historyRes.rows[0]
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error('Promotion error:', err);
+      throw new AppError(500, 'DATABASE_ERROR', 'Failed to execute promotion workflow.');
+    } finally {
+      client.release();
+    }
+  }
+
+  // 5. Transfer Employee Department Workflow
+  async transferEmployee(id: string, data: {
+    newDepartment: string;
+    newTeam: string;
+    reportingManagerId?: string;
+    reportingManagerName?: string;
+    effectiveDate: string;
+    reason: string;
+    notes?: string;
+  }, actor: any): Promise<any> {
+    const existing = await this.getEmployeeById(id);
+    if (!existing) {
+      throw new AppError(404, 'NOT_FOUND', `Employee '${id}' not found.`);
+    }
+
+    // Validate that newTeam belongs to newDepartment
+    const allowedTeams = DEPARTMENT_TEAMS[data.newDepartment] || [];
+    const isTeamValid = allowedTeams.length === 0 || allowedTeams.some(t => t.toLowerCase() === data.newTeam.toLowerCase() || data.newTeam.toLowerCase().includes(t.toLowerCase()) || t.toLowerCase().includes(data.newTeam.toLowerCase()));
+    if (!isTeamValid) {
+      throw new AppError(422, 'VALIDATION_ERROR', `Team '${data.newTeam}' is not part of department '${data.newDepartment}'. Allowed teams: ${allowedTeams.join(', ')}`);
+    }
+
+    const client = await dbPool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Update employees table
+      await client.query(`
+        UPDATE employees SET
+          department = $1,
+          team = $2,
+          reporting_manager_id = $3,
+          reporting_manager_name = $4,
+          updated_at = NOW()
+        WHERE id = $5
+      `, [
+        data.newDepartment.trim(),
+        data.newTeam.trim(),
+        data.reportingManagerId || null,
+        data.reportingManagerName || null,
+        id
+      ]);
+
+      // Update profiles table department
+      await client.query(`
+        UPDATE profiles SET
+          department = $1,
+          updated_at = NOW()
+        WHERE id = (SELECT profile_id FROM employees WHERE id = $2)
+      `, [
+        data.newDepartment.trim(),
+        id
+      ]);
+
+      // Record in career history
+      const historyRes = await client.query(`
+        INSERT INTO employee_career_history (
+          employee_id, event_type,
+          previous_department, new_department,
+          previous_team, new_team,
+          previous_designation, new_designation,
+          previous_role_id, new_role_id,
+          previous_hourly_rate, new_hourly_rate,
+          reporting_manager_id, reporting_manager_name,
+          effective_date, authorized_by_id, authorized_by_name,
+          reason, notes, created_at
+        ) VALUES (
+          $1, 'department_transfer',
+          $2, $3,
+          $4, $5,
+          $6, $6,
+          $7, $7,
+          $8, $8,
+          $9, $10,
+          $11, $12, $13,
+          $14, $15, NOW()
+        ) RETURNING *
+      `, [
+        id,
+        existing.department,
+        data.newDepartment.trim(),
+        existing.team || null,
+        data.newTeam.trim(),
+        existing.designation,
+        existing.role,
+        existing.hourlyRate,
+        data.reportingManagerId || null,
+        data.reportingManagerName || null,
+        data.effectiveDate,
+        actor?.id || 'usr-1',
+        actor?.name || 'Administrator',
+        data.reason,
+        data.notes || null
+      ]);
+
+      await client.query('COMMIT');
+
+      await auditService.record({
+        actorId: actor?.id || 'usr-1',
+        actorName: actor?.name || 'Administrator',
+        actorRole: actor?.role || 'owner_admin',
+        permissionUsed: 'employees.update',
+        action: 'EMPLOYEE_DEPARTMENT_TRANSFER',
+        entity: 'Employee',
+        entityId: id,
+        previousState: {
+          department: existing.department,
+          team: existing.team
+        },
+        newState: {
+          department: data.newDepartment,
+          team: data.newTeam
+        },
+        reason: data.reason
+      });
+
+      const updated = await this.getEmployeeById(id);
+      return {
+        employee: updated,
+        careerEvent: historyRes.rows[0]
+      };
+    } catch (err: any) {
+      await client.query('ROLLBACK');
+      if (err instanceof AppError) throw err;
+      console.error('Department transfer error:', err);
+      throw new AppError(500, 'DATABASE_ERROR', 'Failed to execute department transfer.');
+    } finally {
+      client.release();
+    }
+  }
+
+  // 6. Get Career History Timeline
+  async getCareerHistory(id: string): Promise<any[]> {
+    try {
+      const res = await dbPool.query(`
+        SELECT *
+        FROM employee_career_history
+        WHERE employee_id::text = $1
+        ORDER BY effective_date DESC, created_at DESC
+      `, [id]);
+
+      return res.rows.map(row => ({
+        id: row.id,
+        employeeId: row.employee_id,
+        eventType: row.event_type,
+        previousDesignation: row.previous_designation,
+        newDesignation: row.new_designation,
+        previousDepartment: row.previous_department,
+        newDepartment: row.new_department,
+        previousTeam: row.previous_team,
+        newTeam: row.new_team,
+        previousRoleId: row.previous_role_id,
+        newRoleId: row.new_role_id,
+        previousHourlyRate: Number(row.previous_hourly_rate || 0),
+        newHourlyRate: Number(row.new_hourly_rate || 0),
+        reportingManagerId: row.reporting_manager_id,
+        reportingManagerName: row.reporting_manager_name,
+        effectiveDate: row.effective_date,
+        authorizedById: row.authorized_by_id,
+        authorizedByName: row.authorized_by_name,
+        reason: row.reason,
+        notes: row.notes,
+        createdAt: row.created_at
+      }));
+    } catch (err) {
+      console.warn('Failed to fetch employee career history:', err);
+      return [];
+    }
+  }
+
   async deleteEmployee(id: string): Promise<boolean> {
     const existing = await prisma.employee.findUnique({
       where: { id },
@@ -725,48 +962,26 @@ export class EmployeeService {
     if (!existing) return false;
 
     try {
-<<<<<<< HEAD
-      await prisma.$transaction(async tx => {
-        await tx.employee.delete({ where: { id } });
-        if (existing.profileId) {
-          await tx.profile.delete({ where: { id: existing.profileId } });
-        }
-      });
-      return true;
-    } catch (err: any) {
-      if (err?.code === 'P2025') return false;
-      console.error('Failed to delete employee from database:', err);
-      throw new AppError(500, 'DATABASE_ERROR', 'Employee could not be deleted.');
-=======
-      const employee = await prisma.employee.findUnique({ where: { id } });
-      if (!employee) return false;
-
       await prisma.employee.update({
         where: { id },
         data: { isAvailable: false }
       });
 
-      if (employee.profileId) {
+      if (existing.profileId) {
         await prisma.profile.update({
-          where: { id: employee.profileId },
+          where: { id: existing.profileId },
           data: { isActive: false }
         });
         await prisma.session.updateMany({
-          where: { profileId: employee.profileId },
+          where: { profileId: existing.profileId },
           data: { isRevoked: true }
         });
       }
       return true;
-    } catch (err) {
-      if (!allowDevFallback) throw err;
-      // Development-only in-memory fallback
-      const idx = BASELINE_EMPLOYEES.findIndex(e => e.id === id);
-      if (idx >= 0) {
-        BASELINE_EMPLOYEES[idx] = { ...BASELINE_EMPLOYEES[idx], status: 'inactive', isAvailable: false };
-        return true;
-      }
-      return false;
->>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
+    } catch (err: any) {
+      if (err?.code === 'P2025') return false;
+      console.error('Failed to delete/deactivate employee from database:', err);
+      throw new AppError(500, 'DATABASE_ERROR', 'Employee could not be deactivated.');
     }
   }
 }

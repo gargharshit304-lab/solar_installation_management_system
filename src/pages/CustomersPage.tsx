@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, Search, Filter, Plus, Download, Mail, Phone, MapPin, 
   Eye, Calendar, ArrowRight, Zap, CheckCircle2, XCircle, FileText, ShieldCheck
@@ -7,6 +7,7 @@ import { useApp } from '../context/AppContext';
 import { Customer, LeadStatus, SystemType } from '../types';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { Modal } from '../components/common/Modal';
+import { Pagination } from '../components/common/Pagination';
 
 export const CustomersPage: React.FC = () => {
   const { 
@@ -31,6 +32,14 @@ export const CustomersPage: React.FC = () => {
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [cityFilter, setCityFilter] = useState<string>('all');
   const [salespersonFilter, setSalespersonFilter] = useState<string>('all');
+
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, sourceFilter, cityFilter, salespersonFilter]);
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -67,6 +76,9 @@ export const CustomersPage: React.FC = () => {
     const matchesSales = salespersonFilter === 'all' || c.assignedSalesperson === salespersonFilter;
     return matchesSearch && matchesStatus && matchesSource && matchesCity && matchesSales;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / pageSize));
+  const pagedCustomers = filteredCustomers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const handleCreateCustomer = (e: React.FormEvent) => {
     e.preventDefault();
@@ -275,7 +287,7 @@ export const CustomersPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-warmGrey/40 text-charcoal">
-              {filteredCustomers.map(customer => (
+              {pagedCustomers.map(customer => (
                 <tr 
                   key={customer.id} 
                   className="hover:bg-sand-50/70 transition-colors cursor-pointer"
@@ -323,6 +335,19 @@ export const CustomersPage: React.FC = () => {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Server/Client Unified Pagination */}
+        <div className="p-3 border-t border-warmGrey/60 bg-sand-50/40">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalRecords={filteredCustomers.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+            itemLabel="customers"
+          />
         </div>
       </div>
 

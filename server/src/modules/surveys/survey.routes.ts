@@ -4,20 +4,30 @@ import { requireAuth } from '../../middleware/auth.middleware';
 import { requireAction } from '../../middleware/rbac.middleware';
 import { validateRequest } from '../../middleware/validate.middleware';
 import { surveyService } from './survey.service';
-import { AppError } from '../../utils/response';
+import { AppError, sendSuccess } from '../../utils/response';
+import { parsePaginationParams, buildPaginationMeta } from '../../utils/pagination';
 
 const router = Router();
 
-// 1. Get Surveys List with queue & status filters
+// 1. Get Surveys List with queue & status filters + pagination
 router.get('/', requireAuth, requireAction('surveys', 'view'), async (req, res, next) => {
   try {
-    const { queue, status, reviewerId, technicianId, search } = req.query as Record<string, string>;
-    const surveys = await surveyService.getSurveys({ queue, status, reviewerId, technicianId, search });
-    res.json({
-      success: true,
-      data: surveys,
-      meta: { requestId: req.headers['x-request-id'] || 'req-srv-list', timestamp: new Date().toISOString() }
+    const params = parsePaginationParams(req.query, 20);
+    const { queue, status, reviewerId, technicianId, search, all } = req.query as Record<string, string>;
+    const surveys = await surveyService.getSurveys({
+      queue,
+      status,
+      reviewerId,
+      technicianId,
+      search: search || params.search
     });
+
+    const totalRecords = surveys.length;
+    const isAll = all === 'true' || req.query.pageSize === 'all';
+    const paged = isAll ? surveys : surveys.slice(params.offset, params.offset + params.limit);
+    const pagination = buildPaginationMeta(params.page, isAll ? totalRecords : params.pageSize, totalRecords);
+
+    sendSuccess(res, paged, 200, pagination);
   } catch (err) {
     next(err);
   }
@@ -56,7 +66,7 @@ router.get('/eligible-approvers', requireAuth, requireAction('surveys', 'view'),
 // 4. Get Survey By ID
 router.get('/:id', requireAuth, requireAction('surveys', 'view'), async (req, res, next) => {
   try {
-    const survey = await surveyService.getSurveyById(req.params.id);
+    const survey = await surveyService.getSurveyById(req.params.id as string);
     res.json({
       success: true,
       data: survey,
@@ -68,36 +78,28 @@ router.get('/:id', requireAuth, requireAction('surveys', 'view'), async (req, re
 });
 
 // 5. Assign Reviewer
-router.post('/:id/assign-reviewer', requireAuth, requireAction('surveys', 'assign'), async (req, res, next) => {
+router.post('/:id/assign-reviewer', requireAuth, requireAction('surveys', 'edit'), async (req, res, next) => {
   try {
     const { reviewerId } = req.body;
     if (!reviewerId) throw new AppError(422, 'VALIDATION_FAILED', 'reviewerId is required');
 
     const actor = { id: req.user!.id, name: req.user!.name, role: req.user!.role };
-    const updated = await surveyService.assignReviewer(req.params.id, reviewerId, actor);
-    res.json({
-      success: true,
-      data: updated,
-      meta: { requestId: req.headers['x-request-id'] || 'req-srv-asg-rev', timestamp: new Date().toISOString() }
-    });
+    const updated = await surveyService.assignReviewer(req.params.id as string, reviewerId, actor);
+    sendSuccess(res, updated);
   } catch (err) {
     next(err);
   }
 });
 
 // 6. Assign Approver
-router.post('/:id/assign-approver', requireAuth, requireAction('surveys', 'assign'), async (req, res, next) => {
+router.post('/:id/assign-approver', requireAuth, requireAction('surveys', 'edit'), async (req, res, next) => {
   try {
     const { approverId } = req.body;
     if (!approverId) throw new AppError(422, 'VALIDATION_FAILED', 'approverId is required');
 
     const actor = { id: req.user!.id, name: req.user!.name, role: req.user!.role };
-    const updated = await surveyService.assignApprover(req.params.id, approverId, actor);
-    res.json({
-      success: true,
-      data: updated,
-      meta: { requestId: req.headers['x-request-id'] || 'req-srv-asg-app', timestamp: new Date().toISOString() }
-    });
+    const updated = await surveyService.assignApprover(req.params.id as string, approverId, actor);
+    sendSuccess(res, updated);
   } catch (err) {
     next(err);
   }
@@ -107,7 +109,7 @@ router.post('/:id/assign-approver', requireAuth, requireAction('surveys', 'assig
 router.post('/:id/start-review', requireAuth, requireAction('surveys', 'edit'), async (req, res, next) => {
   try {
     const actor = { id: req.user!.id, name: req.user!.name, role: req.user!.role };
-    const updated = await surveyService.startReview(req.params.id, actor);
+    const updated = await surveyService.startReview(req.params.id as string, actor);
     res.json({
       success: true,
       data: updated,
@@ -123,7 +125,7 @@ router.post('/:id/review-notes', requireAuth, requireAction('surveys', 'edit'), 
   try {
     const { notes } = req.body;
     const actor = { id: req.user!.id, name: req.user!.name, role: req.user!.role };
-    const updated = await surveyService.saveReviewNotes(req.params.id, notes || '', actor);
+    const updated = await surveyService.saveReviewNotes(req.params.id as string, notes || '', actor);
     res.json({
       success: true,
       data: updated,
@@ -141,7 +143,7 @@ router.post('/:id/request-corrections', requireAuth, requireAction('surveys', 'e
     if (!comments?.trim()) throw new AppError(422, 'VALIDATION_FAILED', 'Correction comments are mandatory');
 
     const actor = { id: req.user!.id, name: req.user!.name, role: req.user!.role };
-    const updated = await surveyService.requestCorrections(req.params.id, comments, actor);
+    const updated = await surveyService.requestCorrections(req.params.id as string, comments, actor);
     res.json({
       success: true,
       data: updated,
@@ -188,7 +190,7 @@ const resubmitSurveySchema = z.object({
 router.post('/:id/resubmit', requireAuth, requireAction('surveys', 'edit'), validateRequest({ body: resubmitSurveySchema }), async (req, res, next) => {
   try {
     const actor = { id: req.user!.id, name: req.user!.name, role: req.user!.role };
-    const updated = await surveyService.resubmitSurvey(req.params.id, req.body, actor);
+    const updated = await surveyService.resubmitSurvey(req.params.id as string, req.body, actor);
     res.json({
       success: true,
       data: updated,
@@ -206,7 +208,7 @@ router.post('/:id/recommend', requireAuth, requireAction('surveys', 'edit'), asy
     if (!recommendation) throw new AppError(422, 'VALIDATION_FAILED', 'recommendation is required');
 
     const actor = { id: req.user!.id, name: req.user!.name, role: req.user!.role };
-    const updated = await surveyService.submitRecommendation(req.params.id, recommendation, notes || '', actor);
+    const updated = await surveyService.submitRecommendation(req.params.id as string, recommendation, notes || '', actor);
     res.json({
       success: true,
       data: updated,
@@ -217,35 +219,27 @@ router.post('/:id/recommend', requireAuth, requireAction('surveys', 'edit'), asy
   }
 });
 
-// 12. Final Technical Approval (Explicit surveys.approve authority required + Self-approval prohibited)
-router.post('/:id/approve', requireAuth, requireAction('surveys', 'approve'), async (req, res, next) => {
+// 12. Final Technical Approval (Explicit surveys.edit authority required + Self-approval prohibited)
+router.post('/:id/approve', requireAuth, requireAction('surveys', 'edit'), async (req, res, next) => {
   try {
     const { notes } = req.body;
     const actor = { id: req.user!.id, name: req.user!.name, role: req.user!.role };
-    const updated = await surveyService.approveSurvey(req.params.id, notes || '', actor);
-    res.json({
-      success: true,
-      data: updated,
-      meta: { requestId: req.headers['x-request-id'] || 'req-srv-approve', timestamp: new Date().toISOString() }
-    });
+    const updated = await surveyService.approveSurvey(req.params.id as string, notes || '', actor);
+    sendSuccess(res, updated);
   } catch (err) {
     next(err);
   }
 });
 
 // 13. Reject Survey Report
-router.post('/:id/reject', requireAuth, requireAction('surveys', 'approve'), async (req, res, next) => {
+router.post('/:id/reject', requireAuth, requireAction('surveys', 'edit'), async (req, res, next) => {
   try {
     const { reason } = req.body;
     if (!reason?.trim()) throw new AppError(422, 'VALIDATION_FAILED', 'Rejection reason is required');
 
     const actor = { id: req.user!.id, name: req.user!.name, role: req.user!.role };
-    const updated = await surveyService.rejectSurvey(req.params.id, reason, actor);
-    res.json({
-      success: true,
-      data: updated,
-      meta: { requestId: req.headers['x-request-id'] || 'req-srv-reject', timestamp: new Date().toISOString() }
-    });
+    const updated = await surveyService.rejectSurvey(req.params.id as string, reason, actor);
+    sendSuccess(res, updated);
   } catch (err) {
     next(err);
   }
@@ -254,7 +248,7 @@ router.post('/:id/reject', requireAuth, requireAction('surveys', 'approve'), asy
 // 14. Get Survey Workflow Audit Trail
 router.get('/:id/audit-trail', requireAuth, requireAction('surveys', 'view'), async (req, res, next) => {
   try {
-    const auditTrail = await surveyService.getAuditTrail(req.params.id);
+    const auditTrail = await surveyService.getAuditTrail(req.params.id as string);
     res.json({
       success: true,
       data: auditTrail,

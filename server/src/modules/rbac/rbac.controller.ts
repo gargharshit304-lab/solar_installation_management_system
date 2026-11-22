@@ -12,11 +12,20 @@ export class RbacController {
     }
   }
 
+  async getVersion(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const versionInfo = await rbacService.getRbacVersion();
+      sendSuccess(res, versionInfo);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async updatePermissions(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { roleKey } = req.params;
       const { permissions } = req.body;
-      const updatedRole = await rbacService.updateRolePermissions(roleKey, permissions, req.user);
+      const updatedRole = await rbacService.updateRolePermissions(String(roleKey), permissions, req.user);
       sendSuccess(res, updatedRole, 200);
     } catch (err) {
       next(err);
@@ -43,7 +52,7 @@ export class RbacController {
 
   async revokeDelegation(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const delegation = await rbacService.revokeDelegation(req.params.id, req.user);
+      const delegation = await rbacService.revokeDelegation(String(req.params.id), req.user);
       sendSuccess(res, delegation);
     } catch (err) {
       next(err);

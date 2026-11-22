@@ -11,45 +11,47 @@ export interface DynamicRoleDefinition {
   department: string;
   description: string;
   permissions: Record<string, string[]>;
+  version?: number;
+  updatedAt?: string | Date;
 }
 
-// Initial baseline matrix permissions matching INITIAL_ROLES_PERMISSIONS
+// Initial baseline matrix permissions matching the simplified 4-permission model (view, create, edit, delete)
 const INITIAL_ROLE_MATRIX: Record<UserRole, Record<string, string[]>> = {
   owner_admin: {
-    overview: ['view', 'manage', 'export'],
-    customers: ['view', 'create', 'edit', 'delete', 'manage', 'export'],
-    enquiries: ['view', 'create', 'edit', 'delete', 'assign', 'manage', 'export'],
-    follow_ups: ['view', 'create', 'edit', 'delete', 'manage', 'export'],
-    surveys: ['view', 'create', 'edit', 'delete', 'assign', 'approve', 'manage', 'export'],
-    survey_review: ['view', 'approve', 'edit', 'manage'],
-    quotations: ['view', 'create', 'edit', 'delete', 'approve', 'manage', 'export'],
-    orders: ['view', 'create', 'edit', 'delete', 'approve', 'manage', 'export'],
-    inventory: ['view', 'create', 'edit', 'delete', 'manage', 'export'],
-    dispatch: ['view', 'create', 'edit', 'approve', 'manage', 'export'],
-    installations: ['view', 'create', 'edit', 'assign', 'approve', 'manage', 'export'],
-    workforce: ['view', 'create', 'edit', 'delete', 'assign', 'approve', 'manage', 'export'],
-    departments: ['view', 'create', 'edit', 'delete', 'manage', 'export'],
-    roles_permissions: ['view', 'create', 'edit', 'delete', 'manage'],
-    roles: ['view', 'create', 'edit', 'delete', 'manage'],
-    permissions: ['view', 'create', 'edit', 'delete', 'manage'],
-    approvals: ['view', 'approve', 'edit', 'delete', 'manage'],
-    finance: ['view', 'create', 'edit', 'approve', 'manage', 'export'],
-    reports: ['view', 'manage', 'export'],
-    ai_agents: ['view', 'create', 'edit', 'manage'],
-    warranty: ['view', 'create', 'edit', 'approve', 'manage', 'export'],
-    service: ['view', 'create', 'edit', 'delete', 'manage'],
-    subsidies: ['view', 'create', 'edit', 'approve', 'manage', 'export'],
-    activity_center: ['view', 'export'],
-    audit: ['view', 'view_company_wide', 'export'],
-    settings: ['view', 'edit', 'manage']
+    overview: ['view', 'create', 'edit', 'delete'],
+    customers: ['view', 'create', 'edit', 'delete'],
+    enquiries: ['view', 'create', 'edit', 'delete'],
+    follow_ups: ['view', 'create', 'edit', 'delete'],
+    surveys: ['view', 'create', 'edit', 'delete'],
+    survey_review: ['view', 'create', 'edit', 'delete'],
+    quotations: ['view', 'create', 'edit', 'delete'],
+    orders: ['view', 'create', 'edit', 'delete'],
+    inventory: ['view', 'create', 'edit', 'delete'],
+    dispatch: ['view', 'create', 'edit', 'delete'],
+    installations: ['view', 'create', 'edit', 'delete'],
+    workforce: ['view', 'create', 'edit', 'delete'],
+    departments: ['view', 'create', 'edit', 'delete'],
+    roles_permissions: ['view', 'create', 'edit', 'delete'],
+    roles: ['view', 'create', 'edit', 'delete'],
+    permissions: ['view', 'create', 'edit', 'delete'],
+    approvals: ['view', 'create', 'edit', 'delete'],
+    finance: ['view', 'create', 'edit', 'delete'],
+    reports: ['view', 'create', 'edit', 'delete'],
+    ai_agents: ['view', 'create', 'edit', 'delete'],
+    warranty: ['view', 'create', 'edit', 'delete'],
+    service: ['view', 'create', 'edit', 'delete'],
+    subsidies: ['view', 'create', 'edit', 'delete'],
+    activity_center: ['view', 'create', 'edit', 'delete'],
+    audit: ['view'],
+    settings: ['view', 'create', 'edit', 'delete']
   },
   sales_exec: {
     overview: ['view'],
     customers: ['view', 'create', 'edit'],
     enquiries: ['view', 'create', 'edit'],
     follow_ups: ['view', 'create', 'edit'],
-    surveys: ['view', 'create', 'assign'],
-    quotations: ['view', 'create', 'edit', 'export'],
+    surveys: ['view', 'create', 'edit'],
+    quotations: ['view', 'create', 'edit'],
     orders: ['view', 'create'],
     subsidies: ['view', 'create'],
     reports: ['view']
@@ -62,15 +64,15 @@ const INITIAL_ROLE_MATRIX: Record<UserRole, Record<string, string[]>> = {
   engineering_lead: {
     overview: ['view'],
     surveys: ['view', 'edit'],
-    survey_review: ['view', 'approve', 'edit'],
+    survey_review: ['view', 'edit'],
     installations: ['view'],
     reports: ['view']
   },
   warehouse_mgr: {
     overview: ['view'],
-    inventory: ['view', 'create', 'edit', 'manage', 'export'],
-    dispatch: ['view', 'create', 'edit', 'manage', 'export'],
-    warranty: ['view'], // Read-only warranty trace
+    inventory: ['view', 'create', 'edit'],
+    dispatch: ['view', 'create', 'edit'],
+    warranty: ['view'],
     installations: ['view']
   },
   install_tech: {
@@ -82,17 +84,17 @@ const INITIAL_ROLE_MATRIX: Record<UserRole, Record<string, string[]>> = {
   },
   support_exec: {
     overview: ['view'],
-    service: ['view', 'create', 'edit', 'manage'],
-    warranty: ['view', 'create', 'edit', 'approve', 'manage'],
+    service: ['view', 'create', 'edit'],
+    warranty: ['view', 'create', 'edit'],
     customers: ['view']
   },
   accountant: {
     overview: ['view'],
-    finance: ['view', 'create', 'edit', 'approve', 'manage', 'export'],
-    orders: ['view', 'edit', 'export'],
-    subsidies: ['view', 'edit', 'approve'],
-    reports: ['view', 'export'],
-    approvals: ['view', 'create']
+    finance: ['view', 'create', 'edit'],
+    orders: ['view', 'edit'],
+    subsidies: ['view', 'edit'],
+    reports: ['view'],
+    approvals: ['view', 'create', 'edit']
   }
 };
 
@@ -101,20 +103,74 @@ let inMemoryRoleMatrix: Record<string, Record<string, string[]>> = JSON.parse(JS
 let inMemoryDelegations: any[] = [...INITIAL_DELEGATIONS];
 
 export class RbacService {
+  private lastSyncedAt: number = 0;
+  private maxVersion: number = 1;
+  private latestUpdatedAt: Date = new Date();
+
+  async ensureLatestPermissions(force: boolean = false): Promise<void> {
+    const now = Date.now();
+    if (!force && this.lastSyncedAt > 0 && (now - this.lastSyncedAt) < 5000) {
+      return;
+    }
+
+    try {
+      const dbRoles = await prisma.role.findMany({ orderBy: { id: 'asc' } });
+      if (dbRoles && dbRoles.length > 0) {
+        let maxV = 1;
+        let latestUp = new Date(0);
+        for (const r of dbRoles) {
+          const roleKey = r.id;
+          let perms: Record<string, string[]> = {};
+          if (r.permissions && typeof r.permissions === 'object' && !Array.isArray(r.permissions)) {
+            perms = r.permissions as Record<string, string[]>;
+          } else if (inMemoryRoleMatrix[roleKey]) {
+            perms = inMemoryRoleMatrix[roleKey];
+          }
+          inMemoryRoleMatrix[roleKey] = perms;
+          if (r.version && r.version > maxV) maxV = r.version;
+          if (r.updatedAt && new Date(r.updatedAt) > latestUp) latestUp = new Date(r.updatedAt);
+        }
+        this.maxVersion = maxV;
+        this.latestUpdatedAt = latestUp;
+        this.lastSyncedAt = now;
+      }
+    } catch (err) {
+      console.error('Failed to sync permissions from database:', err);
+    }
+  }
+
+  async getRbacVersion(): Promise<{ version: number; lastModified: string }> {
+    await this.ensureLatestPermissions();
+    return {
+      version: this.maxVersion,
+      lastModified: this.latestUpdatedAt.toISOString()
+    };
+  }
+
   async getRoleDefinitions(): Promise<DynamicRoleDefinition[]> {
     try {
-      const dbRoles = await prisma.role.findMany();
+      const dbRoles = await prisma.role.findMany({ orderBy: { id: 'asc' } });
       if (dbRoles.length > 0) {
-        return dbRoles.map(r => {
+        let maxV = 1;
+        let latestUp = new Date(0);
+        const list = dbRoles.map(r => {
           const roleKey = r.id as UserRole;
           const def = ROLE_DEFINITIONS[roleKey] || {
             title: r.name,
             department: 'General',
             description: r.description || ''
           };
-          const permissions = (r.permissions && typeof r.permissions === 'object')
-            ? (r.permissions as Record<string, string[]>)
-            : inMemoryRoleMatrix[roleKey] || {};
+          let permissions: Record<string, string[]> = {};
+          if (r.permissions && typeof r.permissions === 'object' && !Array.isArray(r.permissions)) {
+            permissions = r.permissions as Record<string, string[]>;
+          } else if (inMemoryRoleMatrix[roleKey]) {
+            permissions = inMemoryRoleMatrix[roleKey];
+          }
+
+          // Keep in-memory cache synchronized with PostgreSQL
+          inMemoryRoleMatrix[roleKey] = permissions;
+          if (r.version && r.version > maxV) maxV = r.version;
+          if (r.updatedAt && new Date(r.updatedAt) > latestUp) latestUp = new Date(r.updatedAt);
 
           return {
             id: r.id,
@@ -122,12 +178,19 @@ export class RbacService {
             name: r.name || def.title,
             department: def.department,
             description: r.description || def.description,
-            permissions
+            permissions,
+            version: r.version,
+            updatedAt: r.updatedAt
           };
         });
+
+        this.maxVersion = maxV;
+        this.latestUpdatedAt = latestUp;
+        this.lastSyncedAt = Date.now();
+        return list;
       }
-    } catch {
-      // Fallback to in-memory store
+    } catch (err) {
+      console.error('Failed to query roles from database, using cached matrix:', err);
     }
 
     return Object.entries(ROLE_DEFINITIONS).map(([key, val]) => ({
@@ -136,7 +199,9 @@ export class RbacService {
       name: val.title,
       department: val.department,
       description: val.description,
-      permissions: inMemoryRoleMatrix[key] || {}
+      permissions: inMemoryRoleMatrix[key] || {},
+      version: 1,
+      updatedAt: new Date().toISOString()
     }));
   }
 
@@ -151,43 +216,69 @@ export class RbacService {
     actor: any
   ): Promise<DynamicRoleDefinition> {
     if (roleKey === 'owner_admin') {
-      // Ensure owner maintains core governance and append-only audit trail access
-      permissions['roles_permissions'] = ['view', 'create', 'edit', 'delete', 'manage'];
-      permissions['roles'] = ['view', 'create', 'edit', 'delete', 'manage'];
-      permissions['permissions'] = ['view', 'create', 'edit', 'delete', 'manage'];
-      permissions['approvals'] = ['view', 'approve', 'edit', 'delete', 'manage'];
-      permissions['activity_center'] = ['view', 'export'];
-      permissions['audit'] = ['view', 'view_company_wide', 'export'];
+      // SUPERADMIN — FULL ACCESS: Owner maintains full CRUD across all current and future modules
+      for (const mod of Object.keys(INITIAL_ROLE_MATRIX.owner_admin)) {
+        permissions[mod] = mod === 'audit' ? ['view'] : ['view', 'create', 'edit', 'delete'];
+      }
+    } else {
+      // Sanitize permissions strictly to the 4 canonical permissions: view, create, edit, delete
+      const sanitized: Record<string, string[]> = {};
+      for (const [mod, acts] of Object.entries(permissions)) {
+        if (Array.isArray(acts)) {
+          const mapped = new Set<string>();
+          for (const a of acts) {
+            if (a === 'view' || a === 'read' || a === 'view_all' || a === 'view_company_wide' || a === 'export') {
+              mapped.add('view');
+            } else if (a === 'create') {
+              mapped.add('create');
+            } else if (a === 'edit' || a === 'assign' || a === 'approve' || a === 'manage' || a === 'update') {
+              mapped.add('edit');
+            } else if (a === 'delete') {
+              mapped.add('delete');
+            }
+          }
+          sanitized[mod] = Array.from(mapped);
+        }
+      }
+      permissions = sanitized;
     }
 
     const previousRole = await this.getRoleByKey(roleKey);
     const previousPermissions = previousRole?.permissions || {};
 
-    // 1. Update In-Memory cache immediately for zero latency
-    inMemoryRoleMatrix[roleKey] = permissions;
-
-    // 2. Persist to PostgreSQL / Prisma
+    // 1. Persist directly to Supabase PostgreSQL without silent catch
     try {
       await prisma.role.upsert({
         where: { id: roleKey },
-        update: { permissions },
+        update: { 
+          permissions,
+          version: { increment: 1 },
+          updatedAt: new Date()
+        },
         create: {
           id: roleKey,
           name: ROLE_DEFINITIONS[roleKey as UserRole]?.title || roleKey,
           description: ROLE_DEFINITIONS[roleKey as UserRole]?.description || '',
-          permissions
+          permissions,
+          version: 1,
+          updatedAt: new Date()
         }
       });
-    } catch {
-      // Offline fallback: already updated in memory
+    } catch (err: any) {
+      console.error(`PostgreSQL role upsert failed for '${roleKey}':`, err);
+      throw new AppError(500, 'DATABASE_ERROR', `Failed to persist role permissions to database: ${err.message}`);
     }
+
+    // 2. Synchronize in-memory cache and timestamp
+    inMemoryRoleMatrix[roleKey] = permissions;
+    this.lastSyncedAt = Date.now();
 
     // 3. Immutable Enterprise Audit Trail
     await auditService.record({
       actorId: actor?.id,
       actorName: actor?.name || 'Administrator',
       actorRole: actor?.role || 'owner_admin',
-      permissionUsed: 'roles_permissions.manage',
+      permissionUsed: 'roles_permissions.edit',
       action: 'ROLE_PERMISSIONS_UPDATE',
       entity: 'Role',
       entityId: roleKey,
@@ -202,15 +293,10 @@ export class RbacService {
 
   /**
    * Evaluates whether a role dynamically possesses an action or capability.
-   * STRICT RULE: VIEW never implies CREATE, EDIT, DELETE, ASSIGN, APPROVE, EXPORT, MANAGE.
+   * STRICT 4-PERMISSION MODEL: VIEW, CREATE, EDIT, DELETE.
    */
-  hasPermission(roleKey: string, permission: string): boolean {
-    const rolePermissions = inMemoryRoleMatrix[roleKey] || {};
-
-    // STRICT GOVERNANCE RULE: Owner cannot execute field installations directly
-    if (roleKey === 'owner_admin' && permission.startsWith('installations.execute')) {
-      return false;
-    }
+  async hasPermission(roleKey: string, permission: string): Promise<boolean> {
+    await this.ensureLatestPermissions();
 
     // Parse module and action
     let moduleKey = '';
@@ -229,35 +315,25 @@ export class RbacService {
       actionKey = 'view';
     }
 
-    // Normalize read synonyms strictly to view
-    if (actionKey === 'read' || actionKey === 'view_all' || actionKey === 'view_company_wide' || actionKey === 'view_assigned' || actionKey === 'view_available') {
-      actionKey = 'view';
-    }
-
-    // Strict Audit Log Immutability: Audit records are append-only.
-    // No role, including owner_admin, may edit, delete, or modify audit records.
-    if (['audit', 'activity_center', 'activity'].includes(moduleKey)) {
-      if (['edit', 'delete', 'update', 'modify', 'purge'].includes(actionKey)) {
-        return false;
-      }
-    }
-
-    // Safe bootstrap for canonical Owner (owner_admin) administrative governance
-    // Ensures owner can never be locked out of governance even if dynamic tables are empty
+    // Superadmin Guarantee: Owner has unrestricted access to all modules and operations
     if (roleKey === 'owner_admin') {
-      const adminGovModules = ['roles', 'permissions', 'roles_permissions', 'workforce', 'employees', 'departments', 'approvals', 'settings', 'overview'];
-      if (adminGovModules.includes(moduleKey)) {
-        if (['view', 'create', 'edit', 'delete', 'assign', 'approve', 'manage', 'export'].includes(actionKey)) {
-          return true;
-        }
-      }
       if (['audit', 'activity_center', 'activity'].includes(moduleKey)) {
-        if (['view', 'view_all', 'view_company_wide', 'export', 'read'].includes(actionKey)) {
-          return true;
+        if (['edit', 'delete', 'update', 'modify', 'purge'].includes(actionKey)) {
+          return false;
         }
-        return false;
+        return true;
       }
+      return true;
     }
+
+    // Map legacy action synonyms to the 4 canonical permissions
+    if (actionKey === 'read' || actionKey === 'view_all' || actionKey === 'view_company_wide' || actionKey === 'view_assigned' || actionKey === 'view_available' || actionKey === 'export') {
+      actionKey = 'view';
+    } else if (actionKey === 'assign' || actionKey === 'approve' || actionKey === 'manage' || actionKey === 'update') {
+      actionKey = 'edit';
+    }
+
+    const rolePermissions = inMemoryRoleMatrix[roleKey] || {};
 
     // Canonical module key alias resolution
     const moduleKeysToCheck = [moduleKey];
@@ -280,18 +356,8 @@ export class RbacService {
       }
     }
 
-    // STRICT ENFORCEMENT: VIEW never implies any mutation or management
-    if (actionKey === 'view') {
-      return grantedActions.includes('view') || grantedActions.includes('manage');
-    }
-
-    // For any non-view action, it must be explicitly present in grantedActions
-    if (grantedActions.includes(actionKey)) {
-      return true;
-    }
-
-    // Direct string match fallback (e.g. specialized capability string)
-    return grantedActions.includes(permission);
+    // Strict 4-permission check
+    return grantedActions.includes(actionKey);
   }
 
   /**
@@ -301,42 +367,32 @@ export class RbacService {
   async checkActionPermission(
     user: any,
     resource: string,
-    action: 'view' | 'create' | 'edit' | 'delete' | 'assign' | 'approve' | 'export' | 'manage' | string,
+    action: 'view' | 'create' | 'edit' | 'delete' | string,
     context?: { entityId?: string; assignedStaff?: string[] }
   ): Promise<boolean> {
     if (!user || !user.role) return false;
 
-    // Strict Audit Log Immutability: Audit records are append-only.
-    // No role, including owner_admin, may edit, delete, or modify audit records.
-    if (['audit', 'activity_center', 'activity'].includes(resource)) {
-      if (['edit', 'delete', 'update', 'modify', 'purge'].includes(action)) {
-        return false;
-      }
-    }
+    await this.ensureLatestPermissions();
 
-    // Strict Administrative Separation: Owner cannot execute field installations without explicit delegation
-    if (user.role === 'owner_admin' && (action === 'execute' || resource === 'installations' && action.startsWith('execute'))) {
-      const activeDelegations = await this.getActiveDelegationsForUser(user.id, 'installations.execute');
-      return activeDelegations.length > 0;
-    }
-
-    // Canonical Owner Administrative Bootstrap: Non-circular governance guarantee
+    // Superadmin Guarantee: Owner & Managing Director has unrestricted access
+    // across every module and every operation in the entire application
     if (user.role === 'owner_admin') {
-      const adminGovResources = [
-        'roles', 'permissions', 'roles_permissions',
-        'workforce', 'employees', 'departments', 'approvals', 'settings', 'overview'
-      ];
-      if (adminGovResources.includes(resource)) {
-        if (['view', 'create', 'edit', 'delete', 'assign', 'approve', 'manage', 'export'].includes(action)) {
-          return true;
-        }
-      }
+      // Immutable Audit Log Protection: Audit records are append-only
       if (['audit', 'activity_center', 'activity'].includes(resource)) {
-        if (['view', 'view_all', 'view_company_wide', 'export', 'read'].includes(action)) {
-          return true;
+        if (['edit', 'delete', 'update', 'modify', 'purge'].includes(action)) {
+          return false;
         }
-        return false;
+        return true;
       }
+      return true;
+    }
+
+    // Normalize incoming action to the 4 core permissions: view, create, edit, delete
+    let canonicalAction = action;
+    if (['read', 'view_all', 'view_company_wide', 'export'].includes(action)) {
+      canonicalAction = 'view';
+    } else if (['assign', 'approve', 'manage', 'update', 'status'].includes(action)) {
+      canonicalAction = 'edit';
     }
 
     const rolePermissions = inMemoryRoleMatrix[user.role] || {};
@@ -362,18 +418,13 @@ export class RbacService {
       }
     }
 
-    // 1. Strict exact action match
-    if (moduleActions.includes(action)) {
+    // Exact check against the 4 core permissions
+    if (moduleActions.includes(canonicalAction)) {
       return true;
     }
 
-    // 2. View synonyms
-    if (action === 'view' && (moduleActions.includes('read') || moduleActions.includes('view_all') || moduleActions.includes('manage'))) {
-      return true;
-    }
-
-    // 3. Operational Delegations check
-    const specificPerm = `${resource}.${action}`;
+    // Operational Delegations check
+    const specificPerm = `${resource}.${canonicalAction}`;
     const delegations = await this.getActiveDelegationsForUser(user.id, specificPerm);
     if (delegations.length > 0) {
       if (!context?.entityId) return true;
@@ -439,6 +490,18 @@ export class RbacService {
 
   async getActiveDelegationsForUser(userId: string, permission?: string): Promise<any[]> {
     try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+      if (!isUuid) {
+        const now = new Date();
+        return inMemoryDelegations.filter(d => 
+          d.employeeId === userId &&
+          d.active &&
+          new Date(d.effectiveFrom) <= now &&
+          new Date(d.effectiveTo) >= now &&
+          (!permission || d.grantedPermission === permission)
+        );
+      }
+
       const now = new Date();
       const where: any = {
         employeeId: userId,

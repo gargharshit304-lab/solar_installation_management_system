@@ -82,7 +82,7 @@ export function requireCapability(permission: string) {
     }
 
     // 2. Check dynamic role permissions from database / in-memory matrix
-    if (rbacService.hasPermission(user.role, permission)) {
+    if (await rbacService.hasPermission(user.role, permission)) {
       return next();
     }
 

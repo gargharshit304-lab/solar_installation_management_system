@@ -54,11 +54,14 @@ function hashToken(token: string): string {
 
 export class AuthService {
   async getUserById(id: string): Promise<any> {
-    try {
-      const user = await prisma.profile.findUnique({ where: { id } });
-      if (user) return user;
-    } catch {
-      // Fall through to (optional) development fallback
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (isUuid) {
+      try {
+        const user = await prisma.profile.findUnique({ where: { id } });
+        if (user) return user;
+      } catch {
+        // Fall through to (optional) development fallback
+      }
     }
     if (!allowDevFallback) return null;
     return inMemoryUsers.find(u => u.id === id) || null;
@@ -105,19 +108,7 @@ export class AuthService {
       throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid email address or password.');
     }
 
-<<<<<<< HEAD
-    if (!user.isActive) {
-      throw new AppError(403, 'ACCOUNT_DEACTIVATED', 'This employee account has been deactivated. Contact administration.');
-    }
-
-    // Verify password with bcrypt
-    const passwordMatch = await verifyPassword(params.password, user.passwordHash);
-    if (!passwordMatch) {
-      throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid email address or password.');
-    }
-=======
     loginAttempts.delete(attemptKey);
->>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
 
     // Generate tokens
     const tokenPayload = {
