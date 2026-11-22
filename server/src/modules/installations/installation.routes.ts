@@ -6,6 +6,25 @@ import { AppError } from '../../utils/response';
 
 const router = Router();
 
+/**
+ * Operational actions are limited to the technicians actually assigned to the
+ * installation. A capability alone must not authorize work on another crew's
+ * job (IDOR / horizontal privilege escalation).
+ */
+function assertAssignedTechnician(inst: any, user: { name?: string; role?: string }): void {
+  if (user.role === 'owner_admin') return;
+  const assigned = Array.isArray(inst.technicianNames) ? inst.technicianNames : [];
+  const userName = (user.name || '').toLowerCase().trim();
+  const isAssigned = assigned.some((entry: string) => {
+    const normalized = String(entry).toLowerCase().replace(/\s*\(.*?\)\s*/g, '').trim();
+    if (!normalized || !userName) return false;
+    return normalized === userName || normalized.includes(userName) || userName.includes(normalized);
+  });
+  if (!isAssigned) {
+    throw new AppError(403, 'NOT_ASSIGNED', 'Only a technician assigned to this installation may execute or complete it.');
+  }
+}
+
 let installationsStore: any[] = [
   { id: 'inst-1', installationCode: 'INS-2026-001', customerName: 'Rajesh Sharma', technicianNames: ['Amit Jadhav (Lead)'], status: 'scheduled' },
   { id: 'inst-2', installationCode: 'INS-2026-002', customerName: 'Sunita Patil', technicianNames: ['Amit Jadhav (Lead)'], status: 'in_progress' }
@@ -61,6 +80,7 @@ router.post('/:id/execute', requireAuth, requireCapability('installations.execut
   try {
     const inst = installationsStore.find(i => i.id === req.params.id);
     if (!inst) throw new AppError(404, 'NOT_FOUND', 'Installation not found');
+    assertAssignedTechnician(inst, req.user!);
     inst.status = 'in_progress';
     inst.startedAt = new Date().toISOString();
     res.json({
@@ -79,6 +99,7 @@ router.post('/:id/complete', requireAuth, requireCapability('installations.execu
     const { customerSignature, checklist } = req.body;
     const inst = installationsStore.find(i => i.id === req.params.id);
     if (!inst) throw new AppError(404, 'NOT_FOUND', 'Installation not found');
+    assertAssignedTechnician(inst, req.user!);
     
     // BUSINESS WORKFLOW GATE: Mandatory commissioning checks & customer signature
     if (!customerSignature) {

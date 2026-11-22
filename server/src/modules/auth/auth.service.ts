@@ -1,18 +1,56 @@
 import { prisma } from '../../db/prisma';
-import { verifyPassword, hashPassword } from '../../utils/password';
+import { verifyPassword, hashPassword, hashPasswordSync } from '../../utils/password';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../../utils/tokens';
 import { AppError } from '../../utils/response';
 import { auditService } from '../audit/audit.service';
 import { INITIAL_SYSTEM_USERS } from '../../db/seed';
+import { env } from '../../config/env';
 import crypto from 'crypto';
 
-// In-memory fallback profiles & sessions for offline testing
+// Development-only fallback. Disabled by default and never enabled in production.
+const allowDevFallback = env.NODE_ENV !== 'production' && env.DEV_AUTH_FALLBACK;
+
+// In-memory fallback profiles & sessions for offline development only.
+// There is deliberately no built-in password: the fallback is only usable when
+// the operator supplies DEV_FALLBACK_PASSWORD. Otherwise the hash is empty and
+// every fallback login is rejected.
+const devFallbackPasswordHash = allowDevFallback && env.DEV_FALLBACK_PASSWORD
+  ? hashPasswordSync(env.DEV_FALLBACK_PASSWORD)
+  : '';
 let inMemoryUsers: any[] = INITIAL_SYSTEM_USERS.map(u => ({
   ...u,
-  passwordHash: '$2a$12$e80MvQhL239hIqUe5n5Hae0e1GZ5n6jGk87y.6eZ5fO5.lG7bXz0y' // hashed solaros2026
+  passwordHash: devFallbackPasswordHash
 }));
 const inMemorySessions: any[] = [];
 const inMemoryResetTokens: any[] = [];
+
+// A real bcrypt hash of an unguessable random value, used only to equalize
+// login timing for accounts that do not exist.
+const DUMMY_PASSWORD_HASH = hashPasswordSync(crypto.randomBytes(32).toString('hex'));
+
+// In-flight brute-force protection. Keyed by normalized email and applied to
+// unknown accounts too, so the response never reveals whether the email exists.
+const loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
+
+function recordFailedLogin(key: string): void {
+  const now = Date.now();
+  const record = loginAttempts.get(key);
+  if (!record || record.lockedUntil < now && record.count >= MAX_LOGIN_ATTEMPTS) {
+    loginAttempts.set(key, { count: 1, lockedUntil: 0 });
+    return;
+  }
+  const count = record.count + 1;
+  loginAttempts.set(key, {
+    count,
+    lockedUntil: count >= MAX_LOGIN_ATTEMPTS ? now + LOGIN_LOCKOUT_MS : 0
+  });
+}
+
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
 
 export class AuthService {
   async getUserById(id: string): Promise<any> {
@@ -20,9 +58,10 @@ export class AuthService {
       const user = await prisma.profile.findUnique({ where: { id } });
       if (user) return user;
     } catch {
-      // Fallback
+      // Fall through to (optional) development fallback
     }
-    return inMemoryUsers.find(u => u.id === id);
+    if (!allowDevFallback) return null;
+    return inMemoryUsers.find(u => u.id === id) || null;
   }
 
   async getUserByEmail(email: string): Promise<any> {
@@ -31,9 +70,10 @@ export class AuthService {
       const user = await prisma.profile.findUnique({ where: { email: cleanEmail } });
       if (user) return user;
     } catch {
-      // Fallback
+      // Fall through to (optional) development fallback
     }
-    return inMemoryUsers.find(u => u.email.toLowerCase() === cleanEmail);
+    if (!allowDevFallback) return null;
+    return inMemoryUsers.find(u => u.email.toLowerCase() === cleanEmail) || null;
   }
 
   async login(params: {
@@ -43,12 +83,29 @@ export class AuthService {
     ipAddress?: string;
     userAgent?: string;
   }): Promise<{ user: any; accessToken: string; refreshToken: string; expiresAt: number }> {
+    const attemptKey = params.email.trim().toLowerCase();
+    const attempt = loginAttempts.get(attemptKey);
+    if (attempt && attempt.lockedUntil > Date.now()) {
+      throw new AppError(429, 'ACCOUNT_LOCKED', 'Too many failed login attempts. Please try again later.');
+    }
+
     const user = await this.getUserByEmail(params.email);
 
-    if (!user) {
+    // Always perform one bcrypt comparison, even for unknown or inactive
+    // accounts, so response timing does not reveal which emails exist.
+    const passwordMatch = await verifyPassword(
+      params.password,
+      user?.passwordHash || DUMMY_PASSWORD_HASH
+    );
+
+    // Use a single generic error for unknown accounts and bad passwords to
+    // prevent account enumeration. Deactivated accounts are rejected the same way.
+    if (!user || !user.isActive || !passwordMatch) {
+      recordFailedLogin(attemptKey);
       throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid email address or password.');
     }
 
+<<<<<<< HEAD
     if (!user.isActive) {
       throw new AppError(403, 'ACCOUNT_DEACTIVATED', 'This employee account has been deactivated. Contact administration.');
     }
@@ -58,6 +115,9 @@ export class AuthService {
     if (!passwordMatch) {
       throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid email address or password.');
     }
+=======
+    loginAttempts.delete(attemptKey);
+>>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
 
     // Generate tokens
     const tokenPayload = {
@@ -74,13 +134,14 @@ export class AuthService {
 
     const durationDays = params.rememberMe ? 30 : 1;
     const expiresAt = Date.now() + durationDays * 86400000;
+    const refreshTokenHash = hashToken(refreshToken);
 
-    // Record session
+    // Record session (only the hash of the refresh token is persisted)
     try {
       await prisma.session.create({
         data: {
           profileId: user.id,
-          refreshToken,
+          refreshToken: refreshTokenHash,
           userAgent: params.userAgent,
           ipAddress: params.ipAddress,
           expiresAt: new Date(expiresAt)
@@ -90,11 +151,12 @@ export class AuthService {
         where: { id: user.id },
         data: { lastLoginAt: new Date() }
       });
-    } catch {
+    } catch (err) {
+      if (!allowDevFallback) throw err;
       inMemorySessions.push({
         id: `sess-${Date.now()}`,
         profileId: user.id,
-        refreshToken,
+        refreshToken: refreshTokenHash,
         isRevoked: false,
         expiresAt: new Date(expiresAt)
       });
@@ -143,16 +205,18 @@ export class AuthService {
       throw new AppError(401, 'ACCOUNT_INACTIVE', 'User account is inactive or not found.');
     }
 
-    // Check if session is revoked
+    // Check if session is revoked (refresh tokens are stored hashed)
+    const refreshTokenHash = hashToken(refreshToken);
     let sessionValid = true;
     try {
-      const dbSession = await prisma.session.findUnique({ where: { refreshToken } });
+      const dbSession = await prisma.session.findUnique({ where: { refreshToken: refreshTokenHash } });
       if (!dbSession || dbSession.isRevoked || new Date() > dbSession.expiresAt) {
         sessionValid = false;
       }
     } catch {
-      const memSession = inMemorySessions.find(s => s.refreshToken === refreshToken);
-      if (memSession && (memSession.isRevoked || new Date() > memSession.expiresAt)) {
+      if (!allowDevFallback) throw new AppError(503, 'DATABASE_UNAVAILABLE', 'Session store is temporarily unavailable.');
+      const memSession = inMemorySessions.find(s => s.refreshToken === refreshTokenHash);
+      if (!memSession || memSession.isRevoked || new Date() > memSession.expiresAt) {
         sessionValid = false;
       }
     }
@@ -175,27 +239,29 @@ export class AuthService {
     const newRefreshToken = generateRefreshToken(tokenPayload);
     const expiresAt = Date.now() + 86400000;
 
-    // Invalidate old session and store new
+    // Invalidate old session and store new (hashed)
+    const newRefreshTokenHash = hashToken(newRefreshToken);
     try {
       await prisma.session.update({
-        where: { refreshToken },
+        where: { refreshToken: refreshTokenHash },
         data: { isRevoked: true }
       });
       await prisma.session.create({
         data: {
           profileId: user.id,
-          refreshToken: newRefreshToken,
+          refreshToken: newRefreshTokenHash,
           ipAddress,
           expiresAt: new Date(expiresAt)
         }
       });
-    } catch {
-      const old = inMemorySessions.find(s => s.refreshToken === refreshToken);
+    } catch (err) {
+      if (!allowDevFallback) throw err;
+      const old = inMemorySessions.find(s => s.refreshToken === refreshTokenHash);
       if (old) old.isRevoked = true;
       inMemorySessions.push({
         id: `sess-${Date.now()}`,
         profileId: user.id,
-        refreshToken: newRefreshToken,
+        refreshToken: newRefreshTokenHash,
         isRevoked: false,
         expiresAt: new Date(expiresAt)
       });
@@ -219,13 +285,14 @@ export class AuthService {
 
   async logout(refreshToken?: string, userId?: string, ipAddress?: string): Promise<void> {
     if (refreshToken) {
+      const refreshTokenHash = hashToken(refreshToken);
       try {
         await prisma.session.updateMany({
-          where: { refreshToken },
+          where: { refreshToken: refreshTokenHash },
           data: { isRevoked: true }
         });
       } catch {
-        const mem = inMemorySessions.find(s => s.refreshToken === refreshToken);
+        const mem = inMemorySessions.find(s => s.refreshToken === refreshTokenHash);
         if (mem) mem.isRevoked = true;
       }
     }
@@ -254,20 +321,22 @@ export class AuthService {
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenHash = hashToken(resetToken);
     const expiresAt = new Date(Date.now() + 3600000); // 1 hour
 
     try {
       await prisma.passwordResetToken.create({
         data: {
           profileId: user.id,
-          token: resetToken,
+          token: resetTokenHash,
           expiresAt
         }
       });
-    } catch {
+    } catch (err) {
+      if (!allowDevFallback) throw err;
       inMemoryResetTokens.push({
         profileId: user.id,
-        token: resetToken,
+        token: resetTokenHash,
         expiresAt,
         used: false
       });
@@ -287,11 +356,13 @@ export class AuthService {
   }
 
   async resetPassword(token: string, newPass: string): Promise<void> {
+    const tokenHash = hashToken(token);
     let record: any = null;
     try {
-      record = await prisma.passwordResetToken.findUnique({ where: { token } });
+      record = await prisma.passwordResetToken.findUnique({ where: { token: tokenHash } });
     } catch {
-      record = inMemoryResetTokens.find(r => r.token === token && !r.used);
+      if (!allowDevFallback) throw new AppError(503, 'DATABASE_UNAVAILABLE', 'Password reset is temporarily unavailable.');
+      record = inMemoryResetTokens.find(r => r.token === tokenHash && !r.used);
     }
 
     if (!record || record.used || new Date() > record.expiresAt) {
@@ -314,7 +385,8 @@ export class AuthService {
         where: { profileId: record.profileId },
         data: { isRevoked: true }
       });
-    } catch {
+    } catch (err) {
+      if (!allowDevFallback) throw err;
       const user = inMemoryUsers.find(u => u.id === record.profileId);
       if (user) user.passwordHash = newHash;
       record.used = true;
@@ -356,7 +428,8 @@ export class AuthService {
         reason: `Administrator action by ${actor.name}`
       });
       return updated;
-    } catch {
+    } catch (err) {
+      if (!allowDevFallback) throw err;
       const user = inMemoryUsers.find(u => u.id === userId);
       if (!user) throw new AppError(404, 'NOT_FOUND', 'User profile not found.');
       user.isActive = active;

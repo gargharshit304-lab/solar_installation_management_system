@@ -1,7 +1,23 @@
 import { app } from './app';
 import { env } from './config/env';
 
+console.log('[Index] Starting server...');
+
+// Global error handlers
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught Exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[FATAL] Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
+console.log('[Index] App imported, calling listen...');
+
 const server = app.listen(env.PORT, () => {
+  console.log('[Index] Server listening on port', env.PORT);
   console.log(`====================================================`);
   console.log(`☀️  SolarOS Enterprise Backend Server`);
   console.log(`    Company:     SunPower Solutions`);

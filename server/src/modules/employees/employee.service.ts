@@ -1,8 +1,20 @@
+<<<<<<< HEAD
 import { prisma, pool as dbPool } from '../../db/prisma';
 import { hashPassword } from '../../utils/password';
 import { AppError } from '../../utils/response';
 import { auditService } from '../audit/audit.service';
 import crypto from 'crypto';
+=======
+import crypto from 'crypto';
+import { prisma } from '../../db/prisma';
+import { INITIAL_SYSTEM_USERS } from '../../db/seed';
+import { hashPassword } from '../../utils/password';
+import { AppError } from '../../utils/response';
+import { env } from '../../config/env';
+import { ROLE_DEFINITIONS, UserRole } from '../../config/constants';
+
+const allowDevFallback = env.NODE_ENV !== 'production' && env.DEV_AUTH_FALLBACK;
+>>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
 
 export interface EmployeeRecord {
   id: string;
@@ -128,6 +140,7 @@ export class EmployeeService {
   async getAuthorizedDepartments(user: any): Promise<DepartmentRecord[]> {
     if (!user) return [];
 
+<<<<<<< HEAD
     let allDepartments: DepartmentRecord[];
     try {
       const result = await dbPool.query(
@@ -145,6 +158,14 @@ export class EmployeeService {
     } catch (err) {
       console.error('Failed to load departments from database:', err);
       throw new AppError(503, 'DATABASE_UNAVAILABLE', 'Department data is temporarily unavailable.');
+=======
+    // Only explicit administrative roles may view all departments. Never infer
+    // authorization from free-text role titles, which are user-influenced data.
+    const isCompanyWide = user.role === 'owner_admin';
+
+    if (isCompanyWide) {
+      return DEPARTMENTS_DATA;
+>>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
     }
 
     if (this.isCompanyWide(user)) return allDepartments;
@@ -181,10 +202,41 @@ export class EmployeeService {
 
     const conditions: any[] = [];
 
+<<<<<<< HEAD
     if (!this.isCompanyWide(user)) {
       const authorized = await this.getAuthorizedDepartments(user);
       if (authorized.length === 0) {
         return { employees: [], pagination: { page, limit, total: 0, totalPages: 1 } };
+=======
+    // Check if user is restricted to a subset of departments
+    const isCompanyWide = user.role === 'owner_admin';
+
+    let pool: EmployeeRecord[] = [...BASELINE_EMPLOYEES];
+
+    // Try reading from Prisma PostgreSQL database first if available
+    try {
+      const dbEmployees = await prisma.employee.findMany({
+        include: { profile: true }
+      });
+      if (dbEmployees.length > 0) {
+        pool = dbEmployees.map(e => ({
+          id: e.id,
+          employeeCode: e.employeeCode,
+          fullName: `${e.firstName} ${e.lastName}`.trim(),
+          email: e.email,
+          phone: e.phone,
+          department: e.department,
+          designation: e.designation,
+          role: e.roleId,
+          hourlyRate: Number(e.hourlyRate) || 0,
+          skills: e.skills || [],
+          isAvailable: e.isAvailable,
+          activeJobs: e.currentAssignedJobs,
+          rating: 4.8,
+          status: 'active' as const,
+          avatarUrl: e.profile?.avatarUrl || undefined
+        }));
+>>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
       }
       conditions.push({ department: { in: authorized.map(dept => dept.name) } });
     }
@@ -246,6 +298,7 @@ export class EmployeeService {
     }
   }
 
+<<<<<<< HEAD
   async createEmployee(user: any, data: Partial<EmployeeRecord> & { temporaryPassword?: string; emergencyContact?: any }): Promise<any> {
     const fullName = (data.fullName || '').trim();
     if (!fullName || fullName.length < 2) {
@@ -393,6 +446,57 @@ export class EmployeeService {
       } catch (auditError) {
         console.warn('Employee created but audit log failed:', auditError);
       }
+=======
+  async createEmployee(
+    user: any,
+    data: Partial<EmployeeRecord> & { password?: string }
+  ): Promise<EmployeeRecord> {
+    const role = data.role as UserRole;
+    if (!ROLE_DEFINITIONS[role]) {
+      throw new AppError(400, 'INVALID_ROLE', 'The selected role is not valid.');
+    }
+
+    const employeeCode = data.employeeCode || `EMP-${String(BASELINE_EMPLOYEES.length + 1).padStart(3, '0')}`;
+    // A temporary password is required for the employee to sign in. If none is
+    // supplied, generate a strong random one; the caller must communicate it.
+    const passwordHash = await hashPassword(
+      data.password || crypto.randomBytes(24).toString('base64')
+    );
+    const roleTitle = ROLE_DEFINITIONS[role].title;
+
+    try {
+      const created = await prisma.employee.create({
+        data: {
+          employeeCode,
+          firstName: data.fullName?.split(' ')[0] || '',
+          lastName: data.fullName?.split(' ').slice(1).join(' ') || '',
+          email: data.email!,
+          phone: data.phone || '',
+          department: data.department!,
+          designation: data.designation!,
+          roleId: role,
+          hourlyRate: data.hourlyRate || 0,
+          skills: data.skills || [],
+          isAvailable: data.isAvailable ?? true,
+          currentAssignedJobs: data.activeJobs || 0,
+          hireDate: data.joiningDate ? new Date(data.joiningDate) : new Date(),
+          profile: {
+            create: {
+              fullName: data.fullName || '',
+              email: data.email!,
+              phone: data.phone,
+              passwordHash,
+              roleId: role,
+              roleTitle,
+              department: data.department,
+              avatarUrl: data.avatarUrl,
+              isActive: true
+            }
+          }
+        },
+        include: { profile: true }
+      });
+>>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
 
       return {
         id: created.id,
@@ -417,6 +521,7 @@ export class EmployeeService {
         temporaryPassword
       };
     } catch (err: any) {
+<<<<<<< HEAD
       try {
         await client.query('ROLLBACK');
       } catch {
@@ -469,6 +574,44 @@ export class EmployeeService {
         : [];
     }
     if (data.activeJobs !== undefined) employeeData.currentAssignedJobs = data.activeJobs;
+=======
+      if (err?.code === 'P2002') {
+        throw new AppError(409, 'DUPLICATE_EMPLOYEE', 'An employee with this email or employee code already exists.');
+      }
+      if (!allowDevFallback) throw err;
+      // Development-only in-memory fallback
+      const newEmp: EmployeeRecord = {
+        id: `emp-${Date.now()}`,
+        employeeCode,
+        fullName: data.fullName || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        department: data.department || 'Installation & Commissioning',
+        designation: data.designation || '',
+        role: data.role || 'install_tech',
+        hourlyRate: data.hourlyRate || 250,
+        skills: data.skills || [],
+        isAvailable: data.isAvailable ?? true,
+        activeJobs: data.activeJobs || 0,
+        rating: 4.8,
+        status: 'active',
+        joiningDate: new Date().toISOString().split('T')[0],
+        reportingManagerId: 'usr-1',
+        reportingManagerName: 'Vikramaditya Rao'
+      };
+      BASELINE_EMPLOYEES.push(newEmp);
+      return newEmp;
+    }
+  }
+
+  async updateEmployee(
+    id: string,
+    data: Partial<EmployeeRecord> & { password?: string }
+  ): Promise<EmployeeRecord | null> {
+    if (data.role && !ROLE_DEFINITIONS[data.role as UserRole]) {
+      throw new AppError(400, 'INVALID_ROLE', 'The selected role is not valid.');
+    }
+>>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
 
     try {
       const updated = await prisma.$transaction(async tx => {
@@ -498,11 +641,69 @@ export class EmployeeService {
         return employee;
       });
 
+<<<<<<< HEAD
       return this.mapEmployee(updated);
     } catch (err: any) {
       if (err?.code === 'P2025') return null;
       if (err?.code === 'P2002') {
         throw new AppError(409, 'DUPLICATE_RECORD', 'An employee with this code or email already exists.');
+=======
+      // Keep the linked login profile in sync with workforce changes.
+      if (updated.profileId) {
+        const profileData: Record<string, any> = {};
+        if (data.fullName) profileData.fullName = data.fullName;
+        if (data.email) profileData.email = data.email;
+        if (data.phone) profileData.phone = data.phone;
+        if (data.department) profileData.department = data.department;
+        if (data.avatarUrl) profileData.avatarUrl = data.avatarUrl;
+        if (data.role) {
+          profileData.roleId = data.role;
+          profileData.roleTitle = ROLE_DEFINITIONS[data.role as UserRole].title;
+        }
+        if (data.password) profileData.passwordHash = await hashPassword(data.password);
+        if (data.status) profileData.isActive = data.status === 'active';
+
+        if (Object.keys(profileData).length > 0) {
+          await prisma.profile.update({ where: { id: updated.profileId }, data: profileData });
+        }
+
+        if (profileData.isActive === false) {
+          await prisma.session.updateMany({
+            where: { profileId: updated.profileId },
+            data: { isRevoked: true }
+          });
+        }
+      }
+
+      return {
+        id: updated.id,
+        employeeCode: updated.employeeCode,
+        fullName: `${updated.firstName} ${updated.lastName}`.trim(),
+        email: updated.email,
+        phone: updated.phone,
+        department: updated.department,
+        designation: updated.designation,
+        role: updated.roleId,
+        hourlyRate: Number(updated.hourlyRate) || 0,
+        skills: updated.skills || [],
+        isAvailable: updated.isAvailable,
+        activeJobs: updated.currentAssignedJobs,
+        rating: 4.8,
+        status: (data.status as EmployeeRecord['status']) || 'active',
+        avatarUrl: updated.profile?.avatarUrl
+      };
+    } catch (err: any) {
+      if (err instanceof AppError) throw err;
+      if (err?.code === 'P2002') {
+        throw new AppError(409, 'DUPLICATE_EMPLOYEE', 'An employee with this email or employee code already exists.');
+      }
+      if (!allowDevFallback) throw err;
+      // Development-only in-memory fallback
+      const idx = BASELINE_EMPLOYEES.findIndex(e => e.id === id);
+      if (idx >= 0) {
+        BASELINE_EMPLOYEES[idx] = { ...BASELINE_EMPLOYEES[idx], ...data };
+        return BASELINE_EMPLOYEES[idx];
+>>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
       }
       if (err?.code === 'P2003') {
         throw new AppError(422, 'VALIDATION_ERROR', 'The selected role or department is invalid.');
@@ -512,6 +713,10 @@ export class EmployeeService {
     }
   }
 
+  /**
+   * Soft-deactivates an employee and revokes their login sessions instead of
+   * deleting the record, preserving audit history.
+   */
   async deleteEmployee(id: string): Promise<boolean> {
     const existing = await prisma.employee.findUnique({
       where: { id },
@@ -520,6 +725,7 @@ export class EmployeeService {
     if (!existing) return false;
 
     try {
+<<<<<<< HEAD
       await prisma.$transaction(async tx => {
         await tx.employee.delete({ where: { id } });
         if (existing.profileId) {
@@ -531,6 +737,36 @@ export class EmployeeService {
       if (err?.code === 'P2025') return false;
       console.error('Failed to delete employee from database:', err);
       throw new AppError(500, 'DATABASE_ERROR', 'Employee could not be deleted.');
+=======
+      const employee = await prisma.employee.findUnique({ where: { id } });
+      if (!employee) return false;
+
+      await prisma.employee.update({
+        where: { id },
+        data: { isAvailable: false }
+      });
+
+      if (employee.profileId) {
+        await prisma.profile.update({
+          where: { id: employee.profileId },
+          data: { isActive: false }
+        });
+        await prisma.session.updateMany({
+          where: { profileId: employee.profileId },
+          data: { isRevoked: true }
+        });
+      }
+      return true;
+    } catch (err) {
+      if (!allowDevFallback) throw err;
+      // Development-only in-memory fallback
+      const idx = BASELINE_EMPLOYEES.findIndex(e => e.id === id);
+      if (idx >= 0) {
+        BASELINE_EMPLOYEES[idx] = { ...BASELINE_EMPLOYEES[idx], status: 'inactive', isAvailable: false };
+        return true;
+      }
+      return false;
+>>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
     }
   }
 }

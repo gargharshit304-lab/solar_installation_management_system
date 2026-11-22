@@ -897,6 +897,15 @@ class SurveyService {
       throw new AppError(400, 'ALREADY_APPROVED', 'Approved survey cannot be silently modified or resubmitted');
     }
 
+    // Field technicians may only resubmit their own assigned survey.
+    if (actor.role === 'survey_tech') {
+      const ownsById = survey.technicianId && survey.technicianId === actor.id;
+      const ownsByName = survey.technicianName && survey.technicianName.toLowerCase() === actor.name.toLowerCase();
+      if ((survey.technicianId || survey.technicianName) && !ownsById && !ownsByName) {
+        throw new AppError(403, 'NOT_ASSIGNED', 'Only the technician assigned to this survey may resubmit it.');
+      }
+    }
+
     // Preserve previous version snapshot
     const versionSnapshot: VersionSnapshot = {
       version: survey.version,
@@ -917,8 +926,25 @@ class SurveyService {
     if (!survey.previousVersions) survey.previousVersions = [];
     survey.previousVersions.unshift(versionSnapshot);
 
-    // Apply updates and increment version
-    Object.assign(survey, updatedDetails);
+    // Apply only technician-editable field data. Status, approval and review
+    // fields are owned by the workflow state machine and must never be
+    // mass-assigned from the request body.
+    const editableFields: Array<keyof SurveyRecord> = [
+      'roofType', 'roofLengthM', 'roofWidthM', 'totalRoofAreaSqm',
+      'shadowFreeAreaSqm', 'roofDirection', 'roofTiltDegrees', 'roofCondition',
+      'availableInstallationSpace', 'nearbyObstructions', 'shadowObservations',
+      'estimatedShadingImpactPct', 'gridConnectionAvailable', 'phaseType',
+      'sanctionedLoadKw', 'meterNumber', 'mainPanelCondition',
+      'proposedInverterLocation', 'cableDistanceMeters', 'earthingRequirement',
+      'additionalElectricalObservations', 'roofAccessibility', 'structuralConcerns',
+      'installationObstacles', 'safetyConsiderations', 'waterLeakageConcerns',
+      'additionalSiteObservations', 'technicianNotes', 'photos'
+    ];
+    for (const field of editableFields) {
+      if (Object.prototype.hasOwnProperty.call(updatedDetails, field)) {
+        (survey as any)[field] = (updatedDetails as any)[field];
+      }
+    }
     survey.version = survey.version + 1;
     survey.status = 'submitted';
     survey.reviewStatus = 'resubmitted';

@@ -6,8 +6,6 @@ import { UserRole } from '../types';
 import { DotGrid } from '../components/common/DotGrid';
 import { AuthInitializingScreen } from '../components/common/AuthInitializingScreen';
 
-const DEMO_PASSWORD = 'solaros2026';
-
 const ROLE_DASHBOARDS: Record<UserRole, string> = {
   owner_admin: '/',
   sales_exec: '/sales-overview',
@@ -20,7 +18,7 @@ const ROLE_DASHBOARDS: Record<UserRole, string> = {
 };
 
 export const LoginPage: React.FC = () => {
-  const { usersList, switchRole, showToast, login, isAuthenticated, isInitializing, currentUser } = useApp();
+  const { showToast, login, isAuthenticated, isInitializing, currentUser } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState('');
@@ -56,7 +54,7 @@ export const LoginPage: React.FC = () => {
     const user = await login(email, password, rememberMe);
     
     if (!user) {
-      setError('Invalid email or password. Demo password: solaros2026');
+      setError('Invalid email or password.');
       setIsLoading(false);
       return;
     }
@@ -173,9 +171,7 @@ export const LoginPage: React.FC = () => {
                 <label htmlFor="password" className="block text-xs font-semibold text-charcoal">
                   Password
                 </label>
-                <span className="text-xs text-navy font-medium cursor-pointer hover:underline">
-                  Demo: solaros2026
-                </span>
+
               </div>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-mutedGrey" />
@@ -242,26 +238,6 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Demo Accounts Quick Access */}
-          <div className="mt-8 pt-6 border-t border-warmGrey/60">
-            <p className="text-xs text-mutedGrey text-center mb-4">Quick Demo Access</p>
-            <div className="grid grid-cols-2 gap-2">
-              {usersList.map(user => (
-                <button
-                  key={user.id}
-                  type="button"
-                  onClick={() => {
-                    setEmail(user.email);
-                    setPassword(DEMO_PASSWORD);
-                  }}
-                  className="p-2.5 text-xs text-charcoal hover:bg-sand-100 rounded-xl border border-warmGrey/60 transition-colors text-left"
-                >
-                  <div className="font-medium truncate">{user.name}</div>
-                  <div className="text-[10px] text-mutedGrey truncate">{user.roleTitle}</div>
-                </button>
-              ))}
-            </div>
-          </div>
             </div>
           </div>
         </div>

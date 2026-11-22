@@ -11,8 +11,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 export const Navbar: React.FC = () => {
   const { 
     currentUser, 
-    switchRole, 
-    usersList, 
     setIsGlobalSearchOpen,
     isMobileMenuOpen,
     setIsMobileMenuOpen,
@@ -250,46 +248,6 @@ export const Navbar: React.FC = () => {
                   <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-navy text-white">
                     <ShieldCheck className="w-3 h-3 mr-1" />
                     {currentUser.roleTitle}
-                  </div>
-                </div>
-
-                {/* Role Switcher Section for Instant Evaluation of All 7 Roles */}
-                <div className="px-2 py-1.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-mutedGrey mb-1.5">
-                    Switch Role View (Interactive RBAC):
-                  </p>
-                  <div className="space-y-1">
-                    {usersList.map(u => (
-                      <button
-                        key={u.role}
-                        onClick={() => {
-                          switchRole(u.role);
-                          setIsProfileMenuOpen(false);
-                          const roleRoutes: Record<UserRole, string> = {
-                            owner_admin: '/',
-                            sales_exec: '/',
-                            survey_tech: '/field',
-                            engineering_lead: '/engineering',
-                            warehouse_mgr: '/inventory',
-                            install_tech: '/',
-                            support_exec: '/',
-                            accountant: '/',
-                          };
-                          navigate(roleRoutes[u.role] || '/');
-                        }}
-                        className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg transition-colors ${
-                          currentUser.role === u.role
-                            ? 'bg-navy text-white font-semibold'
-                            : 'text-charcoal hover:bg-sand-100'
-                        }`}
-                      >
-                        <div className="flex items-center space-x-2 truncate">
-                          <img src={u.avatar} alt="" className="w-4 h-4 rounded-full object-cover" />
-                          <span className="truncate">{u.roleTitle}</span>
-                        </div>
-                        {currentUser.role === u.role && <Check className="w-3.5 h-3.5 shrink-0" />}
-                      </button>
-                    ))}
                   </div>
                 </div>
 

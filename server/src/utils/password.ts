@@ -20,3 +20,10 @@ export async function verifyPassword(plainText: string, hash: string | null | un
     return false;
   }
 }
+
+/**
+ * Synchronous variant used only for one-time module initialization.
+ */
+export function hashPasswordSync(plainText: string): string {
+  return bcrypt.hashSync(plainText, SALT_ROUNDS);
+}

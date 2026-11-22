@@ -3,9 +3,11 @@ import { env } from '../config/env';
 
 const pool = new pg.Pool({
   connectionString: env.DATABASE_URL,
-  ssl: env.NODE_ENV === 'production'
+  // Validate the database TLS certificate by default. Disabling verification
+  // is possible only through an explicit opt-out for local development.
+  ssl: env.DATABASE_SSL_NO_VERIFY
     ? { rejectUnauthorized: false }
-    : { rejectUnauthorized: false },
+    : { rejectUnauthorized: true },
   connectionTimeoutMillis: 10000,
   idleTimeoutMillis: 30000,
   max: 10

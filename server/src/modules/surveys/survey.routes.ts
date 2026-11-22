@@ -1,6 +1,8 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth.middleware';
 import { requireAction } from '../../middleware/rbac.middleware';
+import { validateRequest } from '../../middleware/validate.middleware';
 import { surveyService } from './survey.service';
 import { AppError } from '../../utils/response';
 
@@ -151,7 +153,39 @@ router.post('/:id/request-corrections', requireAuth, requireAction('surveys', 'e
 });
 
 // 10. Resubmit Survey (Technician)
-router.post('/:id/resubmit', requireAuth, requireAction('surveys', 'edit'), async (req, res, next) => {
+const resubmitSurveySchema = z.object({
+  roofType: z.string().max(100).optional(),
+  roofLengthM: z.number().min(0).max(100000).optional(),
+  roofWidthM: z.number().min(0).max(100000).optional(),
+  totalRoofAreaSqm: z.number().min(0).max(10000000).optional(),
+  shadowFreeAreaSqm: z.number().min(0).max(10000000).optional(),
+  roofDirection: z.string().max(50).optional(),
+  roofTiltDegrees: z.number().min(0).max(90).optional(),
+  roofCondition: z.string().max(500).optional(),
+  availableInstallationSpace: z.string().max(500).optional(),
+  nearbyObstructions: z.string().max(1000).optional(),
+  shadowObservations: z.string().max(1000).optional(),
+  estimatedShadingImpactPct: z.number().min(0).max(100).optional(),
+  gridConnectionAvailable: z.boolean().optional(),
+  phaseType: z.string().max(50).optional(),
+  sanctionedLoadKw: z.number().min(0).max(100000).optional(),
+  meterNumber: z.string().max(100).optional(),
+  mainPanelCondition: z.string().max(500).optional(),
+  proposedInverterLocation: z.string().max(200).optional(),
+  cableDistanceMeters: z.number().min(0).max(10000).optional(),
+  earthingRequirement: z.string().max(500).optional(),
+  additionalElectricalObservations: z.string().max(1000).optional(),
+  roofAccessibility: z.string().max(500).optional(),
+  structuralConcerns: z.string().max(1000).optional(),
+  installationObstacles: z.string().max(1000).optional(),
+  safetyConsiderations: z.string().max(1000).optional(),
+  waterLeakageConcerns: z.string().max(1000).optional(),
+  additionalSiteObservations: z.string().max(1000).optional(),
+  technicianNotes: z.string().max(2000).optional(),
+  photos: z.array(z.string().max(2048)).max(50).optional()
+}).strict();
+
+router.post('/:id/resubmit', requireAuth, requireAction('surveys', 'edit'), validateRequest({ body: resubmitSurveySchema }), async (req, res, next) => {
   try {
     const actor = { id: req.user!.id, name: req.user!.name, role: req.user!.role };
     const updated = await surveyService.resubmitSurvey(req.params.id, req.body, actor);

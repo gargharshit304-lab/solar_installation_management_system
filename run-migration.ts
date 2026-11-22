@@ -2,14 +2,23 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres.gcsxtzfiylrjbxxtrrlq:Commando@1805200@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres';
+// Never embed database credentials in source. Provide DATABASE_URL via the
+// environment (or a local .env file that is gitignored).
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  throw new Error('DATABASE_URL must be set before running the migration script.');
+}
 
 async function runMigration() {
   console.log('Connecting to database...');
   
   const pool = new pg.Pool({
     connectionString: DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
+    // Verify the server certificate unless explicitly opted out for a local
+    // self-signed development database.
+    ssl: process.env.DATABASE_SSL_NO_VERIFY === 'true'
+      ? { rejectUnauthorized: false }
+      : { rejectUnauthorized: true },
     connectionTimeoutMillis: 30000,
   });
 

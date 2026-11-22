@@ -5,6 +5,7 @@ FastAPI + Pydantic + Supabase PostgreSQL
 """
 from fastapi import FastAPI, HTTPException, Query, status, Header, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel, EmailStr
@@ -13,6 +14,7 @@ import base64
 import json
 import hmac
 import hashlib
+import os
 
 from models import (
     CustomerResponse, CustomerCreate, 
@@ -116,7 +118,15 @@ SYSTEM_USERS_DB = [
     }
 ]
 
-JWT_SECRET = "solaros_secret_key_sunpower_solutions_2026"
+JWT_SECRET = os.environ.get("JWT_SECRET", "")
+if len(JWT_SECRET) < 32:
+    raise RuntimeError("JWT_SECRET must be set to a value of at least 32 characters.")
+
+# No built-in account password. Operators must set DEMO_USER_PASSWORD (>=12 chars).
+DEMO_USER_PASSWORD = os.environ.get("DEMO_USER_PASSWORD", "")
+IS_PRODUCTION = os.environ.get("ENVIRONMENT", "development") == "production"
+if IS_PRODUCTION and not DEMO_USER_PASSWORD:
+    raise RuntimeError("DEMO_USER_PASSWORD must be configured in production.")
 
 def create_jwt_token(payload: dict) -> str:
     header = {"alg": "HS256", "typ": "JWT"}
@@ -157,7 +167,7 @@ class LoginRequest(BaseModel):
     remember_me: bool = False
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    refresh_token: Optional[str] = None
 
 app = FastAPI(
     title="SolarOS API — SunPower Solutions",
@@ -165,13 +175,65 @@ app = FastAPI(
     description="Enterprise API powering SunPower Solutions rooftop solar workflows."
 )
 
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Request-Id", "X-CSRF-Token"],
 )
+
+# Paths reachable without an access token. Everything else is authenticated by
+# the middleware below, so no endpoint is accidentally left public.
+PUBLIC_PATHS = {
+    "/api/health",
+    "/api/auth/login",
+    "/api/auth/refresh",
+    "/api/auth/logout",
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+}
+
+
+def _resolve_user_from_token(token: str) -> Optional[dict]:
+    payload = verify_jwt_token(token)
+    if not payload or payload.get("type") == "refresh":
+        return None
+    user = next((u for u in SYSTEM_USERS_DB if u["id"] == payload.get("sub")), None)
+    if not user or not user.get("is_active", True):
+        return None
+    return user
+
+
+def _token_from_request(request: Request) -> Optional[str]:
+    authorization = request.headers.get("authorization")
+    if authorization and authorization.startswith("Bearer "):
+        return authorization.split(" ", 1)[1]
+    return request.cookies.get("solaros_session_token")
+
+
+@app.middleware("http")
+async def require_authentication(request: Request, call_next):
+    if request.method == "OPTIONS" or request.url.path in PUBLIC_PATHS:
+        return await call_next(request)
+
+    token = _token_from_request(request)
+    user = _resolve_user_from_token(token) if token else None
+    if not user:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": "Authentication required."},
+        )
+
+    request.state.user = user
+    return await call_next(request)
 
 # -----------------------------------------------------------------------------
 # Authentication & Session Management Endpoints
@@ -179,24 +241,17 @@ app.add_middleware(
 
 @app.post("/api/auth/login")
 def login_endpoint(login_data: LoginRequest, response: Response):
-    DEMO_PASSWORD = "solaros2026"
-    if login_data.password != DEMO_PASSWORD:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials. Demo password: solaros2026"
-        )
-    
     user = next((u for u in SYSTEM_USERS_DB if u["email"].lower() == login_data.email.lower()), None)
-    if not user:
+
+    # One generic failure path and a constant-time comparison prevent both
+    # account enumeration and password disclosure. No default password exists.
+    password_ok = bool(DEMO_USER_PASSWORD) and hmac.compare_digest(
+        login_data.password, DEMO_USER_PASSWORD
+    )
+    if not user or not password_ok or not user.get("is_active", True):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account not found."
-        )
-    
-    if not user.get("is_active", True):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is deactivated. Contact system administrator."
+            detail="Invalid email address or password."
         )
     
     duration_days = 30 if login_data.remember_me else 1
@@ -211,22 +266,35 @@ def login_endpoint(login_data: LoginRequest, response: Response):
     }
     
     token = create_jwt_token(payload)
-    refresh_token = base64.urlsafe_b64encode(f"ref_{user['id']}_{int(datetime.utcnow().timestamp())}".encode()).decode()
-    
-    # Set HttpOnly SameSite cookie where supported
+    refresh_payload = {
+        "sub": user["id"],
+        "type": "refresh",
+        "exp": int((datetime.utcnow() + timedelta(days=duration_days)).timestamp()),
+        "iat": int(datetime.utcnow().timestamp()),
+    }
+    refresh_token = create_jwt_token(refresh_payload)
+
+    # HttpOnly cookies only: tokens are never exposed to page scripts.
     response.set_cookie(
         key="solaros_session_token",
         value=token,
         max_age=duration_days * 86400,
         httponly=True,
         samesite="lax",
-        secure=False # set to True in production with SSL
+        secure=IS_PRODUCTION,
     )
-    
+    response.set_cookie(
+        key="solaros_refresh_token",
+        value=refresh_token,
+        max_age=duration_days * 86400,
+        httponly=True,
+        samesite="lax",
+        secure=IS_PRODUCTION,
+        path="/api/auth",
+    )
+
     return {
         "status": "success",
-        "token": token,
-        "refresh_token": refresh_token,
         "expires_at": int(expires_at.timestamp() * 1000),
         "user": user
     }
@@ -270,39 +338,59 @@ def get_session_endpoint(
     }
 
 @app.post("/api/auth/refresh")
-def refresh_session_endpoint(refresh_data: RefreshRequest):
-    try:
-        raw = base64.urlsafe_b64decode(refresh_data.refresh_token.encode()).decode()
-        parts = raw.split("_")
-        user_id = parts[1]
-    except Exception:
+def refresh_session_endpoint(
+    response: Response,
+    refresh_data: Optional[RefreshRequest] = None,
+    request: Request = None,
+):
+    # Accept the refresh token only from the HttpOnly cookie (or an explicitly
+    # signed token), never from an unsigned client-constructed value.
+    refresh_token = None
+    if refresh_data and refresh_data.refresh_token:
+        refresh_token = refresh_data.refresh_token
+    elif request is not None:
+        refresh_token = request.cookies.get("solaros_refresh_token")
+
+    payload = verify_jwt_token(refresh_token) if refresh_token else None
+    if not payload or payload.get("type") != "refresh":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token."
         )
-    
-    user = next((u for u in SYSTEM_USERS_DB if u["id"] == user_id), None)
+
+    user = next((u for u in SYSTEM_USERS_DB if u["id"] == payload.get("sub")), None)
     if not user or not user.get("is_active", True):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User account inactive or missing."
         )
-    
+
     expires_at = datetime.utcnow() + timedelta(days=1)
-    payload = {
+    new_payload = {
         "sub": user["id"],
         "email": user["email"],
         "role": user["role"],
         "exp": int(expires_at.timestamp()),
         "iat": int(datetime.utcnow().timestamp())
     }
-    
-    new_token = create_jwt_token(payload)
-    new_refresh = base64.urlsafe_b64encode(f"ref_{user['id']}_{int(datetime.utcnow().timestamp())}".encode()).decode()
-    
+    new_token = create_jwt_token(new_payload)
+    new_refresh = create_jwt_token({
+        "sub": user["id"],
+        "type": "refresh",
+        "exp": int((datetime.utcnow() + timedelta(days=1)).timestamp()),
+        "iat": int(datetime.utcnow().timestamp()),
+    })
+
+    response.set_cookie(
+        key="solaros_session_token", value=new_token, max_age=86400,
+        httponly=True, samesite="lax", secure=IS_PRODUCTION,
+    )
+    response.set_cookie(
+        key="solaros_refresh_token", value=new_refresh, max_age=86400,
+        httponly=True, samesite="lax", secure=IS_PRODUCTION, path="/api/auth",
+    )
+
     return {
-        "token": new_token,
-        "refresh_token": new_refresh,
         "expires_at": int(expires_at.timestamp() * 1000),
         "user": user
     }
@@ -310,6 +398,7 @@ def refresh_session_endpoint(refresh_data: RefreshRequest):
 @app.post("/api/auth/logout")
 def logout_endpoint(response: Response):
     response.delete_cookie(key="solaros_session_token", path="/")
+    response.delete_cookie(key="solaros_refresh_token", path="/api/auth")
     return {"status": "success", "message": "Session invalidated."}
 
 
@@ -509,27 +598,22 @@ def get_current_user_from_request(
     authorization: Optional[str] = Header(None),
     request: Request = None
 ) -> dict:
+    # The authentication middleware already resolved and stored the user.
+    if request is not None and getattr(request.state, "user", None):
+        return request.state.user
+
     token = None
     if authorization and authorization.startswith("Bearer "):
-        token = authorization.split(" ")[1]
-    elif request and "solaros_session_token" in request.cookies:
+        token = authorization.split(" ", 1)[1]
+    elif request is not None:
         token = request.cookies.get("solaros_session_token")
-    
-    if not token:
-        # Fallback to default user for unauthenticated requests in demo
-        return SYSTEM_USERS_DB[0]
-    
-    payload = verify_jwt_token(token)
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired session token."
-        )
-    user = next((u for u in SYSTEM_USERS_DB if u["id"] == payload.get("sub")), None)
+
+    user = _resolve_user_from_token(token) if token else None
     if not user:
+        # No anonymous access and no implicit administrator fallback.
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found."
+            detail="Authentication required."
         )
     return user
 

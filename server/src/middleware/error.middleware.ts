@@ -41,9 +41,12 @@ export function errorHandler(
 
   // 4. Default / Unhandled 500 Errors
   console.error(`[Unhandled Error] Request ${req.id || 'unknown'}:`, err);
-  const message = env.NODE_ENV === 'production' 
-    ? 'An unexpected internal error occurred.' 
-    : err.message || 'Internal Server Error';
+  // Detail and stack traces are development-only. Anything other than an
+  // explicit development environment must fail closed.
+  const isDevelopment = env.NODE_ENV === 'development';
+  const message = isDevelopment
+    ? err.message || 'Internal Server Error'
+    : 'An unexpected internal error occurred.';
 
-  sendError(res, 500, 'INTERNAL_SERVER_ERROR', message, env.NODE_ENV !== 'production' ? err.stack : undefined);
+  sendError(res, 500, 'INTERNAL_SERVER_ERROR', message, isDevelopment ? err.stack : undefined);
 }
