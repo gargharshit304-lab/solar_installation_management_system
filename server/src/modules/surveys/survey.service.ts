@@ -497,7 +497,7 @@ let surveysStore: SurveyRecord[] = [
     customerAddress: 'Sector C, Kothrud Industrial Estate, Pune',
     scheduledDate: '2026-11-15T11:00:00',
     status: 'submitted',
-    reviewStatus: 'recommend_rejection',
+    reviewStatus: 'rejected',
     approvalStatus: 'pending_assignment',
     technicianId: 'emp-18',
     technicianName: 'Vikram Patel',
@@ -526,7 +526,8 @@ let surveysStore: SurveyRecord[] = [
         comments: 'Industrial shed survey submitted',
         version: 1
       }
-    ]
+    ],
+    updatedAt: '2026-11-15T15:00:00'
   }
 ];
 

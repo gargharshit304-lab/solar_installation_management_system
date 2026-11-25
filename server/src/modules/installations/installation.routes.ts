@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { requireAuth } from '../../middleware/auth.middleware';
 import { requireAction, requireCapability } from '../../middleware/rbac.middleware';
 import { auditService } from '../audit/audit.service';
-import { AppError } from '../../utils/response';
+import { AppError, sendSuccess } from '../../utils/response';
+import { parsePaginationParams, buildPaginationMeta } from '../../utils/pagination';
 
 const router = Router();
 
@@ -30,12 +31,34 @@ let installationsStore: any[] = [
   { id: 'inst-2', installationCode: 'INS-2026-002', customerName: 'Sunita Patil', technicianNames: ['Amit Jadhav (Lead)'], status: 'in_progress' }
 ];
 
-router.get('/', requireAuth, requireAction('installations', 'view'), (req, res) => {
-  res.json({
-    success: true,
-    data: installationsStore,
-    meta: { requestId: req.headers['x-request-id'] || 'req-inst-list', timestamp: new Date().toISOString() }
-  });
+router.get('/', requireAuth, requireAction('installations', 'view'), (req, res, next) => {
+  try {
+    const params = parsePaginationParams(req.query, 20);
+    const { status, all } = req.query as Record<string, string>;
+
+    let filtered = installationsStore;
+    if (params.search) {
+      const q = params.search.toLowerCase();
+      filtered = filtered.filter(i =>
+        i.installationCode.toLowerCase().includes(q) ||
+        i.customerName.toLowerCase().includes(q) ||
+        i.status.toLowerCase().includes(q)
+      );
+    }
+
+    if (status && status !== 'all') {
+      filtered = filtered.filter(i => i.status === status);
+    }
+
+    const totalRecords = filtered.length;
+    const isAll = all === 'true' || req.query.pageSize === 'all';
+    const paged = isAll ? filtered : filtered.slice(params.offset, params.offset + params.limit);
+    const pagination = buildPaginationMeta(params.page, isAll ? totalRecords : params.pageSize, totalRecords);
+
+    sendSuccess(res, paged, 200, pagination);
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post('/', requireAuth, requireAction('installations', 'create'), async (req, res, next) => {
@@ -49,33 +72,25 @@ router.post('/', requireAuth, requireAction('installations', 'create'), async (r
       technicianNames: []
     };
     installationsStore.unshift(newInst);
-    res.status(201).json({
-      success: true,
-      data: newInst,
-      meta: { requestId: req.headers['x-request-id'] || 'req-inst-create', timestamp: new Date().toISOString() }
-    });
+    sendSuccess(res, newInst, 201, undefined, 'Installation scheduled successfully');
   } catch (err) {
     next(err);
   }
 });
 
-router.post('/:id/reassign', requireAuth, requireAction('installations', 'assign'), async (req, res, next) => {
+router.post('/:id/reassign', requireAuth, requireAction('installations', 'edit'), async (req, res, next) => {
   try {
     const { technicianNames } = req.body;
     const inst = installationsStore.find(i => i.id === req.params.id);
     if (!inst) throw new AppError(404, 'NOT_FOUND', 'Installation not found');
     inst.technicianNames = technicianNames || [];
-    res.json({
-      success: true,
-      data: inst,
-      meta: { requestId: req.headers['x-request-id'] || 'req-inst-reassign', timestamp: new Date().toISOString() }
-    });
+    sendSuccess(res, inst, 200, undefined, 'Technicians assigned successfully');
   } catch (err) {
     next(err);
   }
 });
 
-// Operational execution: Strictly guarded by installations.execute (Owner blocked without delegation)
+// Operational execution: Strictly guarded by installations.execute (Owner bypasses via superadmin)
 router.post('/:id/execute', requireAuth, requireCapability('installations.execute'), async (req, res, next) => {
   try {
     const inst = installationsStore.find(i => i.id === req.params.id);
@@ -83,11 +98,7 @@ router.post('/:id/execute', requireAuth, requireCapability('installations.execut
     assertAssignedTechnician(inst, req.user!);
     inst.status = 'in_progress';
     inst.startedAt = new Date().toISOString();
-    res.json({
-      success: true,
-      data: inst,
-      meta: { requestId: req.headers['x-request-id'] || 'req-inst-exec', timestamp: new Date().toISOString() }
-    });
+    sendSuccess(res, inst);
   } catch (err) {
     next(err);
   }
@@ -122,11 +133,7 @@ router.post('/:id/complete', requireAuth, requireCapability('installations.execu
       reason: 'Rooftop commissioning completed with customer signoff'
     });
 
-    res.json({
-      success: true,
-      data: inst,
-      meta: { requestId: req.headers['x-request-id'] || 'req-inst-comp', timestamp: new Date().toISOString() }
-    });
+    sendSuccess(res, inst, 200, undefined, 'Installation commissioned successfully');
   } catch (err) {
     next(err);
   }

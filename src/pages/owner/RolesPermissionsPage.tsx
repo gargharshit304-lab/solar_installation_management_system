@@ -315,15 +315,19 @@ export const RolesPermissionsPage: React.FC = () => {
     { key: 'view', label: 'View' },
     { key: 'create', label: 'Create' },
     { key: 'edit', label: 'Edit' },
-    { key: 'delete', label: 'Delete' },
-    { key: 'assign', label: 'Assign' },
-    { key: 'approve', label: 'Approve' },
-    { key: 'export', label: 'Export' },
-    { key: 'manage', label: 'Manage' },
+    { key: 'delete', label: 'Delete' }
   ];
 
   // Helper to determine if an action is granted by Role vs Override for selected employee
   const getPermissionStatus = (moduleKey: string, actionKey: PermissionAction) => {
+    const isSuperAdmin = activeRole?.roleKey === 'owner_admin';
+    if (isSuperAdmin) {
+      if (moduleKey === 'audit' && (actionKey === 'edit' || actionKey === 'delete')) {
+        return { isRoleGranted: false, isOverrideGranted: false, isEffectiveGranted: false };
+      }
+      return { isRoleGranted: true, isOverrideGranted: false, isEffectiveGranted: true };
+    }
+
     const isRoleGranted = activeRole?.permissions[moduleKey]?.includes(actionKey) || false;
     
     const specificPerm = `${moduleKey}.${actionKey}`;
@@ -866,9 +870,9 @@ export const RolesPermissionsPage: React.FC = () => {
               <span className="text-mutedGrey">{activeRole.description}</span>
             </div>
             {activeRole.roleKey === 'owner_admin' && (
-              <div className="flex items-center space-x-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[11px] font-semibold shrink-0">
-                <Lock className="w-3 h-3" />
-                <span>Superadmin — Root Access</span>
+              <div className="flex items-center space-x-1.5 text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-300 text-xs font-bold tracking-wide shrink-0 shadow-xs">
+                <Lock className="w-3.5 h-3.5 text-emerald-700" />
+                <span>SUPERADMIN — FULL ACCESS</span>
               </div>
             )}
           </div>

@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { auditService } from './audit.service';
 import { sendSuccess } from '../../utils/response';
+import { buildPaginationMeta } from '../../utils/pagination';
 
 export class AuditController {
   async getLogs(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const page = parseInt(req.query.page as string, 10) || 1;
-      const limit = parseInt(req.query.limit as string, 10) || 20;
+      const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+      const limit = parseInt((req.query.pageSize || req.query.limit) as string, 10) || 20;
       const entity = req.query.entity as string | undefined;
       const module = req.query.module as string | undefined;
       const action = req.query.action as string | undefined;
@@ -31,12 +32,8 @@ export class AuditController {
         search
       });
 
-      sendSuccess(res, logs, 200, {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit)
-      });
+      const pagination = buildPaginationMeta(page, limit, total);
+      sendSuccess(res, logs, 200, pagination);
     } catch (err) {
       next(err);
     }

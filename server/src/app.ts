@@ -23,6 +23,7 @@ import { installationRoutes } from './modules/installations/installation.routes'
 import { dispatchRoutes } from './modules/dispatch/dispatch.routes';
 import { financeRoutes } from './modules/finance/finance.routes';
 import { employeeRoutes } from './modules/employees/employee.routes';
+import { orderRoutes } from './modules/orders/orders.routes';
 import openApiSpec from './docs/openapi.json';
 
 export const app = express();
@@ -46,15 +47,13 @@ app.use(requestIdMiddleware);
 // in development builds only, never in production.
 const allowedOrigins = Array.from(new Set([
   env.CLIENT_ORIGIN,
-  ...(env.NODE_ENV === 'production'
-    ? []
-    : ['http://localhost:5173', 'http://127.0.0.1:5173'])
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
 ]));
 
 app.use(cors({
-<<<<<<< HEAD
-  origin: [env.CLIENT_ORIGIN, 'http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000', 'http://127.0.0.1:3000'],
-=======
   origin: (origin, callback) => {
     // Same-origin/non-browser requests (no Origin header) are allowed.
     if (!origin || allowedOrigins.includes(origin)) {
@@ -62,7 +61,6 @@ app.use(cors({
     }
     return callback(new AppError(403, 'CORS_ORIGIN_DENIED', 'Origin is not allowed.'));
   },
->>>>>>> b2c2306c5ef5e15a46b91a0ea638cc1a9d802d69
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-CSRF-Token']
@@ -107,6 +105,7 @@ app.use('/api/v1/installations', installationRoutes);
 app.use('/api/v1/dispatch', dispatchRoutes);
 app.use('/api/v1/finance', financeRoutes);
 app.use('/api/v1/employees', employeeRoutes);
+app.use('/api/v1/orders', orderRoutes);
 
 // 10. 404 Catch-All Handler
 app.use((req, res, next) => {

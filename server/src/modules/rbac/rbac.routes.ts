@@ -26,6 +26,10 @@ router.get('/roles', requireAuth, (req, res, next) => {
   rbacController.getRoles(req, res, next);
 });
 
+router.get('/version', requireAuth, (req, res, next) => {
+  rbacController.getVersion(req, res, next);
+});
+
 router.put(
   '/roles/:roleKey/permissions',
   requireAuth,

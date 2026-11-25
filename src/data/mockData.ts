@@ -3905,28 +3905,32 @@ export const INITIAL_ROLES_PERMISSIONS: RoleDefinition[] = [
     description: 'Unrestricted full enterprise access across all departments, financial approvals, workforce, AI agents, and system configurations.',
     userCount: 1,
     permissions: {
-      overview: ['view', 'manage', 'export'],
-      customers: ['view', 'create', 'edit', 'delete', 'manage', 'export'],
-      enquiries: ['view', 'create', 'edit', 'delete', 'assign', 'manage', 'export'],
-      surveys: ['view', 'create', 'edit', 'delete', 'assign', 'approve', 'manage', 'export'],
-      survey_review: ['view', 'approve', 'edit', 'manage'],
-      quotations: ['view', 'create', 'edit', 'delete', 'approve', 'manage', 'export'],
-      orders: ['view', 'create', 'edit', 'delete', 'approve', 'manage', 'export'],
-      inventory: ['view', 'create', 'edit', 'delete', 'manage', 'export'],
-      dispatch: ['view', 'create', 'edit', 'approve', 'manage', 'export'],
-      installations: ['view', 'create', 'edit', 'assign', 'approve', 'manage', 'export'],
-      workforce: ['view', 'create', 'edit', 'delete', 'assign', 'approve', 'manage', 'export'],
-      departments: ['view', 'create', 'edit', 'delete', 'manage', 'export'],
-      roles_permissions: ['view', 'create', 'edit', 'delete', 'manage'],
-      roles: ['view', 'create', 'edit', 'delete', 'manage'],
-      permissions: ['view', 'create', 'edit', 'delete', 'manage'],
-      approvals: ['view', 'approve', 'edit', 'delete', 'manage'],
-      finance: ['view', 'create', 'edit', 'approve', 'manage', 'export'],
-      reports: ['view', 'manage', 'export'],
-      ai_agents: ['view', 'create', 'edit', 'manage'],
-      activity_center: ['view', 'export'],
-      audit: ['view', 'view_company_wide', 'export'],
-      settings: ['view', 'edit', 'manage']
+      overview: ['view', 'create', 'edit', 'delete'],
+      customers: ['view', 'create', 'edit', 'delete'],
+      enquiries: ['view', 'create', 'edit', 'delete'],
+      follow_ups: ['view', 'create', 'edit', 'delete'],
+      surveys: ['view', 'create', 'edit', 'delete'],
+      survey_review: ['view', 'create', 'edit', 'delete'],
+      quotations: ['view', 'create', 'edit', 'delete'],
+      orders: ['view', 'create', 'edit', 'delete'],
+      inventory: ['view', 'create', 'edit', 'delete'],
+      dispatch: ['view', 'create', 'edit', 'delete'],
+      installations: ['view', 'create', 'edit', 'delete'],
+      workforce: ['view', 'create', 'edit', 'delete'],
+      departments: ['view', 'create', 'edit', 'delete'],
+      roles_permissions: ['view', 'create', 'edit', 'delete'],
+      roles: ['view', 'create', 'edit', 'delete'],
+      permissions: ['view', 'create', 'edit', 'delete'],
+      approvals: ['view', 'create', 'edit', 'delete'],
+      finance: ['view', 'create', 'edit', 'delete'],
+      reports: ['view', 'create', 'edit', 'delete'],
+      ai_agents: ['view', 'create', 'edit', 'delete'],
+      warranty: ['view', 'create', 'edit', 'delete'],
+      service: ['view', 'create', 'edit', 'delete'],
+      subsidies: ['view', 'create', 'edit', 'delete'],
+      activity_center: ['view', 'create', 'edit', 'delete'],
+      audit: ['view'],
+      settings: ['view', 'create', 'edit', 'delete']
     }
   },
   {
@@ -3940,9 +3944,11 @@ export const INITIAL_ROLES_PERMISSIONS: RoleDefinition[] = [
       overview: ['view'],
       customers: ['view', 'create', 'edit'],
       enquiries: ['view', 'create', 'edit'],
-      surveys: ['view', 'create', 'assign'],
-      quotations: ['view', 'create', 'edit', 'export'],
+      follow_ups: ['view', 'create', 'edit'],
+      surveys: ['view', 'create', 'edit'],
+      quotations: ['view', 'create', 'edit'],
       orders: ['view', 'create'],
+      subsidies: ['view', 'create'],
       reports: ['view']
     }
   },
@@ -3968,8 +3974,8 @@ export const INITIAL_ROLES_PERMISSIONS: RoleDefinition[] = [
     userCount: 1,
     permissions: {
       overview: ['view'],
-      surveys: ['view', 'edit', 'approve', 'assign'],
-      survey_review: ['view', 'approve', 'edit', 'manage'],
+      surveys: ['view', 'edit'],
+      survey_review: ['view', 'edit'],
       installations: ['view'],
       reports: ['view']
     }
@@ -3984,6 +3990,7 @@ export const INITIAL_ROLES_PERMISSIONS: RoleDefinition[] = [
     permissions: {
       overview: ['view'],
       installations: ['view', 'edit'],
+      service: ['view', 'edit'],
       inventory: ['view'],
       surveys: ['view']
     }
@@ -3997,8 +4004,9 @@ export const INITIAL_ROLES_PERMISSIONS: RoleDefinition[] = [
     userCount: 2,
     permissions: {
       overview: ['view'],
-      inventory: ['view', 'create', 'edit', 'manage', 'export'],
-      dispatch: ['view', 'create', 'edit', 'manage', 'export'],
+      inventory: ['view', 'create', 'edit'],
+      dispatch: ['view', 'create', 'edit'],
+      warranty: ['view'],
       installations: ['view']
     }
   },
@@ -4011,10 +4019,11 @@ export const INITIAL_ROLES_PERMISSIONS: RoleDefinition[] = [
     userCount: 1,
     permissions: {
       overview: ['view'],
-      orders: ['view', 'edit', 'export'],
-      finance: ['view', 'create', 'edit', 'approve', 'manage', 'export'],
-      reports: ['view', 'export'],
-      approvals: ['view', 'create']
+      finance: ['view', 'create', 'edit'],
+      orders: ['view', 'edit'],
+      subsidies: ['view', 'edit'],
+      reports: ['view'],
+      approvals: ['view', 'create', 'edit']
     }
   },
   {
@@ -4026,9 +4035,9 @@ export const INITIAL_ROLES_PERMISSIONS: RoleDefinition[] = [
     userCount: 1,
     permissions: {
       overview: ['view'],
-      customers: ['view'],
-      installations: ['view'],
-      reports: ['view']
+      service: ['view', 'create', 'edit'],
+      warranty: ['view', 'create', 'edit'],
+      customers: ['view']
     }
   }
 ];

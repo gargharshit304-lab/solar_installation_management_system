@@ -17,7 +17,8 @@ model Role {
   id          String    @id @db.VarChar(50) // e.g. 'owner_admin', 'sales_exec'
   name        String    @db.VarChar(100)
   description String?   @db.Text
-  permissions Json      @default("[]") // Array of capability permissions
+  permissions Json      @default("{}") // Structured permissions matrix
+  version     Int       @default(1)
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
 

@@ -9,6 +9,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { ActivityDepartment, EmployeeActivityLog } from '../../types';
 import { auditApi } from '../../services/api';
+import { Pagination } from '../../components/common/Pagination';
 
 export const EmployeeActivityCenterPage: React.FC = () => {
   const { employeeActivities, employees, showToast, session } = useApp();
@@ -587,49 +588,17 @@ export const EmployeeActivityCenterPage: React.FC = () => {
         </div>
 
         {/* 5. Pagination Controls */}
-        <div className="px-5 py-3 border-t border-warmGrey/60 bg-sand-50/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <div className="flex items-center space-x-2 text-mutedGrey">
-            <span>Show</span>
-            <select
-              value={pageSize}
-              onChange={e => {
-                setPageSize(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="px-2 py-1 border border-warmGrey rounded-lg bg-white text-charcoal font-medium focus:outline-none"
-            >
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-            </select>
-            <span>entries per page</span>
-            <span className="text-warmGrey">|</span>
-            <span>Total: <strong className="text-charcoal">{totalRecords}</strong> records</span>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <span className="text-mutedGrey">
-              Page <strong className="text-charcoal">{currentPage}</strong> of <strong className="text-charcoal">{totalPages}</strong>
-            </span>
-
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage <= 1}
-              className="p-1.5 border border-warmGrey rounded-lg bg-white hover:bg-sand-100 disabled:opacity-40 transition-colors"
-              title="Previous Page"
-            >
-              <ChevronLeft className="w-4 h-4 text-charcoal" />
-            </button>
-
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage >= totalPages}
-              className="p-1.5 border border-warmGrey rounded-lg bg-white hover:bg-sand-100 disabled:opacity-40 transition-colors"
-              title="Next Page"
-            >
-              <ChevronRight className="w-4 h-4 text-charcoal" />
-            </button>
-          </div>
+        <div className="p-3 border-t border-warmGrey/60 bg-sand-50/40">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalRecords={totalRecords}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+            isLoading={isLoading}
+            itemLabel="audit events"
+          />
         </div>
       </div>
     </div>

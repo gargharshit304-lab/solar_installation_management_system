@@ -38,8 +38,12 @@ export class AuthController {
       const accessMaxAgeMs = (rememberMe ? 30 : 1) * 86400 * 1000;
       setSessionCookies(res, result.accessToken, result.refreshToken, accessMaxAgeMs);
 
-      // Tokens are delivered only as HttpOnly cookies, never in the response body.
-      sendSuccess(res, { user: result.user, expiresAt: result.expiresAt }, 200);
+      sendSuccess(res, {
+        user: result.user,
+        accessToken: result.accessToken,
+        token: result.accessToken,
+        expiresAt: result.expiresAt
+      }, 200);
     } catch (err) {
       next(err);
     }

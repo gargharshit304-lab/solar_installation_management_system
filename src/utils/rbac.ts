@@ -173,59 +173,39 @@ export const ROLE_CAPABILITIES: Record<UserRole, CapabilityPermission[]> = {
 export function checkActionPermission(
   user: UserProfile,
   resource: string,
-  action: 'view' | 'create' | 'edit' | 'delete' | 'assign' | 'approve' | 'export' | 'manage' | string,
+  action: 'view' | 'create' | 'edit' | 'delete' | string,
   dynamicRoles?: RoleDefinition[],
   delegations: OperationalDelegation[] = [],
   context?: { assignedTechnicians?: string[]; entityId?: string }
 ): boolean {
   if (!user || !user.role) return false;
 
-  // Strict Audit Log Immutability: Audit records are append-only.
-  // No role, including owner_admin, may edit, delete, or modify audit records.
-  if (['audit', 'activity_center', 'activity'].includes(resource)) {
-    if (['edit', 'delete', 'update', 'modify', 'purge'].includes(action)) {
-      return false;
-    }
-  }
-
-  // Strict Administrative Separation: Owner cannot execute field installations without explicit delegation
-  if (user.role === 'owner_admin' && (action === 'execute' || (resource === 'installations' && action.startsWith('execute')))) {
-    const hasDelegation = delegations.some(
-      d => d.active &&
-           d.employeeId === user.id &&
-           d.grantedPermission === 'installations.execute' &&
-           (!d.resourceId || d.resourceId === context?.entityId) &&
-           (!d.expiresDate || new Date(d.expiresDate) > new Date())
-    );
-    return hasDelegation;
-  }
-
-  // Canonical Owner Administrative Bootstrap: Non-circular administrative governance guarantee
-  // Owner always retains authority to manage roles, permissions, workforce, departments, approvals, settings
+  // SUPERADMIN GUARANTEE: Owner & Managing Director has unrestricted full access
+  // across every module and every operation in the entire application
   if (user.role === 'owner_admin') {
-    const adminGovResources = [
-      'roles', 'permissions', 'roles_permissions',
-      'workforce', 'employees', 'departments', 'approvals', 'settings', 'overview'
-    ];
-    if (adminGovResources.includes(resource)) {
-      if (['view', 'create', 'edit', 'delete', 'assign', 'approve', 'manage', 'export'].includes(action)) {
-        return true;
-      }
-    }
-    // Company-wide audit trail access: read and export only
+    // Immutable Audit Log Immutability: Audit records are append-only.
     if (['audit', 'activity_center', 'activity'].includes(resource)) {
-      if (['view', 'view_all', 'view_company_wide', 'export', 'read'].includes(action)) {
-        return true;
+      if (['edit', 'delete', 'update', 'modify', 'purge'].includes(action)) {
+        return false;
       }
-      return false;
+      return true;
     }
+    return true;
+  }
+
+  // Canonical Action Normalization to 4 Core Permissions: view, create, edit, delete
+  let canonicalAction = action;
+  if (['read', 'view_all', 'view_company_wide', 'export'].includes(action)) {
+    canonicalAction = 'view';
+  } else if (['assign', 'approve', 'manage', 'update', 'status'].includes(action)) {
+    canonicalAction = 'edit';
   }
 
   // 1. Check Dynamic Role Definition (Highest Priority Authority)
   if (dynamicRoles && dynamicRoles.length > 0) {
     const roleDef = dynamicRoles.find(r => r.roleKey === user.role || r.id === user.role);
     if (roleDef && roleDef.permissions) {
-      // Map canonical resource aliases (e.g. roles <-> roles_permissions <-> permissions, workforce <-> employees, audit <-> activity_center)
+      // Map canonical resource aliases
       const resourceAliases = [resource];
       if (resource === 'roles' || resource === 'permissions') {
         resourceAliases.push('roles_permissions', 'roles', 'permissions');
@@ -246,44 +226,32 @@ export function checkActionPermission(
         }
       }
 
-      // View action check: view, view_company_wide, view_all, or manage grants viewing
-      if (action === 'view' || action === 'view_company_wide' || action === 'view_all' || action === 'read') {
-        if (
-          actions.includes('view') || 
-          actions.includes('view_company_wide' as any) || 
-          actions.includes('view_all' as any) || 
-          actions.includes('manage')
-        ) return true;
-      } else {
-        // Mutation actions: VIEW never implies CREATE, EDIT, DELETE, ASSIGN, APPROVE, EXPORT
-        if (actions.includes(action as any)) return true;
-      }
+      if (actions.includes(canonicalAction as any)) return true;
 
-      // Check specific capability string (e.g. inventory.receive)
-      const specificPerm = `${resource}.${action}`;
+      // Check specific capability string fallback
+      const specificPerm = `${resource}.${canonicalAction}`;
       if (actions.includes(specificPerm as any)) return true;
 
       // Check explicit operational delegations
       const activeDelegation = delegations.find(
         d => d.active &&
              d.employeeId === user.id &&
-             (d.grantedPermission === specificPerm || d.grantedPermission === action) &&
+             (d.grantedPermission === specificPerm || d.grantedPermission === canonicalAction) &&
              (!d.resourceId || d.resourceId === context?.entityId) &&
              (!d.expiresDate || new Date(d.expiresDate) > new Date())
       );
       if (activeDelegation) return true;
 
-      // Dynamic permissions configured for this module: DO NOT fall back to static capability table
       return false;
     }
   }
 
   // 2. Operational Delegations check
-  const specificPerm = `${resource}.${action}`;
+  const specificPerm = `${resource}.${canonicalAction}`;
   const activeDelegation = delegations.find(
     d => d.active &&
          d.employeeId === user.id &&
-         (d.grantedPermission === specificPerm || d.grantedPermission === action) &&
+         (d.grantedPermission === specificPerm || d.grantedPermission === canonicalAction) &&
          (!d.resourceId || d.resourceId === context?.entityId) &&
          (!d.expiresDate || new Date(d.expiresDate) > new Date())
   );
@@ -688,6 +656,11 @@ export function isRouteAllowedForRole(
   role: UserRole, 
   dynamicRoles?: RoleDefinition[]
 ): boolean {
+  // Superadmin has unrestricted route access across every module
+  if (role === 'owner_admin') {
+    return true;
+  }
+
   const normalizedPath = path === '/' ? '/' : path.replace(/\/$/, '');
 
   // Universal routes allowed for all authenticated users
@@ -732,13 +705,8 @@ export function isRouteAllowedForRole(
         }
       }
 
-      // If user has view, view_all, view_company_wide, or manage permission on this module, route access is GRANTED
-      if (
-        moduleActions.includes('view') || 
-        moduleActions.includes('manage') ||
-        moduleActions.includes('view_company_wide' as any) ||
-        moduleActions.includes('view_all' as any)
-      ) {
+      // If user has view permission on this module, route access is GRANTED
+      if (moduleActions.includes('view')) {
         return true;
       }
       // If module is configured in dynamic permissions and view is NOT granted, deny access
@@ -768,6 +736,11 @@ export function isRouteReadOnlyForRole(
   role: UserRole, 
   dynamicRoles?: RoleDefinition[]
 ): boolean {
+  // Superadmin is never read-only
+  if (role === 'owner_admin') {
+    return false;
+  }
+
   const normalizedPath = path === '/' ? '/' : path.replace(/\/$/, '');
 
   let moduleKey = ROUTE_TO_MODULE_MAP[normalizedPath];
@@ -784,8 +757,8 @@ export function isRouteReadOnlyForRole(
     const roleDef = dynamicRoles.find(r => r.roleKey === role || r.id === role);
     if (roleDef && roleDef.permissions) {
       const moduleActions = roleDef.permissions[moduleKey] || [];
-      const hasView = moduleActions.includes('view') || moduleActions.includes('manage');
-      const hasWrite = moduleActions.some(a => ['create', 'edit', 'delete', 'manage', 'assign', 'approve'].includes(a));
+      const hasView = moduleActions.includes('view');
+      const hasWrite = moduleActions.some(a => ['create', 'edit', 'delete'].includes(a));
       // Read-only if user can view but has no write actions
       return hasView && !hasWrite;
     }

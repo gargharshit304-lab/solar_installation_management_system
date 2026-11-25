@@ -7,6 +7,7 @@ import { useApp } from '../context/AppContext';
 import { Order, PaymentRecord } from '../types';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { Modal } from '../components/common/Modal';
+import { Pagination } from '../components/common/Pagination';
 
 export const OrdersPaymentsPage: React.FC = () => {
   const { 
@@ -27,6 +28,18 @@ export const OrdersPaymentsPage: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<'bank_transfer' | 'upi' | 'cheque' | 'cash'>('bank_transfer');
   const [transactionRef, setTransactionRef] = useState('');
   const [paymentStage, setPaymentStage] = useState<'advance' | 'dispatch_milestone' | 'final_commissioning'>('dispatch_milestone');
+
+  // Pagination States
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [ordersPageSize, setOrdersPageSize] = useState(10);
+  const [paymentsPage, setPaymentsPage] = useState(1);
+  const [paymentsPageSize, setPaymentsPageSize] = useState(10);
+
+  const ordersTotalPages = Math.max(1, Math.ceil(orders.length / ordersPageSize));
+  const pagedOrders = orders.slice((ordersPage - 1) * ordersPageSize, ordersPage * ordersPageSize);
+
+  const paymentsTotalPages = Math.max(1, Math.ceil(payments.length / paymentsPageSize));
+  const pagedPayments = payments.slice((paymentsPage - 1) * paymentsPageSize, paymentsPage * paymentsPageSize);
 
   const totalContractedValue = orders.reduce((sum, o) => sum + o.totalOrderValue, 0);
   const totalCollections = orders.reduce((sum, o) => sum + o.advanceAmountPaid, 0);
@@ -133,7 +146,7 @@ export const OrdersPaymentsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-warmGrey/40 text-charcoal">
-                {orders.map(order => (
+                {pagedOrders.map(order => (
                   <tr key={order.id} className="hover:bg-sand-50/70 transition-colors">
                     <td className="py-3 px-4 font-mono font-bold text-navy">
                       {order.orderNumber}
@@ -187,6 +200,18 @@ export const OrdersPaymentsPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+
+          <div className="p-3 border-t border-warmGrey/60 bg-sand-50/40">
+            <Pagination
+              currentPage={ordersPage}
+              totalPages={ordersTotalPages}
+              pageSize={ordersPageSize}
+              totalRecords={orders.length}
+              onPageChange={setOrdersPage}
+              onPageSizeChange={setOrdersPageSize}
+              itemLabel="orders"
+            />
+          </div>
         </div>
       )}
 
@@ -214,7 +239,7 @@ export const OrdersPaymentsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-warmGrey/40 text-charcoal">
-                {payments.map(pay => (
+                {pagedPayments.map(pay => (
                   <tr key={pay.id} className="hover:bg-sand-50/70 transition-colors">
                     <td className="py-3.5 px-4 font-mono font-bold text-navy">
                       {pay.paymentNumber}
@@ -247,6 +272,18 @@ export const OrdersPaymentsPage: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="p-3 border-t border-warmGrey/60 bg-sand-50/40">
+            <Pagination
+              currentPage={paymentsPage}
+              totalPages={paymentsTotalPages}
+              pageSize={paymentsPageSize}
+              totalRecords={payments.length}
+              onPageChange={setPaymentsPage}
+              onPageSizeChange={setPaymentsPageSize}
+              itemLabel="receipts"
+            />
           </div>
         </div>
       )}

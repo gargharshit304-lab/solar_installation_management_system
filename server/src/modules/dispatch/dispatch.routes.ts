@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { requireAuth } from '../../middleware/auth.middleware';
 import { requireAction } from '../../middleware/rbac.middleware';
 import { auditService } from '../audit/audit.service';
-import { AppError } from '../../utils/response';
+import { AppError, sendSuccess } from '../../utils/response';
+import { parsePaginationParams, buildPaginationMeta } from '../../utils/pagination';
 
 const router = Router();
 
@@ -11,12 +12,35 @@ let dispatchStore: any[] = [
   { id: 'dsp-2', dispatchNumber: 'DSP-2026-002', orderId: 'ord-102', customerName: 'Sunita Patil', paymentVerified: false, status: 'pending' }
 ];
 
-router.get('/', requireAuth, requireAction('dispatch', 'view'), (req, res) => {
-  res.json({
-    success: true,
-    data: dispatchStore,
-    meta: { requestId: req.headers['x-request-id'] || 'req-dsp-list', timestamp: new Date().toISOString() }
-  });
+router.get('/', requireAuth, requireAction('dispatch', 'view'), (req, res, next) => {
+  try {
+    const params = parsePaginationParams(req.query, 20);
+    const { status, all } = req.query as Record<string, string>;
+
+    let filtered = dispatchStore;
+    if (params.search) {
+      const q = params.search.toLowerCase();
+      filtered = filtered.filter(d =>
+        d.dispatchNumber.toLowerCase().includes(q) ||
+        d.customerName.toLowerCase().includes(q) ||
+        d.orderId.toLowerCase().includes(q) ||
+        d.status.toLowerCase().includes(q)
+      );
+    }
+
+    if (status && status !== 'all') {
+      filtered = filtered.filter(d => d.status === status);
+    }
+
+    const totalRecords = filtered.length;
+    const isAll = all === 'true' || req.query.pageSize === 'all';
+    const paged = isAll ? filtered : filtered.slice(params.offset, params.offset + params.limit);
+    const pagination = buildPaginationMeta(params.page, isAll ? totalRecords : params.pageSize, totalRecords);
+
+    sendSuccess(res, paged, 200, pagination);
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post('/', requireAuth, requireAction('dispatch', 'create'), async (req, res, next) => {
@@ -31,11 +55,7 @@ router.post('/', requireAuth, requireAction('dispatch', 'create'), async (req, r
       status: 'pending'
     };
     dispatchStore.unshift(newDsp);
-    res.status(201).json({
-      success: true,
-      data: newDsp,
-      meta: { requestId: req.headers['x-request-id'] || 'req-dsp-create', timestamp: new Date().toISOString() }
-    });
+    sendSuccess(res, newDsp, 201, undefined, 'Dispatch created successfully');
   } catch (err) {
     next(err);
   }
@@ -68,11 +88,7 @@ router.post('/:id/release', requireAuth, requireAction('dispatch', 'edit'), asyn
       reason: 'Material released from warehouse'
     });
 
-    res.json({
-      success: true,
-      data: dsp,
-      meta: { requestId: req.headers['x-request-id'] || 'req-dsp-rel', timestamp: new Date().toISOString() }
-    });
+    sendSuccess(res, dsp, 200, undefined, 'Material released from warehouse');
   } catch (err) {
     next(err);
   }
@@ -84,11 +100,7 @@ router.post('/:id/confirm-delivery', requireAuth, requireAction('dispatch', 'edi
     if (!dsp) throw new AppError(404, 'NOT_FOUND', 'Dispatch order not found');
     dsp.status = 'delivered';
     dsp.deliveredAt = new Date().toISOString();
-    res.json({
-      success: true,
-      data: dsp,
-      meta: { requestId: req.headers['x-request-id'] || 'req-dsp-del', timestamp: new Date().toISOString() }
-    });
+    sendSuccess(res, dsp, 200, undefined, 'Delivery confirmed successfully');
   } catch (err) {
     next(err);
   }
